@@ -17,7 +17,7 @@
             <meta name="viewport" content="width=device-width,
                 initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
             <style>
-                #map_e810c91787c79f1fe5c1e4b17424f87c {
+                #map_eb4f706bb08b63c42a470380f1f322dd {
                     position: relative;
                     width: 100.0%;
                     height: 100.0%;
@@ -701,14 +701,42 @@ else{window.addEventListener("load",function(){setTimeout(_gemInit,800);});}
 })();
 </script>
     
-            <div class="folium-map" id="map_e810c91787c79f1fe5c1e4b17424f87c" ></div>
+<div id="run-info-banner" style="
+  position:fixed;bottom:0;left:0;right:0;z-index:10005;
+  background:rgba(15,20,30,0.88);backdrop-filter:blur(4px);
+  color:#c9d1d9;font-family:Courier New,monospace;font-size:11px;
+  display:flex;align-items:center;gap:0;
+  border-top:1px solid #30363d;
+  pointer-events:none;
+">
+  <span style="background:#1a4a8a;color:#aed4ff;padding:4px 12px;font-weight:bold;white-space:nowrap;">
+    Script run
+  </span>
+  <span style="padding:4px 14px;border-right:1px solid #30363d;white-space:nowrap;">
+    2026-06-01 23:49Z
+  </span>
+  <span style="background:#0d3320;color:#56d364;padding:4px 12px;font-weight:bold;white-space:nowrap;">
+    RDPS run
+  </span>
+  <span style="padding:4px 14px;border-right:1px solid #30363d;white-space:nowrap;">
+    2026-06-01 18Z
+  </span>
+  <span style="background:#2d1b00;color:#f0883e;padding:4px 12px;font-weight:bold;white-space:nowrap;">
+    GDPS run
+  </span>
+  <span style="padding:4px 14px;white-space:nowrap;">
+    2026-06-01 12Z
+  </span>
+</div>
+    
+            <div class="folium-map" id="map_eb4f706bb08b63c42a470380f1f322dd" ></div>
         
 </body>
 <script>
     
     
-            var map_e810c91787c79f1fe5c1e4b17424f87c = L.map(
-                "map_e810c91787c79f1fe5c1e4b17424f87c",
+            var map_eb4f706bb08b63c42a470380f1f322dd = L.map(
+                "map_eb4f706bb08b63c42a470380f1f322dd",
                 {
                     center: [55.0, -115.0],
                     crs: L.CRS.EPSG3857,
@@ -725,7 +753,7 @@ else{window.addEventListener("load",function(){setTimeout(_gemInit,800);});}
 
         
     
-            var tile_layer_7a7a1a492b40749e7a5476ecffcb4e8a = L.tileLayer(
+            var tile_layer_cca05ddaf05a1ef9a2a341a54c6bb38e = L.tileLayer(
                 "about:blank",
                 {
   "minZoom": 0,
@@ -742,7 +770,7 @@ else{window.addEventListener("load",function(){setTimeout(_gemInit,800);});}
             );
         
     
-            tile_layer_7a7a1a492b40749e7a5476ecffcb4e8a.addTo(map_e810c91787c79f1fe5c1e4b17424f87c);
+            tile_layer_cca05ddaf05a1ef9a2a341a54c6bb38e.addTo(map_eb4f706bb08b63c42a470380f1f322dd);
         
 </script>
 </html>
