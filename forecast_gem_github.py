@@ -2331,8 +2331,8 @@ matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 import matplotlib.patches as _mpatches
 from datetime import date as _date
-_display = display; _Image = None
-
+_display = lambda *a, **k: None
+_Image   = lambda *a, **k: None
 print('=' * 60)
 print('  BLOCK 05 — Cell 2')
 print('  Normal Temperature Bands & Colour Tables')
