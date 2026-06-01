@@ -19,11 +19,30 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: pip install jupyter nbconvert ...   # your packages
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -q libeccodes-dev
 
-      - name: Run notebook
-        run: jupyter nbconvert --to notebook --execute forecast.ipynb
+      - name: Install Python dependencies
+        run: |
+          pip install \
+            requests \
+            scipy \
+            matplotlib \
+            numpy \
+            pykrige \
+            folium \
+            shapely \
+            branca \
+            pandas \
+            cfgrib \
+            eccodes \
+            xarray \
+            metpy
+
+      - name: Run forecast script
+        run: python forecast_gem_github.py
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
