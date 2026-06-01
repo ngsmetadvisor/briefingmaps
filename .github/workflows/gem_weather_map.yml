@@ -2,7 +2,8 @@ name: Generate Forecast Maps
 
 on:
   schedule:
-    - cron: '0 14 * * *'   # 14Z daily, after 12Z model data arrives
+    - cron: '11 10 * * *'   # 10Z daily, after 06Z model data arrives
+    - cron: '43 18 * * *'   # 18Z daily, after 12Z model data arrives
   workflow_dispatch:
 
 permissions:
