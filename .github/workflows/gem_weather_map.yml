@@ -1,90 +1,30 @@
-name: GEM Weather Map
+name: Generate Forecast Maps
+
 on:
   schedule:
-    - cron: '17 10 * * *'
-    - cron: '17 11 * * *'
-    - cron: '19 18 * * *'
-    - cron: '19 19 * * *'
+    - cron: '0 14 * * *'   # 14Z daily, after 12Z model data arrives
   workflow_dispatch:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
-  generate-maps:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q libeccodes-dev
+      - name: Install dependencies
+        run: pip install jupyter nbconvert ...   # your packages
 
-      - name: Install Python dependencies
-        run: |
-          pip install --upgrade pip
-          pip install \
-            requests scipy matplotlib numpy pykrige \
-            folium shapely branca pandas cfgrib \
-            eccodes xarray aiohttp metpy
+      - name: Run notebook
+        run: jupyter nbconvert --to notebook --execute forecast.ipynb
 
-      - name: Create output directory
-        run: mkdir -p output
-
-      - name: Run GEM weather map script
-        run: python forecast_gem_github.py
-
-      - name: Create index.html with links to both maps
-        run: |
-          cat > output/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>AWCC Weather Maps</title>
-            <style>
-              body { font-family: Arial, sans-serif; background: #1a1a2e; color: #e0e0e0;
-                     display: flex; flex-direction: column; align-items: center;
-                     justify-content: center; height: 100vh; margin: 0; }
-              h1   { color: #4a7fc1; }
-              a    { display: block; margin: 16px; padding: 16px 40px;
-                     background: #4a7fc1; color: white; text-decoration: none;
-                     border-radius: 8px; font-size: 18px; font-weight: bold; }
-              a:hover { background: #6a9fe1; }
-              .ts  { color: #8888aa; font-size: 13px; margin-top: 8px; }
-            </style>
-          </head>
-          <body>
-            <h1>AWCC Weather Maps</h1>
-            <a href="synoptic_map.html">🌐 Upper Air Map (850 / 500 hPa)</a>
-            <a href="gem_surface_map.html">🌧 Surface Map (MSLP + QPF 12h)</a>
-            <p class="ts">Generated: $(date -u +'%Y-%m-%d %H:%MZ')</p>
-          </body>
-          </html>
-          EOF
-
-      - name: Commit output maps to repo
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add output/
-          git diff --cached --quiet || git commit -m "chore: auto-update weather maps $(date -u +'%Y-%m-%d %H:%MZ')"
-          git push
-
-      - name: Upload artifact for Pages
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: output/
-          
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
@@ -92,14 +32,3 @@ jobs:
           publish_dir: ./output
           publish_branch: gh-pages
           keep_files: true
-
-  deploy-pages:
-    needs: generate-maps
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
