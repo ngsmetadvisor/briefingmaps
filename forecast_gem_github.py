@@ -9,8 +9,7 @@ Original file is located at
 
 # @title
 # ── Cell 1 . Install & import packages ────────────────────────
-import subprocess, sys, importlib, importlib.util
-
+import subprocess, sys, importlib
 
 # ── Install missing packages ──────────────────────────────────
 _pkg_map = {
@@ -98,14 +97,11 @@ for _p in _pkgs:
         print(f'✓ {_p} installed')
 
 import os
-os.makedirs('output', exist_ok=True)
 if not os.path.exists('/usr/include/eccodes.h'):
     subprocess.call(['apt-get', 'install', '-y', '-q', 'libeccodes-dev'],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) if os.path.exists('/usr/bin/apt-get') else None
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 print('✓ libeccodes-dev ready')
 
-# @title
-print('Running in GitHub Actions mode — keepalive not needed')
 ##########################################################
 ##########################################################
 
@@ -253,9 +249,6 @@ print('Open this session to change the met symbols sizes')
 # @title
 # -- Cell 8 - WMO station model as SVG string ---
 import math
-# IPython display stubs (not used in GitHub Actions)
-SVG = HTML = Javascript = lambda *a, **k: None
-def display(*a, **k): pass
 
 
 print("Building Met Symbols")
@@ -621,51 +614,22 @@ for _i, (_svg_str, _sw, _sh, _rec) in enumerate(_svg_parts_list):
 
 _out.append('</svg>')
 
-_ = '''
-<div style="font-family:Courier New,monospace;font-size:12px;background:#f0f4ff;
-            border:1px solid #1a4a8a;border-radius:8px;padding:14px 20px;
-            max-width:640px;margin:10px 0;color:#1a2030">
-  <div style="font-size:14px;font-weight:bold;color:#1a4a8a;
-              border-bottom:1px solid #aac;padding-bottom:6px;margin-bottom:10px">
-    📡 Station Model Key
-  </div>
-  <table style="border-collapse:collapse;width:100%">
-    <tr><td style="color:#888;padding:2px 8px 2px 0;white-space:nowrap">Top-left</td>
-        <td>Temperature (°C)</td></tr>
-    <tr><td style="color:#888;padding:2px 8px 2px 0;white-space:nowrap">Left</td>
-        <td>Visibility (SM) + Present Weather</td></tr>
-    <tr><td style="color:#888;padding:2px 8px 2px 0;white-space:nowrap">Bottom-left</td>
-        <td>Dewpoint (°C)</td></tr>
-    <tr><td style="color:#888;padding:2px 8px 2px 0;white-space:nowrap">Top-right</td>
-        <td>SLP last 3 digits &nbsp;
-            <span style="color:#555">132 = 1013.2 hPa &nbsp;|&nbsp; 986 = 998.6 hPa</span>
-        </td></tr>
-    <tr><td style="color:#888;padding:2px 8px 2px 0;white-space:nowrap;vertical-align:top">
-            Right</td>
-        <td>Pressure change (tenths hPa) + Tendency<br>
-          <span style="display:inline-block;margin-top:4px">
-            <b>/</b> rising &nbsp; <b>\\</b> falling &nbsp; <b>—</b> steady &nbsp;
-            <b>∧</b> rise→fall &nbsp; <b>V</b> fall→rise &nbsp;
-            <b>⌐</b> rise→steady &nbsp; <b>∟</b> fall→steady
-          </span>
-        </td></tr>
-    <tr><td style="color:#888;padding:2px 8px 2px 0;white-space:nowrap">Circle</td>
-        <td>Sky cover oktas 0–8 &nbsp;
-            <span style="color:#555">Triangle = no sky sensor</span></td></tr>
-    <tr><td style="color:#888;padding:2px 8px 2px 0;white-space:nowrap">Barb</td>
-        <td>Wind direction (from) + speed &nbsp;
-            <span style="color:#555">½=5kt &nbsp; full=10kt &nbsp; pennant=50kt</span>
-        </td></tr>
-  </table>
-  <div style="margin-top:10px;border-top:1px solid #aac;padding-top:8px;color:#444">
-    <b>Examples:</b><br>
-    <span style="color:#c00">-10 \\</span> &nbsp;→ fell 1.0 hPa, still falling<br>
-    <span style="color:#080">+28 /</span> &nbsp;→ rose 2.8 hPa, still rising
-  </div>
-</div>
-'''  # station model key HTML (not displayed in GitHub Actions mode)
+print('''
+Station Model Key:
+  Top-left    : Temperature (°C)
+  Left        : Visibility (SM) + Present Weather
+  Bottom-left : Dewpoint (°C)
+  Top-right   : SLP last 3 digits  (132 = 1013.2 hPa | 986 = 998.6 hPa)
+  Right       : Pressure change (tenths hPa) + Tendency
+                  / rising  \\ falling  — steady  ^ rise>fall  V fall>rise
+  Circle      : Sky cover oktas 0-8  (Triangle = no sky sensor)
+  Barb        : Wind direction (from) + speed  (half=5kt  full=10kt  pennant=50kt)
+''')
 
-print('  [Station model SVG preview omitted in GitHub Actions mode]')
+_svg_out_path = 'station_model_examples.svg'
+with open(_svg_out_path, 'w') as _f:
+    _f.write(''.join(_out))
+print(f'Station model SVG saved to: {_svg_out_path}')
 
 # @title
 # ── Cell UA-2b. Fetch GEM upper-air + surface: RDPS days 0-3, GDPS days 3-7 ──
@@ -679,16 +643,16 @@ for _pkg in ['cfgrib', 'eccodes', 'xarray', 'scipy']:
     except ImportError:
         subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q', _pkg])
 subprocess.call(['apt-get', 'install', '-y', '-q', 'libeccodes-dev'],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) if os.path.exists('/usr/bin/apt-get') else None
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 import xarray as xr
 from scipy.spatial import cKDTree
 import math as _math
-import tempfile, os, asyncio, aiohttp
+import tempfile, os
+import concurrent.futures as _cf
 import numpy as np
 import pandas as pd
 from datetime import datetime, timezone as _tz, timedelta
-
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -911,7 +875,7 @@ def _fxx(run_dt, valid_dt):
 #   6. Precip fxx_prior=0 → skip probe entirely (prior accumulation = 0 by definition).
 #      fxx_prior=6+ → probe required; failure is a real data gap.
 
-async def _probe_run(session, run_dt, is_rdps, target_vts, sfc_target_vts):
+def _probe_run(run_dt, is_rdps, target_vts, sfc_target_vts):
     """
     Probe all needed files for run_dt.
     Returns (all_ok, report_lines) where report_lines is the per-fxx status list.
@@ -982,22 +946,21 @@ async def _probe_run(session, run_dt, is_rdps, target_vts, sfc_target_vts):
 
         for attempt in range(PROBE_RETRIES + 1):
             try:
-                async with session.head(
-                        url, timeout=aiohttp.ClientTimeout(total=PROBE_TIMEOUT)) as r:
-                    if r.status == 200:
-                        results[label] = ('ok', '')
-                        succeeded = True
-                        break
-                    elif r.status == 404:
-                        # Genuine missing — no point retrying
-                        last_status = 'missing'
-                        last_detail = 'HTTP 404'
-                        break
-                    else:
-                        # 5xx or other — transient, retry
-                        last_status = 'error'
-                        last_detail = f'HTTP {r.status}'
-            except asyncio.TimeoutError:
+                r = requests.head(url, timeout=PROBE_TIMEOUT)
+                if r.status_code == 200:
+                    results[label] = ('ok', '')
+                    succeeded = True
+                    break
+                elif r.status_code == 404:
+                    # Genuine missing — no point retrying
+                    last_status = 'missing'
+                    last_detail = 'HTTP 404'
+                    break
+                else:
+                    # 5xx or other — transient, retry
+                    last_status = 'error'
+                    last_detail = f'HTTP {r.status_code}'
+            except requests.exceptions.Timeout:
                 last_status = 'error'
                 last_detail = 'timeout'
             except Exception as e:
@@ -1005,7 +968,7 @@ async def _probe_run(session, run_dt, is_rdps, target_vts, sfc_target_vts):
                 last_detail = str(e)
 
             if not succeeded and attempt < PROBE_RETRIES:
-                await asyncio.sleep(PROBE_RETRY_DELAY)
+                time.sleep(PROBE_RETRY_DELAY)
 
         if not succeeded:
             results[label] = (last_status, last_detail)
@@ -1026,13 +989,19 @@ async def _probe_run(session, run_dt, is_rdps, target_vts, sfc_target_vts):
     for fxx_key in sorted(fxx_groups.keys()):
         items    = fxx_groups[fxx_key]
         statuses = ' | '.join(items)
-        report_lines.append(f'  {fxx_key}: {statuses}')
+        # Find the url for this fxx to provide a clickable link
+        fxx_url  = next((url for lbl, url, _ in probes
+                         if lbl.startswith(fxx_key)), '')
+        # Build parent directory url (strip filename)
+        dir_url  = fxx_url.rsplit('/', 1)[0] if fxx_url else ''
+        link     = f'  <{dir_url}>' if dir_url else ''
+        report_lines.append(f'  {fxx_key}: {statuses}{link}')
 
     return all_ok, report_lines
 
 
-async def _select_run_verified(run_hours, min_age_h, is_rdps,
-                                target_vts, sfc_target_vts):
+def _select_run_verified(run_hours, min_age_h, is_rdps,
+                         target_vts, sfc_target_vts):
     """
     Select the best available run for RDPS or GDPS.
 
@@ -1045,7 +1014,8 @@ async def _select_run_verified(run_hours, min_age_h, is_rdps,
       6. If no candidates remain → raise RuntimeError.
     """
     model_label = 'RDPS' if is_rdps else 'GDPS'
-    now = datetime.now(_tz.utc)
+    now = _NOW_UTC
+
 
     # Build candidates newest → oldest
     candidates = []
@@ -1063,39 +1033,43 @@ async def _select_run_verified(run_hours, min_age_h, is_rdps,
     if not candidates:
         raise RuntimeError(f'{model_label}: no run candidates found within lookback window')
 
-    connector = aiohttp.TCPConnector(ssl=False)
-    async with aiohttp.ClientSession(connector=connector) as session:
+    primary     = candidates[0]
+    fallbacks   = candidates[1:]
 
-        primary     = candidates[0]
-        fallbacks   = candidates[1:]
-
-        print(f'\n{model_label}:')
-        print(f'  {primary.strftime("%Y-%m-%d %HZ")} run (probing all needed fxx):')
-        all_ok, report = await _probe_run(session, primary, is_rdps,
-                                          target_vts, sfc_target_vts)
-        for line in report:
+    print(f'\n{model_label}:')
+    print(f'  {primary.strftime("%Y-%m-%d %HZ")} run (probing all needed fxx):')
+    all_ok, report = _probe_run(primary, is_rdps,
+                                target_vts, sfc_target_vts)
+    for line in report:
+        # lines with a url in angle brackets → print as clickable
+        if '<http' in line:
+            text, url = line.rsplit('<', 1)
+            url = url.rstrip('>')
+            print(f'{text}')
+            print(f'    → {url}')
+        else:
             print(line)
 
-        if all_ok:
-            print(f'  ✓ Verified {model_label} run: {primary.strftime("%Y-%m-%d %HZ")}')
-            return primary
+    if all_ok:
+        print(f'  ✓ Verified {model_label} run: {primary.strftime("%Y-%m-%d %HZ")}')
+        return primary
 
-        # ── Primary failed — print summary and fall back ──────────────────────
-        missing_lines = [l for l in report if '✗' in l]
-        print(f'\n  ✗ {len(missing_lines)} probe(s) failed on '
-              f'{primary.strftime("%Y-%m-%d %HZ")} — falling back:')
-        for line in missing_lines:
-            print(f'  {line}')
+    # ── Primary failed — print summary and fall back ──────────────────────
+    missing_lines = [l for l in report if '✗' in l]
+    print(f'\n  ✗ {len(missing_lines)} probe(s) failed on '
+          f'{primary.strftime("%Y-%m-%d %HZ")} — falling back:')
+    for line in missing_lines:
+        print(f'  {line}')
 
-        for fallback in fallbacks:
-            print(f'\n  → {fallback.strftime("%Y-%m-%d %HZ")} run (fallback probe):')
-            _, fb_report = await _probe_run(session, fallback, is_rdps,
-                                            target_vts, sfc_target_vts)
-            for line in fb_report:
-                print(line)
-            print(f'  ✓ Committing to {model_label} fallback run: '
-                  f'{fallback.strftime("%Y-%m-%d %HZ")}')
-            return fallback
+    for fallback in fallbacks:
+        print(f'\n  → {fallback.strftime("%Y-%m-%d %HZ")} run (fallback probe):')
+        _, fb_report = _probe_run(fallback, is_rdps,
+                                  target_vts, sfc_target_vts)
+        for line in fb_report:
+            print(line)
+        print(f'  ✓ Committing to {model_label} fallback run: '
+              f'{fallback.strftime("%Y-%m-%d %HZ")}')
+        return fallback
 
     raise RuntimeError(f'{model_label}: no available run found within {MAX_LOOKBACK_DAYS}-day lookback')
 
@@ -1129,17 +1103,14 @@ _target_lons = [lon for _   in GEM_LATITUDES for lon in GEM_LONGITUDE]
 # ║                     SELECT VERIFIED RUNS                                    ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
-async def _select_runs():
-    global _rdps_run_dt, _gdps_run_dt
-    _rdps_run_dt = await _select_run_verified(
-        RDPS_RUN_HOURS, RDPS_MIN_AGE_H, is_rdps=True,
-        target_vts=_target_vts, sfc_target_vts=_sfc_target_vts
-    )
-    _gdps_run_dt = await _select_run_verified(
-        GDPS_RUN_HOURS, GDPS_MIN_AGE_H, is_rdps=False,
-        target_vts=_target_vts, sfc_target_vts=_sfc_target_vts
-    )
-asyncio.run(_select_runs())
+_rdps_run_dt = _select_run_verified(
+    RDPS_RUN_HOURS, RDPS_MIN_AGE_H, is_rdps=True,
+    target_vts=_target_vts, sfc_target_vts=_sfc_target_vts
+)
+_gdps_run_dt = _select_run_verified(
+    GDPS_RUN_HOURS, GDPS_MIN_AGE_H, is_rdps=False,
+    target_vts=_target_vts, sfc_target_vts=_sfc_target_vts
+)
 
 print(f'\nRDPS run        : {_rdps_run_dt.strftime("%Y-%m-%d %HZ")}')
 print(f'GDPS run        : {_gdps_run_dt.strftime("%Y-%m-%d %HZ")}')
@@ -1277,73 +1248,85 @@ print(f'Extraction pts  : {len(set(zip(_target_lats, _target_lons)))} grid point
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║                     ASYNC FETCH + EXTRACT                                   ║
+# ║                     THREADED FETCH + EXTRACT                                 ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
-async def _fetch_and_extract_all():
-    sem    = asyncio.Semaphore(MAX_CONCURRENT)
+import threading as _threading
+_data_lock = _threading.Lock()
+
+def _fetch_and_extract_all():
     errors = []
 
-    async def _worker_isob(model, url, var_name, pres, vt):
+    def _worker_isob(model, url, var_name, pres, vt):
         vt_str = vt.strftime('%Y-%m-%d') + f' {vt.hour:02d}Z'
         col    = _VAR_MAP[var_name]
-        async with sem:
-            try:
-                async with session.get(
-                        url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_S)) as r:
-                    raw    = await r.read() if r.status == 200 else None
-                    status = r.status
-            except Exception as e:
-                errors.append((url, str(e))); return
+        try:
+            r      = requests.get(url, timeout=TIMEOUT_S)
+            raw    = r.content if r.status_code == 200 else None
+            status = r.status_code
+        except Exception as e:
+            with _data_lock: errors.append((url, str(e)))
+            return
         if raw is None:
-            errors.append((url, f'HTTP {status}')); return
+            with _data_lock: errors.append((url, f'HTTP {status}'))
+            return
         if len(raw) == 0:
-            errors.append((url, 'HTTP 200 but zero bytes')); return
+            with _data_lock: errors.append((url, 'HTTP 200 but zero bytes'))
+            return
         try:
             extracted = _extract_points_grib(raw, _target_lats, _target_lons, var_name)
         except Exception as e:
-            errors.append((url, str(e))); return
-        for (lat, lon), val in extracted.items():
-            key = (lat, lon, vt_str, float(pres))
-            if key not in _point_data:
-                _point_data[key] = {}
-            _point_data[key][col] = val
+            with _data_lock: errors.append((url, str(e)))
+            return
+        with _data_lock:
+            for (lat, lon), val in extracted.items():
+                key = (lat, lon, vt_str, float(pres))
+                if key not in _point_data:
+                    _point_data[key] = {}
+                _point_data[key][col] = val
         print(f'  ✓ {model} {vt_str}  {var_name}@{pres}hPa  ({len(extracted)} pts)')
 
-    async def _worker_sfc(model, url, var_name, vt, col_suffix):
+    def _worker_sfc(model, url, var_name, vt, col_suffix):
         vt_str   = vt.strftime('%Y-%m-%d') + f' {vt.hour:02d}Z'
         base_col = _SFC_VAR_MAP[var_name]
         col      = base_col + col_suffix
-        async with sem:
-            try:
-                async with session.get(
-                        url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_S)) as r:
-                    raw    = await r.read() if r.status == 200 else None
-                    status = r.status
-            except Exception as e:
-                errors.append((url, str(e))); return
+        try:
+            r      = requests.get(url, timeout=TIMEOUT_S)
+            raw    = r.content if r.status_code == 200 else None
+            status = r.status_code
+        except Exception as e:
+            with _data_lock: errors.append((url, str(e)))
+            return
         if raw is None:
-            errors.append((url, f'HTTP {status}')); return
+            with _data_lock: errors.append((url, f'HTTP {status}'))
+            return
         if len(raw) == 0:
-            errors.append((url, 'HTTP 200 but zero bytes')); return
+            with _data_lock: errors.append((url, 'HTTP 200 but zero bytes'))
+            return
         try:
             extracted = _extract_points_grib(raw, _target_lats, _target_lons, var_name)
         except Exception as e:
-            errors.append((url, str(e))); return
-        for (lat, lon), val in extracted.items():
-            key = (lat, lon, vt_str)
-            if key not in _sfc_data:
-                _sfc_data[key] = {}
-            _sfc_data[key][col] = val
+            with _data_lock: errors.append((url, str(e)))
+            return
+        with _data_lock:
+            for (lat, lon), val in extracted.items():
+                key = (lat, lon, vt_str)
+                if key not in _sfc_data:
+                    _sfc_data[key] = {}
+                _sfc_data[key][col] = val
         tag = 'PRIOR' if col_suffix else 'TARGET'
         print(f'  ✓ {model} {vt_str}  {var_name} [{tag}]  ({len(extracted)} pts)')
 
-    connector = aiohttp.TCPConnector(limit=MAX_CONCURRENT, ssl=False)
-    async with aiohttp.ClientSession(connector=connector) as session:
-        await asyncio.gather(
-            *[_worker_isob(*t) for t in _tasks],
-            *[_worker_sfc(*t)  for t in _sfc_tasks],
-        )
+    all_items = [('isob', t) for t in _tasks] + [('sfc', t) for t in _sfc_tasks]
+    with _cf.ThreadPoolExecutor(max_workers=MAX_CONCURRENT) as executor:
+        futs = []
+        for kind, t in all_items:
+            if kind == 'isob':
+                futs.append(executor.submit(_worker_isob, *t))
+            else:
+                futs.append(executor.submit(_worker_sfc, *t))
+        for f in _cf.as_completed(futs):
+            f.result()  # propagate any unexpected exceptions
 
     # ── Completeness report ───────────────────────────────────────────────────
     _requested = set()
@@ -1399,63 +1382,10 @@ async def _fetch_and_extract_all():
     for prefix, vt_str, field in sorted(_missing_keys):
         print(f'  ✗ MISSING: {prefix}  {vt_str}  {field}')
 
-    _all_vt_strs = sorted(set(vt_str for _, vt_str, _ in _requested))
-    _isob_fields = sorted(f for f in set(field for _, _, field in _requested) if 'Sfc' not in f)
-    _sfc_fields  = sorted(f for f in set(field for _, _, field in _requested) if 'Sfc' in f)
-    _all_fields  = _isob_fields + _sfc_fields
-    _status_map  = {}
-    for key in _requested:
-        prefix, vt_str, field = key
-        _status_map[(vt_str, field)] = (
-            ('✓ fetched', '#0a5c36', '#d1fae5') if key in _fetched
-            else ('✗ missing', '#991b1b', '#fee2e2')
-        )
-
-    _col_headers = ''.join(
-        f'<th style="padding:6px 8px;color:#6b7280;font-weight:500;'
-        f'font-size:11px;white-space:nowrap;border-bottom:2px solid #e5e7eb;">'
-        f'{v}</th>' for v in _all_vt_strs)
-
-    _html_rows = ''
-    for field in _all_fields:
-        _cells = ''
-        for vt_str in _all_vt_strs:
-            st, co, bg = _status_map.get((vt_str, field), ('–', '#9ca3af', '#f9fafb'))
-            sym = '✓' if 'fetched' in st else ('✗' if 'missing' in st else '–')
-            _cells += (f'<td style="padding:6px 8px;text-align:center;">'
-                       f'<span title="{st}" style="display:inline-block;width:22px;height:22px;'
-                       f'line-height:22px;border-radius:4px;background:{bg};color:{co};'
-                       f'font-size:13px;font-weight:600;">{sym}</span></td>')
-        _html_rows += (f'<tr style="border-bottom:0.5px solid #f3f4f6;">'
-                       f'<td style="padding:6px 10px;font-size:12px;white-space:nowrap;'
-                       f'color:#374151;font-weight:500;">{field}</td>{_cells}</tr>')
-
-    _html = f'''
-<div style="font-family:Courier New,monospace;font-size:12px;margin:8px 0;">
-  <div style="display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap;">
-    <div style="background:#d1fae5;color:#0a5c36;padding:4px 14px;border-radius:6px;font-weight:600;">
-      ✓ {_n_dl} fetched</div>
-    <div style="background:{'#fee2e2' if _n_mi else '#f0fdf4'};
-      color:{'#991b1b' if _n_mi else '#166534'};
-      padding:4px 14px;border-radius:6px;font-weight:600;">
-      {'✗' if _n_mi else '✓'} {_n_mi} missing</div>
-    <div style="background:#f3f4f6;color:#374151;padding:4px 14px;border-radius:6px;font-weight:600;">
-      {_n_tot} total</div>
-  </div>
-  <table style="border-collapse:collapse;width:100%;font-size:12px;">
-    <thead>
-      <tr style="background:#f9fafb;">
-        <th style="text-align:left;padding:6px 10px;color:#6b7280;font-weight:500;
-          border-bottom:2px solid #e5e7eb;">Field</th>{_col_headers}
-      </tr>
-    </thead>
-    <tbody>{_html_rows}</tbody>
-  </table>
-</div>'''
-    print('  [Data fetch status table omitted in GitHub Actions mode]')
+    print(f'\n  Fetch summary: {_n_dl}/{_n_tot} fields fetched, {_n_mi} missing')
     return errors
 
-gem_ua_errors = asyncio.run(_fetch_and_extract_all())
+gem_ua_errors = _fetch_and_extract_all()
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -1480,63 +1410,73 @@ _sfc_tasks_missing = [t for t in _sfc_tasks if not _task_fetched_sfc(t[2], t[3],
 if _tasks_missing or _sfc_tasks_missing:
     print(f'\n⚠ {len(_tasks_missing)} isobaric + {len(_sfc_tasks_missing)} surface tasks missing — retrying...')
 
-    async def _retry_fetch():
-        sem    = asyncio.Semaphore(MAX_CONCURRENT)
-        errors = []
+    def _retry_fetch():
+        retry_errors = []
+        retry_lock   = _threading.Lock()
 
-        async def _worker_isob_r(model, url, var_name, pres, vt):
+        def _worker_isob_r(model, url, var_name, pres, vt):
             vt_str = vt.strftime('%Y-%m-%d') + f' {vt.hour:02d}Z'
             col    = _VAR_MAP[var_name]
-            async with sem:
-                try:
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_S)) as r:
-                        raw = await r.read() if r.status == 200 else None
-                        status = r.status
-                except Exception as e:
-                    errors.append((url, str(e))); return
+            try:
+                r   = requests.get(url, timeout=TIMEOUT_S)
+                raw = r.content if r.status_code == 200 else None
+                status = r.status_code
+            except Exception as e:
+                with retry_lock: retry_errors.append((url, str(e)))
+                return
             if raw is None:
-                errors.append((url, f'HTTP {status}')); return
+                with retry_lock: retry_errors.append((url, f'HTTP {status}'))
+                return
             try:
                 extracted = _extract_points_grib(raw, _target_lats, _target_lons, var_name)
             except Exception as e:
-                errors.append((url, str(e))); return
-            for (lat, lon), val in extracted.items():
-                key = (lat, lon, vt_str, float(pres))
-                if key not in _point_data: _point_data[key] = {}
-                _point_data[key][col] = val
+                with retry_lock: retry_errors.append((url, str(e)))
+                return
+            with _data_lock:
+                for (lat, lon), val in extracted.items():
+                    key = (lat, lon, vt_str, float(pres))
+                    if key not in _point_data: _point_data[key] = {}
+                    _point_data[key][col] = val
             print(f'  ✓ RETRY {model} {vt_str}  {var_name}@{pres}hPa')
 
-        async def _worker_sfc_r(model, url, var_name, vt, col_suffix):
+        def _worker_sfc_r(model, url, var_name, vt, col_suffix):
             vt_str = vt.strftime('%Y-%m-%d') + f' {vt.hour:02d}Z'
             col    = _SFC_VAR_MAP[var_name] + col_suffix
-            async with sem:
-                try:
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_S)) as r:
-                        raw = await r.read() if r.status == 200 else None
-                        status = r.status
-                except Exception as e:
-                    errors.append((url, str(e))); return
+            try:
+                r   = requests.get(url, timeout=TIMEOUT_S)
+                raw = r.content if r.status_code == 200 else None
+                status = r.status_code
+            except Exception as e:
+                with retry_lock: retry_errors.append((url, str(e)))
+                return
             if raw is None:
-                errors.append((url, f'HTTP {status}')); return
+                with retry_lock: retry_errors.append((url, f'HTTP {status}'))
+                return
             try:
                 extracted = _extract_points_grib(raw, _target_lats, _target_lons, var_name)
             except Exception as e:
-                errors.append((url, str(e))); return
-            for (lat, lon), val in extracted.items():
-                key = (lat, lon, vt_str)
-                if key not in _sfc_data: _sfc_data[key] = {}
-                _sfc_data[key][col] = val
+                with retry_lock: retry_errors.append((url, str(e)))
+                return
+            with _data_lock:
+                for (lat, lon), val in extracted.items():
+                    key = (lat, lon, vt_str)
+                    if key not in _sfc_data: _sfc_data[key] = {}
+                    _sfc_data[key][col] = val
             print(f'  ✓ RETRY {model} {vt_str}  {var_name} [{"PRIOR" if col_suffix else "TARGET"}]')
 
-        connector = aiohttp.TCPConnector(limit=MAX_CONCURRENT, ssl=False)
-        async with aiohttp.ClientSession(connector=connector) as session:
-            await asyncio.gather(
-                *[_worker_isob_r(*t) for t in _tasks_missing],
-                *[_worker_sfc_r(*t)  for t in _sfc_tasks_missing],
-            )
-        return errors
+        all_retry = [('isob', t) for t in _tasks_missing] + [('sfc', t) for t in _sfc_tasks_missing]
+        with _cf.ThreadPoolExecutor(max_workers=MAX_CONCURRENT) as executor:
+            futs = []
+            for kind, t in all_retry:
+                if kind == 'isob':
+                    futs.append(executor.submit(_worker_isob_r, *t))
+                else:
+                    futs.append(executor.submit(_worker_sfc_r, *t))
+            for f in _cf.as_completed(futs):
+                f.result()
+        return retry_errors
 
-    _retry_errors = asyncio.run(_retry_fetch())
+    _retry_errors = _retry_fetch()
     if _retry_errors:
         print(f'  Retry errors ({len(_retry_errors)}):')
         for _u, _e in _retry_errors:
@@ -1718,27 +1658,15 @@ _summary = (
     .reset_index()
 )
 
-display(HTML(
-    '<div style="font-family:Courier New,monospace;font-size:12px;'
-    'border:2px solid #1a4a7a;border-radius:8px;padding:10px 16px;'
-    'background:#e8f0fb;margin:8px 0;">'
-    '<b style="color:#1a3a6a;">✔ GEM upper-air + surface merged into ua_raw_df '
-    '(RDPS days 0-3 · GDPS days 3-7 · dd.weather.gc.ca WXO-DD GRIB2)</b><br>'
-    f'<span style="color:#555;">'
-    f'{gem_ua_df["icao"].nunique()} virtual stations &mdash; '
-    f'{len(GEM_PRESSURE_LEVELS)} pressure levels + surface &mdash; '
-    f'{gem_ua_df["valid_time"].nunique()} valid times &mdash; '
-    f'{len(gem_ua_df)} total rows &mdash; '
-    f'MSLP &amp; QPF12H (true 12h diff) included</span></div>'
-    + _summary.to_html(index=False, border=0, table_id='gem-ua-summary')
-))
+print(f'\n✔ GEM upper-air + surface merged into ua_raw_df '
+      f'(RDPS days 0-{RDPS_FORECAST_DAYS} · GDPS days {RDPS_FORECAST_DAYS}-{GDPS_FORECAST_DAYS} · dd.weather.gc.ca WXO-DD GRIB2)')
+print(_summary.to_string(index=False))
 
 # @title
 # ── Cell UA-3 . Standard-level summary table (850/700/500/250 hPa) ────────
 print('--- Upper Air station - Data extract ---')
 import pandas as pd
 import numpy as np
-
 
 STANDARD_LEVELS = [850, 500]
 LEVEL_TOL       = 25
@@ -1877,9 +1805,8 @@ else:
             s = s.bar(subset=pres_cols, color='#9ecae1', vmin=200, vmax=900)
         return s
 
-    _sh = _style_summary(ua_summary_df.head(10)).to_html()
-    _fl = _style_summary(ua_summary_df).to_html()
-    print('[HTML status display omitted in GitHub Actions mode]')
+    print(ua_summary_df.head(10).to_string())
+    print(f'  ... ({len(ua_summary_df)} total rows)')
 
 # @title
 # ── Block 01 SKIPPED — populate empty segment globals for downstream cells ──
@@ -2331,8 +2258,7 @@ matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 import matplotlib.patches as _mpatches
 from datetime import date as _date
-_display = lambda *a, **k: None
-_Image   = lambda *a, **k: None
+
 print('=' * 60)
 print('  BLOCK 05 — Cell 2')
 print('  Normal Temperature Bands & Colour Tables')
@@ -2549,7 +2475,10 @@ _buf = _io.BytesIO()
 _fig_demo.savefig(_buf, format='png', dpi=130, bbox_inches='tight')
 plt.close(_fig_demo)
 _buf.seek(0)
-_display(_Image(_buf.read()))
+_png_path = 'temp_band_legend.png'
+with open(_png_path, 'wb') as _fp:
+    _fp.write(_buf.read())
+print(f'Temperature band legend saved to: {_png_path}')
 
 print('\n✅ Cell 2 complete — band tables and colour scales ready.')
 print(f'   Exports: UA_TEMP_BANDS_850, UA_TEMP_BANDS_500, UA_TEMP_BANDS')
@@ -2603,7 +2532,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from metpy.calc import peak_persistence, smooth_gaussian
 from metpy.units import units
 
-# keepalive not needed in GitHub Actions
+# (Colab keepalive removed — not needed outside Colab)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -2703,10 +2632,58 @@ def _find_ua_hl_metpy(hght_grid, lon_vec, lat_vec, pressure_level):
                 accepted.append({'type': typ, 'lat': lat, 'lon': lon,
                                  'val':  float(sm[r, c]),
                                  'persistence': float(pers)})
+                print(f'        ✓ {typ}  lat={lat:.1f}  lon={lon:.1f}  val={sm[r,c]:.0f}m  pers={pers:.2f}')
         all_centers.extend(accepted)
     return all_centers
 
 
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  W/C DETECTION
+# ══════════════════════════════════════════════════════════════════════════
+# ── W/C (Warm/Cold centre) detection config ───────────────────────────────
+WC_LEVELS         = [850, 500]          # pressure levels to detect on
+WC_MIN_PERSISTENCE = {850: 1.0, 500: 1.0}   # °C
+WC_MIN_DISTANCE_KM = {850: 400.0, 500: 400.0}
+WC_EDGE_SKIP_DEG  = HL_EDGE_SKIP_DEG        # reuse same edge margin
+WC_SMOOTH_N       = HL_SMOOTH_N             # reuse same MetPy smoothing
+
+
+def _find_wc_metpy(temp_grid, lon_vec, lat_vec, pressure_level):
+    """Detect warm (W) / cold (C) temperature centres via MetPy peak_persistence."""
+    min_pers    = WC_MIN_PERSISTENCE.get(pressure_level, 2.0)
+    min_dist_km = WC_MIN_DISTANCE_KM.get(pressure_level, 350.0)
+    edge_skip   = WC_EDGE_SKIP_DEG
+
+    grid_q = temp_grid * units.degC
+    sm     = smooth_gaussian(grid_q, n=WC_SMOOTH_N).magnitude
+    print(f'      W/C {pressure_level}hPa: T range [{sm.min():.1f}, {sm.max():.1f}]°C  min_pers={min_pers}')
+    all_centers = []
+
+    for typ, maxima in [('W', True), ('C', False)]:
+        pp       = peak_persistence(sm, maxima=maxima)
+        print(f'      W/C {pressure_level}hPa {typ}: {len(pp)} raw candidates from peak_persistence')
+        accepted = []
+        for (r, c), pers in pp:
+            if pers != float('inf') and pers < min_pers:
+                continue
+            lat = float(lat_vec[r])
+            lon = float(lon_vec[c])
+            if (lat < lat_vec[0]  + edge_skip or lat > lat_vec[-1] - edge_skip or
+                    lon < lon_vec[0]  + edge_skip or lon > lon_vec[-1] - edge_skip):
+                continue
+            too_close = any(
+                _haversine_km(lat, lon, p['lat'], p['lon']) < min_dist_km
+                for p in accepted
+            )
+            if not too_close:
+                accepted.append({'type': typ, 'lat': lat, 'lon': lon,
+                                 'val':  float(sm[r, c]),
+                                 'persistence': float(pers)})
+                print(f'        ✓ {typ}  lat={lat:.1f}  lon={lon:.1f}  val={sm[r,c]:.1f}°C  pers={pers:.2f}')
+        all_centers.extend(accepted)
+    return all_centers
 # ══════════════════════════════════════════════════════════════════════════
 #  PER-LEVEL WORKER
 # ══════════════════════════════════════════════════════════════════════════
@@ -2811,7 +2788,15 @@ def _process_level(_df_hr, _plvl, _bands_850, _bands_500, _hght_levels, _key):
         if hg is not None:
             _ua_hl = _find_ua_hl_metpy(hg, lv_hl, ltv_hl, _plvl)
 
-    return _plvl, _lvl_data, _ua_hl
+    # ── W/C detection ─────────────────────────────────────────────────────
+    _ua_wc = []
+    if _plvl in WC_LEVELS:
+        cached = _tgrid_cache.get(f'{_plvl}_{_key}')
+        if cached is not None:
+            tg, lv_wc, ltv_wc, _ = cached
+            _ua_wc = _find_wc_metpy(tg, lv_wc, ltv_wc, _plvl)
+
+    return _plvl, _lvl_data, _ua_hl, _ua_wc
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -2868,6 +2853,8 @@ for (_date_val, _hr) in _synoptic_times:
 
     _hr_data   = {}
     _ua_hl_all = {}
+    _ua_wc_all = {}
+
 
     with ThreadPoolExecutor(max_workers=4) as _pool:
         _futs = {_pool.submit(_process_level, _df_hr, pl,
@@ -2875,19 +2862,23 @@ for (_date_val, _hr) in _synoptic_times:
                               UA_HGHT_LEVELS, _key): pl
                  for pl in [850, 700, 500, 250]}
         for _fut in as_completed(_futs):
-            _plvl, _lvl_data, _hl_list = _fut.result()
+            _plvl, _lvl_data, _hl_list, _wc_list = _fut.result()
             _hr_data[str(_plvl)] = _lvl_data
             _ua_hl_all[_plvl]    = _hl_list
+            _ua_wc_all[_plvl]    = _wc_list
             print(f'    {_plvl} hPa  '
                   f'HGHT:{len(_lvl_data["hght"])}  '
                   f'TEMP:{len(_lvl_data["temp"])}  '
                   f'fills:0 (Cell 1B)  '
                   f'T-Td:{len(_lvl_data["ttdp"])}  '
                   f'WIND:{len(_lvl_data["sped"])}  '
-                  f'HL:{len(_hl_list)}')
+                  f'HL:{len(_hl_list)}  WC:{len(_wc_list)}')
             for c in _hl_list:
                 print(f'      {c["type"]}  lat={c["lat"]:.1f}  lon={c["lon"]:.1f}'
                       f'  val={c["val"]:.0f}m  pers={c["persistence"]:.1f}')
+            for c in _wc_list:
+                print(f'      {c["type"]}  lat={c["lat"]:.1f}  lon={c["lon"]:.1f}'
+                      f'  val={c["val"]:.1f}°C  pers={c["persistence"]:.1f}')
 
     # ── Instability (T700 - T500) ─────────────────────────────────────────
     _instab_cts = []
@@ -2963,6 +2954,8 @@ for (_date_val, _hr) in _synoptic_times:
         'thermal_trough_500': [_seg_to_dict(s) for s in globals().get(f'trough_segs_500_{_key}',   [])],
         'dtdx_zero_pts':      [],
         **{f'hl_{pl}': _ua_hl_all.get(pl, []) for pl in HL_LEVELS},
+        **{f'wc_{pl}': _ua_wc_all.get(pl, []) for pl in WC_LEVELS},
+
     }
     print(f'    → stored {_key}  ({time.time() - _t0:.1f}s)')
 
@@ -2973,11 +2966,17 @@ for (_date_val, _hr) in _synoptic_times:
     _k = f'{_date_str}_{int(_hr):02d}'
     for _pl in HL_LEVELS:
         _hl_list = _ts_ua[_k].get(f'hl_{_pl}', 'KEY MISSING')
-        print(f'    {_k} {_pl}hPa: {_hl_list}')
+        print(f'    {_k} {_pl}hPa HL: {_hl_list}')
+    for _pl in WC_LEVELS:
+        _wc_list = _ts_ua[_k].get(f'wc_{_pl}', 'KEY MISSING')
+        print(f'    {_k} {_pl}hPa WC: {_wc_list}')
 
 print(f'\n✅ Cell 1A complete — {len(_ts_ua)} synoptic time(s)')
 print(f'   _tgrid_cache keys: {sorted(_tgrid_cache.keys())}')
 print(f'   ▶ Run Cell 1B to build temperature band fills.')
+
+_ts_ua_json_str = _json_ua.dumps(_ts_ua)
+print(f'  _ts_ua_json_str: {len(_ts_ua_json_str)//1024} KB')
 
 # @title
 # How temp band get filled
@@ -3271,8 +3270,8 @@ for _k in _ts_ua:
             # Truncate coord precision to 4 decimal places
             f['coords'] = [[round(c[0], 4), round(c[1], 4)] for c in f['coords']]
 
-_ts_ua_json_str = _json_ua.dumps(_ts_ua, separators=(',', ':'))
-print(f"JSON size: {len(_ts_ua_json_str)//1024} KB")
+_ts_ua_json_str = _json_ua.dumps(_ts_ua)
+print(f'\n✅ Cell 1B complete ...')
 
     # Rebuild JSON for Cell 9
 _ts_ua_json_str = _json_ua.dumps(_ts_ua)
@@ -3523,7 +3522,7 @@ borders_js = (
     '    fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson")\n'
     '      .then(function(r){return r.json();})\n'
     '      .then(function(gj){\n'
-    '        L.geoJSON(gj,{style:function(){return {color:"none",weight:0,fill:true,fillColor:"#e8e8e8",fillOpacity:1.0};},pane:"landPane"}).addTo(MAP);\n'
+    '        L.geoJSON(gj,{style:function(){return {color:"none",weight:0,fill:true,fillColor:"#d4d4d4",fillOpacity:1.0};},pane:"landPane"}).addTo(MAP);\n'
     '      }).catch(function(e){console.warn("land fill load failed",e);});\n'
     '    var items=[\n'
     '      ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_coastline.geojson",\n'
@@ -3721,13 +3720,12 @@ for (date_val, hr), _grp in ua_summary_df.groupby(
     _stns     = []
 
     _PINNED_COORDS = [
-        (54.00, -114.00),   # Edmonton Stony Plain  (was 53.55, -114.10)
-        (60.00, -112.00),   # Fort Smith            (was 60.02, -111.95)
-        (58.00, -122.00),   # Fort Nelson           (was 58.83, -122.58)
-        (54.00, -122.00),   # Prince George         (was 53.88, -122.68)
-        (50.00, -128.00),   # Port Hardy            (was 50.68, -127.37)
-        (60.00, -136.00),   # Whitehorse            (was 60.72, -135.07)
-        (66.00, -126.00),   # Norman Wells          (was 65.28, -126.80)
+        (54.00, -114.00),   # WSE; Edmonton Stony Plain  (was 53.55, -114.10)
+        (60.00, -112.00),   # YSM; Fort Smith            (was 60.02, -111.95)
+        (58.00, -122.00),   # YYE; Fort Nelson           (was 58.83, -122.58)
+        (54.00, -122.00),   # ZXS; Prince George         (was 53.88, -122.68)
+        (60.00, -136.00),   # YXY; Whitehorse            (was 60.72, -135.07)
+        (66.00, -126.00),   # YVQ; Norman Wells          (was 65.28, -126.80)
     ]
     def _is_pinned(row, coords=_PINNED_COORDS, tol=0.5):
         return any(abs(row['lat']-la) < tol and abs(row['lon']-lo) < tol for la, lo in coords)
@@ -3810,7 +3808,14 @@ for (date_val, hr), _grp in ua_summary_df.groupby(
             if _lws is not None and not (isinstance(_lws, float) and math.isnan(_lws)):
                 _lws_kt = _lws * 1
             _ua_d = {
-                'icao': str(_r['icao']),
+                'icao': {
+                    (54.00, -114.00): 'WSE',
+                    (60.00, -112.00): 'YSM',
+                    (58.00, -122.00): 'YYE',
+                    (54.00, -122.00): 'ZXS',
+                    (60.00, -136.00): 'YXY',
+                    (66.00, -126.00): 'YVQ',
+                }.get((round(float(_r['lat']), 2), round(float(_r['lon']), 2)), '   '),
                 'temp': round(_lt, 1) if _lt is not None and not (isinstance(_lt, float) and math.isnan(_lt)) else None,
                 'dew':  round(_lttd, 1) if _lttd is not None else None,
                 'wind_dir': int(_lwd) if _lwd is not None and not (isinstance(_lwd, float) and math.isnan(_lwd)) else None,
@@ -4070,8 +4075,8 @@ function synRenderUA(fullKey, stepLabel) {{
       Math.round(ct.level) === KEY_HGT_M[_synLevel]));
     var _hLine = L.polyline(ll, {{
       color:   "#000000",
-      weight:  isKey ? 4.5 : 1.5,
-      opacity: isKey ? 1.0 : 0.85,
+      weight:  isKey ? 5.5 : 2.5,
+      opacity: isKey ? 1.0 : 1.0,
       pane:    "heightPane"
     }});
     if (_synShowTooltips) _hLine.bindTooltip(_synLevel + " hPa Hgt=" + Math.round(ct.level) + "dam");
@@ -4138,7 +4143,7 @@ function synRenderUA(fullKey, stepLabel) {{
     }}) }}).addTo(_synUALayer);
   }});
 
-  // ── UA H/L centres ────────────────────────────────────────────────────
+    // ── UA H/L centres ────────────────────────────────────────────────────
   var _uaHL = (_SYN_UA[fullKey] || {{}})["hl_" + _synLevel] || [];
   _uaHL.forEach(function(c) {{
     var _shadow = "1px 1px 0 white,-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white";
@@ -4153,7 +4158,44 @@ function synRenderUA(fullKey, stepLabel) {{
     _hlMark.addTo(_synUALayer);
   }});
 
+  // ── UA W/C centres ────────────────────────────────────────────────────
+  var _uaWC = (_SYN_UA[fullKey] || {{}})["wc_" + _synLevel] || [];
+  _uaWC.forEach(function(c) {{
+    var _isW     = c.type === "W";
+    var _fgColor = _isW ? "#cc0000" : "#0033cc";
+    var _bgColor = _isW ? "#ffcccc" : "#cce0ff";
+    var _shadow  = "2px 2px 0 " + _bgColor
+      + ",-2px -2px 0 " + _bgColor
+      + ",2px -2px 0 "  + _bgColor
+      + ",-2px 2px 0 "  + _bgColor
+      + ",-2px 0 0 "    + _bgColor
+      + ",2px 0 0 "     + _bgColor
+      + ",0 -2px 0 "    + _bgColor
+      + ",0 2px 0 "     + _bgColor;
+    var _html = '<div style="font-size:61px;font-weight:bold;color:' + _fgColor + ';'
+      + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
+      + 'text-shadow:' + _shadow + ';pointer-events:none;">' + c.type + '</div>';
+    var _wcMark = L.marker([c.lat, c.lon], {{
+      icon: L.divIcon({{ html: _html, iconSize: [70,65], iconAnchor: [35,32], className: "" }}),
+      zIndexOffset: 190
+    }});
+    if (_synShowTooltips) _wcMark.bindTooltip(
+      _synLevel + " hPa " + c.type + " " + c.val.toFixed(1) + "\u00b0C"
+    );
+    _wcMark.addTo(_synUALayer);
+  }});
+
   _synUALayer.addTo(MAP);
+
+  // ── Pinned station code labels ────────────────────────────────────────
+  var _PINNED_LABELS = [
+    {{ lat: 54.00, lon: -114.00, code: "WSE" }},
+    {{ lat: 60.00, lon: -112.00, code: "YSM" }},
+    {{ lat: 58.00, lon: -122.00, code: "YYE" }},
+    {{ lat: 54.00, lon: -122.00, code: "ZXS" }},
+    {{ lat: 60.00, lon: -136.00, code: "YXY" }},
+    {{ lat: 66.00, lon: -126.00, code: "YVQ" }},
+  ];
 
   // ── Station wind barbs ────────────────────────────────────────────────
   var stns = _SYN_UA_STNS[fullKey] || [];
@@ -4635,15 +4677,11 @@ else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700);
 m.get_root().html.add_child(Element(_bar_html))
 m.get_root().html.add_child(Element(_js))
 
-# ── Save and display ───────────────────────────────────────────────────────
-out_path = 'output/synoptic_map.html'
+# ── Save map ───────────────────────────────────────────────────────────────
+out_path = 'synoptic_map.html'
 m.save(out_path)
-
-
-with open(out_path) as _f:
-    _html = _f.read()
-
-print(f'✅ Upper-air map saved to {out_path}')
+print(f'\n✅ Synoptic map saved to: {out_path}')
+print(f'   Open this file in a browser to view the interactive map.')
 
 """Below is LLJ plot. Not running at the moment.
 
@@ -4651,7 +4689,8 @@ Ctrl A & Ctrl / to cancel comment out.
 """
 
 # @title
-print('This is LLJ code for future use')
+# # @title
+print('this is LLJ for future use')
 
 # # Cell 9 — Synoptic map
 # # Layers: height + temp always on, 850/500 selector, time slider
@@ -4837,7 +4876,7 @@ print('This is LLJ code for future use')
 #     '    fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson")\n'
 #     '      .then(function(r){return r.json();})\n'
 #     '      .then(function(gj){\n'
-#     '        L.geoJSON(gj,{style:function(){return {color:"none",weight:0,fill:true,fillColor:"#e8e8e8",fillOpacity:1.0};},pane:"landPane"}).addTo(MAP);\n'
+#     '        L.geoJSON(gj,{style:function(){return {color:"none",weight:0,fill:true,fillColor:"#d4d4d4",fillOpacity:1.0};},pane:"landPane"}).addTo(MAP);\n'
 #     '      }).catch(function(e){console.warn("land fill load failed",e);});\n'
 #     '    var items=[\n'
 #     '      ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_coastline.geojson",\n'
@@ -5919,10 +5958,10 @@ print('This is LLJ code for future use')
 # m.get_root().html.add_child(Element(_js))
 
 # # ── Save and display ───────────────────────────────────────────────────────
-# out_path = 'output/synoptic_map.html'
+# out_path = '/content/synoptic_map.html'
 # m.save(out_path)
 
-# 
+# from IPython.display import Javascript, display
 # with open(out_path) as _f:
 #     _html = _f.read()
 
@@ -5951,7 +5990,6 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from scipy.ndimage import zoom as _zoom
-
 
 if 'ua_raw_df' not in globals():
     raise RuntimeError('❌ Run Cell UA-2b first')
@@ -5991,7 +6029,7 @@ def _extract_contours(grid, lon_vec, lat_vec, interval):
     contours = []
     for li, lvl in enumerate(cs.levels):
         is_major = (round((lvl - 1000) % 16) == 0)
-        weight   = 2.5 if is_major else 2.0
+        weight   = 3.5 if is_major else 3.0
         opacity  = 1.0 if is_major else 1.0
         for coords in cs.allsegs[li]:
             if len(coords) < 2: continue
@@ -6111,7 +6149,7 @@ _borders_js = '''
     fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson")
       .then(function(r){return r.json();})
       .then(function(gj){
-        L.geoJSON(gj,{style:function(){return{color:"none",weight:0,fill:true,fillColor:"#e8e8e8",fillOpacity:0.5};},pane:"landPane"}).addTo(MAP);
+        L.geoJSON(gj,{style:function(){return{color:"none",weight:0,fill:true,fillColor:"#d4d4d4",fillOpacity:1.0};},pane:"landPane"}).addTo(MAP);
       });
     [
       ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_coastline.geojson",
@@ -6402,7 +6440,7 @@ function gemRender(idx){{
       L.marker([c.lat,c.lon],{{
         icon:L.divIcon({{
           html:'<div style="font-size:52px;font-weight:bold;'
-              +'color:'+(_isH?'#cc0000':'#0000cc')+';'
+              +'color:'+(_isH?'#000000':'#000000')+';'
               +'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
               +'text-shadow:'+_shadow+';pointer-events:none;">'
               +c.type+'<br>'
@@ -6550,7 +6588,7 @@ function _gemRunExportQueue(done){{
       ctx.fillText(tsStr,blackW/2,cropH+BANNER_H/2);
       ctx.font="bold 42px Arial,sans-serif"; ctx.fillStyle="#111111";
       ctx.textAlign="left"; ctx.textBaseline="middle";
-      ctx.fillText("GEM Surface \u2014 MSLP & 12h Precipitation accumulation",blackW+24,cropH+BANNER_H/2);
+      ctx.fillText("Surface & 12h Precipitation accumulation (noon to midnight)",blackW+24,cropH+BANNER_H/2);
       ctx.font="bold 38px Arial,sans-serif"; ctx.fillStyle="#333333";
       ctx.textAlign="right"; ctx.textBaseline="middle";
       ctx.fillText("AWCC Weather Office",cropW-24,cropH+BANNER_H/2);
@@ -6713,30 +6751,10 @@ _banner_html = f'''
 '''
 m.get_root().html.add_child(Element(_banner_html))
 
-_out_path = 'output/gem_surface_map.html'
+_out_path = 'gem_surface_map.html'
 m.save(_out_path)
 
-with open(_out_path) as _f:
-    _html = _f.read()
-
-display(Javascript(f"""
-  var iframe = document.createElement('iframe');
-  iframe.style.width        = '100%';
-  iframe.style.height       = '700px';
-  iframe.style.border       = '1px solid #ccc';
-  iframe.style.borderRadius = '6px';
-  var target = document.querySelector('#output-area, .output, .jp-OutputArea-output') || document.body;
-  target.appendChild(iframe);
-  iframe.contentDocument.open();
-  iframe.contentDocument.write({repr(_html)});
-  iframe.contentDocument.close();
-"""))
-
-print(f'\\n✅ Cell UA-2d complete — map saved to {_out_path}')
+print(f'\n✅ Cell UA-2d complete — map saved to {_out_path}')
+print(f'   Open this file in a browser to view the interactive map.')
 
 # @title
-
-#####################################################
-# ── Stop keepalive ────────────────────────────────
-#####################################################
-print('✓ Script complete')
