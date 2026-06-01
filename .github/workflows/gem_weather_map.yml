@@ -1,0 +1,70 @@
+name: GEM Weather Map
+
+on:
+  schedule:
+    # Edmonton Mountain Time — 4 schedules to cover MDT (UTC-6) and MST (UTC-7)
+    - cron: '17 10 * * *'   # 04:17 MDT (summer, Mar–Nov)
+    - cron: '17 11 * * *'   # 04:17 MST (winter, Nov–Mar)
+    - cron: '19 18 * * *'   # 12:19 MDT (summer, Mar–Nov)
+    - cron: '19 19 * * *'   # 12:19 MST (winter, Nov–Mar)
+  workflow_dispatch:        # also allow manual runs from GitHub UI
+
+jobs:
+  generate-maps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies (eccodes)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libeccodes-dev
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install \
+            requests \
+            scipy \
+            matplotlib \
+            numpy \
+            pykrige \
+            folium \
+            shapely \
+            branca \
+            pandas \
+            cfgrib \
+            eccodes \
+            xarray \
+            aiohttp
+
+      - name: Create output directory
+        run: mkdir -p output
+
+      - name: Run GEM weather map script
+        run: python forecast_gem_github.py
+
+      - name: Upload output maps as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-weather-maps-${{ github.run_id }}
+          path: output/
+          retention-days: 7
+
+      # Optional: commit outputs back to the repo
+      # Uncomment if you want the HTML files versioned in git
+      # - name: Commit output maps
+      #   run: |
+      #     git config user.name "GitHub Actions"
+      #     git config user.email "actions@github.com"
+      #     git add output/
+      #     git diff --cached --quiet || git commit -m "chore: auto-update weather maps $(date -u +'%Y-%m-%d %H:%MZ')"
+      #     git push
