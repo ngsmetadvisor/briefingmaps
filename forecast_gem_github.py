@@ -9,7 +9,8 @@ Original file is located at
 
 # @title
 # ── Cell 1 . Install & import packages ────────────────────────
-import subprocess, sys, importlib
+import subprocess, sys, importlib, importlib.util
+
 
 # ── Install missing packages ──────────────────────────────────
 _pkg_map = {
