@@ -6711,3 +6711,152 @@ print(f'\n✅ Cell UA-2d complete — map saved to {_out_path}')
 print(f'   Open this file in a browser to view the interactive map.')
 
 # @title
+
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║                     GENERATE OUTPUT INDEX PAGE                              ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+from datetime import datetime, timezone as _tz_idx
+
+_generated_utc = datetime.now(_tz_idx.utc).strftime('%Y-%m-%d %H:%MZ')
+
+_output_files = [
+    ('synoptic_map.html',          '🗺️ Synoptic Map',          'Upper-air analysis — MSLP, 850 & 500 hPa heights, temperature, wind'),
+    ('gem_surface_map.html',       '🌧️ GEM Surface Map',        'GEM MSLP isobars + 12h QPF precipitation accumulation'),
+    ('station_model_examples.svg', '📡 Station Model Examples', 'WMO station model symbol reference chart'),
+    ('temp_band_legend.png',       '🌡️ Temperature Band Legend','850 & 500 hPa normal temperature band colour scale'),
+]
+
+_index_html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWCC Forecast Maps</title>
+  <style>
+    body {{
+      font-family: Arial, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      margin: 0;
+      padding: 0;
+    }}
+    header {{
+      background: #111827;
+      border-bottom: 2px solid #1a4a8a;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }}
+    header h1 {{
+      margin: 0;
+      font-size: 22px;
+      color: #ffffff;
+    }}
+    header p {{
+      margin: 4px 0 0;
+      font-size: 13px;
+      color: #8b949e;
+    }}
+    .badge {{
+      background: #1a4a8a;
+      color: #aed4ff;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }}
+    main {{
+      max-width: 860px;
+      margin: 40px auto;
+      padding: 0 24px;
+    }}
+    h2 {{
+      font-size: 14px;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 0 0 16px;
+    }}
+    .card-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 16px;
+    }}
+    .card {{
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 20px 24px;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      transition: border-color 0.15s, background 0.15s;
+    }}
+    .card:hover {{
+      border-color: #1a4a8a;
+      background: #1a2030;
+    }}
+    .card-title {{
+      font-size: 16px;
+      font-weight: bold;
+      color: #58a6ff;
+      margin-bottom: 6px;
+    }}
+    .card-desc {{
+      font-size: 13px;
+      color: #8b949e;
+      line-height: 1.5;
+    }}
+    footer {{
+      text-align: center;
+      font-size: 12px;
+      color: #484f58;
+      margin: 60px 0 24px;
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>⛅ AWCC Forecast Maps</h1>
+      <p>Based on GEM RDPS &amp; GDPS model data — Meteorological Service of Canada</p>
+    </div>
+    <span class="badge">Updated {_generated_utc}</span>
+  </header>
+  <main>
+    <h2>Available Maps</h2>
+    <div class="card-grid">
+'''
+
+for _fname, _title, _desc in _output_files:
+    _fpath = os.path.join(_OUTPUT_DIR, _fname)
+    if os.path.exists(_fpath):
+        _index_html += f'''      <a class="card" href="{_fname}">
+        <div class="card-title">{_title}</div>
+        <div class="card-desc">{_desc}</div>
+      </a>
+'''
+    else:
+        _index_html += f'''      <div class="card" style="opacity:0.4;cursor:default;">
+        <div class="card-title">{_title}</div>
+        <div class="card-desc">{_desc}<br><em>(not generated this run)</em></div>
+      </div>
+'''
+
+_index_html += f'''    </div>
+  </main>
+  <footer>
+    Generated {_generated_utc} · Data: Meteorological Service of Canada (dd.weather.gc.ca)
+  </footer>
+</body>
+</html>
+'''
+
+_index_path = os.path.join(_OUTPUT_DIR, 'index.html')
+with open(_index_path, 'w') as _f:
+    _f.write(_index_html)
+
+print(f'\n✅ Index page written to {_index_path}')
+print(f'   Links included for files that exist in {_OUTPUT_DIR}/')
