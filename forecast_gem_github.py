@@ -8,30 +8,7 @@ Original file is located at
 """
 
 # @title
-# ── Cell 1 . Install & import packages ────────────────────────
-import subprocess, sys, importlib
-
-# ── Install missing packages ──────────────────────────────────
-_pkg_map = {
-    'requests':   'requests',
-    'scipy':      'scipy',
-    'matplotlib': 'matplotlib',
-    'numpy':      'numpy',
-    'pykrige':    'pykrige',
-    'folium':     'folium',
-    'shapely':    'shapely',
-    'branca':     'branca',
-    'pandas':     'pandas',
-}
-
-_to_install = [pip for pip, imp in _pkg_map.items()
-               if importlib.util.find_spec(imp) is None]
-
-if _to_install:
-    print(f'Installing: {_to_install}')
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q'] + _to_install)
-else:
-    print('All packages already present — nothing to install.')
+# ── Cell 1 . Import packages ────────────────────────────────────
 
 # ── Standard library ──────────────────────────────────────────
 import csv, io, json, math, os, re, time, warnings
@@ -90,22 +67,7 @@ HL_SIGMA        = 1.0              # gaussian smooth before extrema search (0.1�
 
 print(f'Coverage: {COVERAGE} | Interp: {INTERP_METHOD} | Grid: {GRID_N} | Export: {EXPORT_TIME}')
 
-#################################
-_pkgs = ['cfgrib', 'eccodes']
-for _p in _pkgs:
-    try:
-        __import__(_p)
-        print(f'✓ {_p} already installed')
-    except ImportError:
-        print(f'Installing {_p}…')
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q', _p])
-        print(f'✓ {_p} installed')
-
-import os
-if not os.path.exists('/usr/include/eccodes.h'):
-    subprocess.call(['apt-get', 'install', '-y', '-q', 'libeccodes-dev'],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-print('✓ libeccodes-dev ready')
+print('✓ All packages ready (installed via pip in workflow)')
 
 ##########################################################
 ##########################################################
@@ -640,15 +602,6 @@ print(f'Station model SVG saved to: {_svg_out_path}')
 # ── Cell UA-2b. Fetch GEM upper-air + surface: RDPS days 0-3, GDPS days 3-7 ──
 # ── Source: dd.weather.gc.ca  WXO-DD layout (confirmed May 2026) ─────────────
 # - new code, with better runs checking system before run
-
-import subprocess, sys
-for _pkg in ['cfgrib', 'eccodes', 'xarray', 'scipy']:
-    try:
-        __import__(_pkg)
-    except ImportError:
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q', _pkg])
-subprocess.call(['apt-get', 'install', '-y', '-q', 'libeccodes-dev'],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 import xarray as xr
 from scipy.spatial import cKDTree
@@ -2505,12 +2458,7 @@ print(f'            _normal_850_hi/lo, _normal_500_hi/lo, _TODAY')
 #    - _ts_ua_json_str        (set to empty by Cell 1B after patching)
 # ══════════════════════════════════════════════════════════════════════════
 
-# ── Install MetPy if not present ──────────────────────────────────────────
-try:
-    import metpy
-except ModuleNotFoundError:
-    import subprocess, sys
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'metpy', '-q'])
+import metpy
 
 print('=' * 60)
 print('  BLOCK 05 — Cell 1A')
