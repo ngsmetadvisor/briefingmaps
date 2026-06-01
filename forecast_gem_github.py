@@ -4630,10 +4630,50 @@ else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700);
 m.get_root().html.add_child(Element(_bar_html))
 m.get_root().html.add_child(Element(_js))
 
+# ── Run-info banner (synoptic map) ────────────────────────────────────────
+import datetime as _dt_mod
+_script_run_utc = _dt_mod.datetime.now(_dt_mod.timezone.utc).strftime('%Y-%m-%d %H:%MZ')
+_rdps_run_str   = _rdps_run_dt.strftime('%Y-%m-%d %HZ')
+_gdps_run_str   = _gdps_run_dt.strftime('%Y-%m-%d %HZ')
+
+_run_info_html = f'''
+<div id="run-info-banner" style="
+  position:fixed;bottom:0;left:0;right:0;z-index:10005;
+  background:rgba(15,20,30,0.88);backdrop-filter:blur(4px);
+  color:#c9d1d9;font-family:Courier New,monospace;font-size:11px;
+  display:flex;align-items:center;gap:0;
+  border-top:1px solid #30363d;
+  pointer-events:none;
+">
+  <span style="background:#1a4a8a;color:#aed4ff;padding:4px 12px;font-weight:bold;white-space:nowrap;">
+    Script run
+  </span>
+  <span style="padding:4px 14px;border-right:1px solid #30363d;white-space:nowrap;">
+    {_script_run_utc}
+  </span>
+  <span style="background:#0d3320;color:#56d364;padding:4px 12px;font-weight:bold;white-space:nowrap;">
+    RDPS run
+  </span>
+  <span style="padding:4px 14px;border-right:1px solid #30363d;white-space:nowrap;">
+    {_rdps_run_str}
+  </span>
+  <span style="background:#2d1b00;color:#f0883e;padding:4px 12px;font-weight:bold;white-space:nowrap;">
+    GDPS run
+  </span>
+  <span style="padding:4px 14px;white-space:nowrap;">
+    {_gdps_run_str}
+  </span>
+</div>
+'''
+m.get_root().html.add_child(Element(_run_info_html))
+
 # ── Save map ───────────────────────────────────────────────────────────────
 out_path = os.path.join(_OUTPUT_DIR, 'synoptic_map.html')
 m.save(out_path)
 print(f'\n✅ Synoptic map saved to: {out_path}')
+print(f'   Script run : {_script_run_utc}')
+print(f'   RDPS run   : {_rdps_run_str}')
+print(f'   GDPS run   : {_gdps_run_str}')
 print(f'   Open this file in a browser to view the interactive map.')
 
 """Below is LLJ plot. Not running at the moment.
@@ -6704,10 +6744,45 @@ _banner_html = f'''
 '''
 m.get_root().html.add_child(Element(_banner_html))
 
+# ── Run-info banner (GEM surface map) ────────────────────────────────────
+_run_info_html_gem = f'''
+<div id="run-info-banner" style="
+  position:fixed;bottom:0;left:0;right:0;z-index:10005;
+  background:rgba(15,20,30,0.88);backdrop-filter:blur(4px);
+  color:#c9d1d9;font-family:Courier New,monospace;font-size:11px;
+  display:flex;align-items:center;gap:0;
+  border-top:1px solid #30363d;
+  pointer-events:none;
+">
+  <span style="background:#1a4a8a;color:#aed4ff;padding:4px 12px;font-weight:bold;white-space:nowrap;">
+    Script run
+  </span>
+  <span style="padding:4px 14px;border-right:1px solid #30363d;white-space:nowrap;">
+    {_script_run_utc}
+  </span>
+  <span style="background:#0d3320;color:#56d364;padding:4px 12px;font-weight:bold;white-space:nowrap;">
+    RDPS run
+  </span>
+  <span style="padding:4px 14px;border-right:1px solid #30363d;white-space:nowrap;">
+    {_rdps_run_str}
+  </span>
+  <span style="background:#2d1b00;color:#f0883e;padding:4px 12px;font-weight:bold;white-space:nowrap;">
+    GDPS run
+  </span>
+  <span style="padding:4px 14px;white-space:nowrap;">
+    {_gdps_run_str}
+  </span>
+</div>
+'''
+m.get_root().html.add_child(Element(_run_info_html_gem))
+
 _out_path = os.path.join(_OUTPUT_DIR, 'gem_surface_map.html')
 m.save(_out_path)
 
 print(f'\n✅ Cell UA-2d complete — map saved to {_out_path}')
+print(f'   Script run : {_script_run_utc}')
+print(f'   RDPS run   : {_rdps_run_str}')
+print(f'   GDPS run   : {_gdps_run_str}')
 print(f'   Open this file in a browser to view the interactive map.')
 
 # @title
