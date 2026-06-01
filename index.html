@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AWCC Weather Maps</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #1a1a2e; color: #e0e0e0;
+           display: flex; flex-direction: column; align-items: center;
+           justify-content: center; height: 100vh; margin: 0; }
+    h1   { color: #4a7fc1; }
+    a    { display: block; margin: 16px; padding: 16px 40px;
+           background: #4a7fc1; color: white; text-decoration: none;
+           border-radius: 8px; font-size: 18px; font-weight: bold; }
+    a:hover { background: #6a9fe1; }
+    .ts  { color: #8888aa; font-size: 13px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>AWCC Weather Maps</h1>
+  <a href="synoptic_map.html">🌐 Upper Air Map (850 / 500 hPa)</a>
+  <a href="gem_surface_map.html">🌧 Surface Map (MSLP + QPF 12h)</a>
+  <p class="ts">Generated: $(date -u +'%Y-%m-%d %H:%MZ')</p>
+</body>
+</html>
