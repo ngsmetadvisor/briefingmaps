@@ -1,23 +1,124 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>AWCC Weather Maps</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWCC Forecast Maps</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #1a1a2e; color: #e0e0e0;
-           display: flex; flex-direction: column; align-items: center;
-           justify-content: center; height: 100vh; margin: 0; }
-    h1   { color: #4a7fc1; }
-    a    { display: block; margin: 16px; padding: 16px 40px;
-           background: #4a7fc1; color: white; text-decoration: none;
-           border-radius: 8px; font-size: 18px; font-weight: bold; }
-    a:hover { background: #6a9fe1; }
-    .ts  { color: #8888aa; font-size: 13px; margin-top: 8px; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #111827;
+      border-bottom: 2px solid #1a4a8a;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 22px;
+      color: #ffffff;
+    }
+    header p {
+      margin: 4px 0 0;
+      font-size: 13px;
+      color: #8b949e;
+    }
+    .badge {
+      background: #1a4a8a;
+      color: #aed4ff;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+    main {
+      max-width: 860px;
+      margin: 40px auto;
+      padding: 0 24px;
+    }
+    h2 {
+      font-size: 14px;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 0 0 16px;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 20px 24px;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .card:hover {
+      border-color: #1a4a8a;
+      background: #1a2030;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #58a6ff;
+      margin-bottom: 6px;
+    }
+    .card-desc {
+      font-size: 13px;
+      color: #8b949e;
+      line-height: 1.5;
+    }
+    footer {
+      text-align: center;
+      font-size: 12px;
+      color: #484f58;
+      margin: 60px 0 24px;
+    }
   </style>
 </head>
 <body>
-  <h1>AWCC Weather Maps</h1>
-  <a href="synoptic_map.html">🌐 Upper Air Map (850 / 500 hPa)</a>
-  <a href="gem_surface_map.html">🌧 Surface Map (MSLP + QPF 12h)</a>
-  <p class="ts">Generated: $(date -u +'%Y-%m-%d %H:%MZ')</p>
+  <header>
+    <div>
+      <h1>⛅ AWCC Forecast Maps</h1>
+      <p>Based on GEM RDPS &amp; GDPS model data — Meteorological Service of Canada</p>
+    </div>
+    <span class="badge">Updated 2026-06-01 23:31Z</span>
+  </header>
+  <main>
+    <h2>Available Maps</h2>
+    <div class="card-grid">
+      <a class="card" href="synoptic_map.html">
+        <div class="card-title">🗺️ Synoptic Map</div>
+        <div class="card-desc">Upper-air analysis — MSLP, 850 & 500 hPa heights, temperature, wind</div>
+      </a>
+      <a class="card" href="gem_surface_map.html">
+        <div class="card-title">🌧️ GEM Surface Map</div>
+        <div class="card-desc">GEM MSLP isobars + 12h QPF precipitation accumulation</div>
+      </a>
+      <a class="card" href="station_model_examples.svg">
+        <div class="card-title">📡 Station Model Examples</div>
+        <div class="card-desc">WMO station model symbol reference chart</div>
+      </a>
+      <a class="card" href="temp_band_legend.png">
+        <div class="card-title">🌡️ Temperature Band Legend</div>
+        <div class="card-desc">850 & 500 hPa normal temperature band colour scale</div>
+      </a>
+    </div>
+  </main>
+  <footer>
+    Generated 2026-06-01 23:31Z · Data: Meteorological Service of Canada (dd.weather.gc.ca)
+  </footer>
 </body>
 </html>
