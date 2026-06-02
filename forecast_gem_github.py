@@ -6798,6 +6798,8 @@ _generated_utc = datetime.now(_tz_idx.utc).strftime('%Y-%m-%d %H:%MZ')
 _output_files = [
     ('synoptic_map.html',          '🗺️ Upper Air Map',          'Upper-air analysis — 850 & 500 hPa heights, temperature, wind'),
     ('gem_surface_map.html',       '🌧️ Surface Map',        'MSLP + 12h QPF precipitation accumulation'),
+    ('__EXTERNAL__https://ngsmetadvisor.github.io/SfcMap/synoptic_map.html', '🌍 Surface Synoptic Map (Live)', 'Interactive surface synoptic map — external hosted version'),
+    ('__EXTERNAL__https://ngsmetadvisor.github.io/UAanalysis/', '🌐 Upper Air Analysis (Live)', 'Interactive upper air analysis — external hosted version'),
     ('station_model_examples.svg', '📡 Station Model Examples', 'WMO station model symbol reference chart'),
     ('temp_band_legend.png',       '🌡️ Temperature Band Legend','850 & 500 hPa normal temperature band colour scale'),
 ]
@@ -6906,15 +6908,23 @@ _index_html = f'''<!DOCTYPE html>
 '''
 
 for _fname, _title, _desc in _output_files:
-    _fpath = os.path.join(_OUTPUT_DIR, _fname)
-    if os.path.exists(_fpath):
-        _index_html += f'''      <a class="card" href="{_fname}">
-        <div class="card-title">{_title}</div>
+    if _fname.startswith('__EXTERNAL__'):
+        _url = _fname[len('__EXTERNAL__'):]
+        _index_html += f'''      <a class="card" href="{_url}" target="_blank" rel="noopener noreferrer">
+        <div class="card-title">{_title} ↗</div>
         <div class="card-desc">{_desc}</div>
       </a>
 '''
     else:
-        _index_html += f'''      <div class="card" style="opacity:0.4;cursor:default;">
+        _fpath = os.path.join(_OUTPUT_DIR, _fname)
+        if os.path.exists(_fpath):
+            _index_html += f'''      <a class="card" href="{_fname}">
+        <div class="card-title">{_title}</div>
+        <div class="card-desc">{_desc}</div>
+      </a>
+'''
+        else:
+            _index_html += f'''      <div class="card" style="opacity:0.4;cursor:default;">
         <div class="card-title">{_title}</div>
         <div class="card-desc">{_desc}<br><em>(not generated this run)</em></div>
       </div>
