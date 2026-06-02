@@ -3,7 +3,7 @@
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 from datetime import datetime, timezone as _tz_idx
-
+import os
 _generated_utc = datetime.now(_tz_idx.utc).strftime('%Y-%m-%d %H:%MZ')
 
 _output_files = [
