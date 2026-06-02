@@ -6944,7 +6944,7 @@ _index_html += f'''    </div>
           <input id="trig-token-suffix" type="password" placeholder="last 4 chars..." maxlength="4" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;font-family:monospace;">
         </div>
         <button onclick="triggerRun()" id="trig-btn" style="width:100%;padding:9px;background:#1a4a8a;color:#aed4ff;border:1px solid #2a5a9a;border-radius:6px;font-size:14px;font-weight:bold;cursor:pointer;">
-          ▶ Run forecast now
+          ▶ Run forecast now for Upper Air Forecast & QPF
         </button>
 <div id="trig-bar" style="display:none;margin-top:12px;">
           <div style="display:flex;justify-content:space-between;font-size:11px;color:#8b949e;margin-bottom:4px;">
