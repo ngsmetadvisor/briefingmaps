@@ -6396,7 +6396,7 @@ function gemRender(idx){{
     fd.mslp.forEach(function(ct){{
       if(!ct.coords||ct.coords.length<2) return;
       L.polyline(ct.coords,{{
-        color:"#0d2040",
+        color:"#000000",
         weight:ct.weight,
         opacity:ct.opacity,
         pane:"heightPane"
