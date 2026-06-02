@@ -6931,7 +6931,7 @@ _index_html += f'''    </div>
         <input id="trig-branch"   type="hidden" value="main">
         <div style="margin-bottom:12px;">
           <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">Personal access token</div>
-          <input id="trig-token" type="password" placeholder="github_pat_..." style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;font-family:monospace;">
+          <input id="trig-token-suffix" type="password" placeholder="last 4 chars..." maxlength="4" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;font-family:monospace;">
         </div>
         <button onclick="triggerRun()" id="trig-btn" style="width:100%;padding:9px;background:#1a4a8a;color:#aed4ff;border:1px solid #2a5a9a;border-radius:6px;font-size:14px;font-weight:bold;cursor:pointer;">
           ▶ Run forecast now
@@ -6961,11 +6961,12 @@ function triggerRun() {{
   var repo     = document.getElementById('trig-repo').value.trim();
   var workflow = document.getElementById('trig-workflow').value.trim() || 'forecast.yml';
   var branch   = document.getElementById('trig-branch').value.trim() || 'main';
-  var token    = document.getElementById('trig-token').value.trim();
-  if (!token) {{
-    setTrigStatus('Enter your personal access token.', '#f85149');
+  var suffix = document.getElementById('trig-token-suffix').value.trim();
+  if (suffix.length !== 4) {{
+    setTrigStatus('Enter the last 4 characters of the token.', '#f85149');
     return;
   }}
+  var token = 'ghp_5te1jZS2kbyfzeYUANY6CebGtQGpza' + suffix;
   var btn = document.getElementById('trig-btn');
   btn.disabled = true;
   setTrigStatus('Sending trigger...', '#8b949e');
@@ -7083,20 +7084,7 @@ function setTrigProgress(pct, label) {{
 </html>
 '''
 
-# ── Patch: partial-token trigger ──────────────────────────────────────────
-_index_html = _index_html.replace(
-    "  var token    = document.getElementById('trig-token').value.trim();",
-    "  var token = 'ghp_5te1jZS2kbyfzeYUANY6CebGtQGpza' + document.getElementById('trig-token-suffix').value.trim();"
-)
-_index_html = _index_html.replace(
-    "  if (!token) {\n    setTrigStatus('Enter your personal access token.', '#f85149');\n    return;\n  }",
-    "  if (document.getElementById('trig-token-suffix').value.trim().length !== 4) {\n    setTrigStatus('Enter the last 4 characters of the token.', '#f85149');\n    return;\n  }"
-)
-_index_html = _index_html.replace(
-    "  var token    = document.getElementById('trig-token').value.trim();\n  if (!token) {\n    setTrigStatus('Enter your personal access token.', '#f85149');\n    return;\n  }",
-    "  var token = 'ghp_5te1jZS2kbyfzeYUANY6CebGtQGpza' + document.getElementById('trig-token-suffix').value.trim();\n  if (document.getElementById('trig-token-suffix').value.trim().length !== 4) {\n    setTrigStatus('Enter the last 4 characters of the token.', '#f85149');\n    return;\n  }"
-)
-# ─────────────────────────────────────────────────────────────────────────
+
 
 _index_path = os.path.join(_OUTPUT_DIR, 'index.html')
 with open(_index_path, 'w') as _f:
