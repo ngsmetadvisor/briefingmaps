@@ -6417,7 +6417,7 @@ function gemRender(idx){{
       L.marker([_best[0],_best[1]],{{
         icon:L.divIcon({{
           html:'<div style="font-size:11px;font-weight:bold;color:#fff;'
-              +'font-family:Courier New,monospace;background:#0d2040;'
+              +'font-family:Courier New,monospace;background:#000000;'
               +'padding:0 3px;line-height:1.4;text-align:center;min-width:28px;">'
               +ct.level.toFixed(0)+'</div>',
           iconSize:[36,14],iconAnchor:[18,7],className:""
