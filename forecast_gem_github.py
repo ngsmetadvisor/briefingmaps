@@ -7085,16 +7085,16 @@ function setTrigProgress(pct, label) {{
 
 # ── Patch: partial-token trigger ──────────────────────────────────────────
 _index_html = _index_html.replace(
-    '          <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">Personal access token</div>',
-    '          <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">Last 4 characters of access token</div>'
+    "  var token    = document.getElementById('trig-token').value.trim();",
+    "  var token = 'ghp_5te1jZS2kbyfzeYUANY6CebGtQGpza' + document.getElementById('trig-token-suffix').value.trim();"
 )
 _index_html = _index_html.replace(
-    '          <input id="trig-token" type="password" placeholder="github_pat_..." style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;font-family:monospace;">',
-    '          <input id="trig-token-suffix" type="password" maxlength="4" placeholder="last 4 chars..." style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;font-family:monospace;">'
+    "  if (!token) {\n    setTrigStatus('Enter your personal access token.', '#f85149');\n    return;\n  }",
+    "  if (document.getElementById('trig-token-suffix').value.trim().length !== 4) {\n    setTrigStatus('Enter the last 4 characters of the token.', '#f85149');\n    return;\n  }"
 )
 _index_html = _index_html.replace(
-    "  var token    = document.getElementById('trig-token').value.trim();\n  if (!token) {{\n    setTrigStatus('Enter your personal access token.', '#f85149');\n    return;\n  }}",
-    "  var token = 'ghp_5te1jZS2kbyfzeYUANY6CebGtQGpza' + document.getElementById('trig-token-suffix').value.trim();\n  if (document.getElementById('trig-token-suffix').value.trim().length !== 4) {{\n    setTrigStatus('Enter the last 4 characters of the token.', '#f85149');\n    return;\n  }}"
+    "  var token    = document.getElementById('trig-token').value.trim();\n  if (!token) {\n    setTrigStatus('Enter your personal access token.', '#f85149');\n    return;\n  }",
+    "  var token = 'ghp_5te1jZS2kbyfzeYUANY6CebGtQGpza' + document.getElementById('trig-token-suffix').value.trim();\n  if (document.getElementById('trig-token-suffix').value.trim().length !== 4) {\n    setTrigStatus('Enter the last 4 characters of the token.', '#f85149');\n    return;\n  }"
 )
 # ─────────────────────────────────────────────────────────────────────────
 
