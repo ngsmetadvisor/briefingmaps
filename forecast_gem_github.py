@@ -6796,10 +6796,10 @@ from datetime import datetime, timezone as _tz_idx
 _generated_utc = datetime.now(_tz_idx.utc).strftime('%Y-%m-%d %H:%MZ')
 
 _output_files = [
-    ('synoptic_map.html',          '🗺️ Upper Air Map',          'Upper-air analysis — 850 & 500 hPa heights, temperature, wind'),
+    ('synoptic_map.html',          '🗺️ Upper Air Forecst',          'Upper-air analysis — 850 & 500 hPa heights, temperature, wind'),
     ('gem_surface_map.html',       '🌧️ QPF',        'MSLP + 12h QPF precipitation accumulation'),
-    ('__EXTERNAL__https://ngsmetadvisor.github.io/SfcMap/synoptic_map.html', '🌍 Surface Synoptic Map (Live)', 'Interactive surface synoptic map — external hosted version'),
-    ('__EXTERNAL__https://ngsmetadvisor.github.io/UAanalysis/', '🌐 Upper Air Analysis (Live)', 'Interactive upper air analysis — external hosted version'),
+    ('__EXTERNAL__https://ngsmetadvisor.github.io/SfcMap/synoptic_map.html', '🌍 Surface Synoptic Map', 'Interactive surface synoptic map — external hosted version'),
+    ('__EXTERNAL__https://ngsmetadvisor.github.io/UAanalysis/', '🌐 Upper Air Analysis', 'Interactive upper air analysis — external hosted version'),
     ('station_model_examples.svg', '📡 Station Model Examples', 'WMO station model symbol reference chart'),
     ('temp_band_legend.png',       '🌡️ Temperature Band Legend','850 & 500 hPa normal temperature band colour scale'),
 ]
