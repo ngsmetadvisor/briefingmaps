@@ -94,7 +94,7 @@
       <h1>⛅ AWCC Forecast Maps</h1>
       <p>Based on GEM RDPS &amp; GDPS model data — Meteorological Service of Canada</p>
     </div>
-    <span class="badge">Updated 2026-06-02 01:19Z</span>
+    <span class="badge">Updated 2026-06-02 01:24Z</span>
   </header>
   <main>
     <h2>Available Maps</h2>
@@ -120,26 +120,10 @@
     <div style="margin:40px 0 20px;">
       <h2 style="font-size:14px;color:#8b949e;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 16px;">Run forecast</h2>
       <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px 24px;max-width:480px;">
-        <div style="display:flex;gap:12px;margin-bottom:12px;">
-          <div style="flex:1;">
-            <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">GitHub username</div>
-            <input id="trig-user" type="text" placeholder="your-username" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;">
-          </div>
-          <div style="flex:1;">
-            <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">Repository</div>
-            <input id="trig-repo" type="text" placeholder="your-repo" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;">
-          </div>
-        </div>
-        <div style="display:flex;gap:12px;margin-bottom:12px;">
-          <div style="flex:1;">
-            <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">Workflow file</div>
-            <input id="trig-workflow" type="text" placeholder="forecast.yml" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;">
-          </div>
-          <div style="flex:1;">
-            <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">Branch</div>
-            <input id="trig-branch" type="text" placeholder="main" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;">
-          </div>
-        </div>
+<input id="trig-user"     type="hidden" value="ngsmetadvisor">
+        <input id="trig-repo"     type="hidden" value="briefingmaps">
+        <input id="trig-workflow" type="hidden" value="gem_weather_map.yml">
+        <input id="trig-branch"   type="hidden" value="main">
         <div style="margin-bottom:12px;">
           <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">Personal access token</div>
           <input id="trig-token" type="password" placeholder="github_pat_..." style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;font-family:monospace;">
@@ -147,38 +131,41 @@
         <button onclick="triggerRun()" id="trig-btn" style="width:100%;padding:9px;background:#1a4a8a;color:#aed4ff;border:1px solid #2a5a9a;border-radius:6px;font-size:14px;font-weight:bold;cursor:pointer;">
           ▶ Run forecast now
         </button>
+<div id="trig-bar" style="display:none;margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:#8b949e;margin-bottom:4px;">
+            <span id="trig-bar-label">—</span>
+          </div>
+          <div style="background:#21262d;border-radius:4px;height:8px;overflow:hidden;">
+            <div id="trig-bar-fill" style="height:100%;width:0%;background:#1a4a8a;border-radius:4px;transition:width 0.6s ease;"></div>
+          </div>
+        </div>
         <div id="trig-status" style="margin-top:10px;font-size:12px;text-align:center;color:#8b949e;min-height:18px;"></div>
       </div>
     </div>
 
   </main>
   <footer>
-    Generated 2026-06-02 01:19Z · Data: Meteorological Service of Canada (dd.weather.gc.ca)
+    Generated 2026-06-02 01:24Z · Data: Meteorological Service of Canada (dd.weather.gc.ca)
   </footer>
 
 <script>
-var _TRIG_FIELDS = ['trig-user','trig-repo','trig-workflow','trig-branch'];
-_TRIG_FIELDS.forEach(function(id) {
-  var el = document.getElementById(id);
-  var saved = localStorage.getItem(id);
-  if (saved) el.value = saved;
-  el.addEventListener('input', function() { localStorage.setItem(id, el.value); });
-});
+
+
 function triggerRun() {
   var user     = document.getElementById('trig-user').value.trim();
   var repo     = document.getElementById('trig-repo').value.trim();
   var workflow = document.getElementById('trig-workflow').value.trim() || 'forecast.yml';
   var branch   = document.getElementById('trig-branch').value.trim() || 'main';
   var token    = document.getElementById('trig-token').value.trim();
-  if (!user || !repo || !token) {
-    document.getElementById('trig-status').textContent = 'Fill in username, repo, and token.';
-    document.getElementById('trig-status').style.color = '#f85149';
+  if (!token) {
+    setTrigStatus('Enter your personal access token.', '#f85149');
     return;
   }
   var btn = document.getElementById('trig-btn');
   btn.disabled = true;
-  document.getElementById('trig-status').style.color = '#8b949e';
-  document.getElementById('trig-status').textContent = 'Sending trigger...';
+  setTrigStatus('Sending trigger...', '#8b949e');
+  setTrigProgress(0, 'Queuing...');
+
   fetch('https://api.github.com/repos/' + user + '/' + repo + '/actions/workflows/' + workflow + '/dispatches', {
     method: 'POST',
     headers: {
@@ -190,20 +177,101 @@ function triggerRun() {
   })
   .then(function(r) {
     if (r.status === 204) {
-      document.getElementById('trig-status').textContent = '✓ Workflow triggered! Check Actions tab for progress.';
-      document.getElementById('trig-status').style.color = '#3fb950';
+      setTrigStatus('Workflow triggered — waiting for run to start...', '#8b949e');
+      setTimeout(function() { pollRun(user, repo, token, Date.now(), 0); }, 4000);
     } else {
       return r.json().then(function(j) {
-        document.getElementById('trig-status').textContent = 'Error ' + r.status + ': ' + (j.message || 'unknown');
-        document.getElementById('trig-status').style.color = '#f85149';
+        setTrigStatus('Error ' + r.status + ': ' + (j.message || 'unknown'), '#f85149');
+        setTrigProgress(0, '');
+        btn.disabled = false;
       });
     }
   })
   .catch(function(e) {
-    document.getElementById('trig-status').textContent = 'Network error: ' + e.message;
-    document.getElementById('trig-status').style.color = '#f85149';
+    setTrigStatus('Network error: ' + e.message, '#f85149');
+    setTrigProgress(0, '');
+    btn.disabled = false;
+  });
+}
+
+function pollRun(user, repo, token, startedAt, attempt) {
+  if (attempt > 60) {
+    setTrigStatus('Timed out waiting for run.', '#f85149');
+    document.getElementById('trig-btn').disabled = false;
+    return;
+  }
+  fetch('https://api.github.com/repos/' + user + '/' + repo + '/actions/runs?per_page=5', {
+    headers: {
+      'Authorization': 'token ' + token,
+      'Accept': 'application/vnd.github.v3+json'
+    }
   })
-  .finally(function() { btn.disabled = false; });
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    var runs = data.workflow_runs || [];
+    var run  = null;
+    for (var i = 0; i < runs.length; i++) {
+      if (new Date(runs[i].created_at).getTime() >= startedAt - 10000) {
+        run = runs[i]; break;
+      }
+    }
+    if (!run) {
+      setTrigProgress(5, 'Waiting for runner...');
+      _trigPollTimer = setTimeout(function() { pollRun(user, repo, token, startedAt, attempt + 1); }, 5000);
+      return;
+    }
+
+    var status     = run.status;
+    var conclusion = run.conclusion;
+    var runUrl     = run.html_url;
+
+    if (status === 'queued') {
+      setTrigProgress(10, 'Queued');
+      setTrigStatus('Run queued — <a href="' + runUrl + '" target="_blank" style="color:#58a6ff;">view on GitHub ↗</a>', '#8b949e');
+    } else if (status === 'in_progress') {
+      var elapsed = (Date.now() - new Date(run.created_at).getTime()) / 1000;
+      var pct     = Math.min(15 + Math.round(elapsed / 180 * 75), 90);
+      var mins    = Math.floor(elapsed / 60);
+      var secs    = Math.floor(elapsed % 60);
+      setTrigProgress(pct, 'Running — ' + mins + 'm ' + String(secs).padStart(2,'0') + 's');
+      setTrigStatus('In progress — <a href="' + runUrl + '" target="_blank" style="color:#58a6ff;">view on GitHub ↗</a>', '#8b949e');
+    } else if (status === 'completed') {
+      if (conclusion === 'success') {
+        setTrigProgress(100, 'Complete');
+        setTrigStatus('✓ Run completed successfully! <a href="' + runUrl + '" target="_blank" style="color:#3fb950;">view on GitHub ↗</a>', '#3fb950');
+      } else {
+        setTrigProgress(100, conclusion || 'completed');
+        setTrigStatus('✗ Run ended: ' + conclusion + ' — <a href="' + runUrl + '" target="_blank" style="color:#f85149;">view on GitHub ↗</a>', '#f85149');
+      }
+      document.getElementById('trig-btn').disabled = false;
+      return;
+    }
+
+    _trigPollTimer = setTimeout(function() { pollRun(user, repo, token, startedAt, attempt + 1); }, 5000);
+  })
+  .catch(function(e) {
+    setTrigProgress(0, 'Poll error');
+    setTrigStatus('Poll error: ' + e.message, '#f85149');
+    document.getElementById('trig-btn').disabled = false;
+  });
+}
+
+function setTrigStatus(html, color) {
+  var el = document.getElementById('trig-status');
+  el.innerHTML = html;
+  el.style.color = color || '#8b949e';
+}
+
+function setTrigProgress(pct, label) {
+  var bar   = document.getElementById('trig-bar');
+  var barEl = document.getElementById('trig-bar-fill');
+  var lblEl = document.getElementById('trig-bar-label');
+  if (!bar) return;
+  if (pct === 0 && !label) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
+  barEl.style.width = pct + '%';
+  barEl.style.background = pct === 100 ? '#3fb950' : '#1a4a8a';
+  lblEl.textContent = label + (pct > 0 && pct < 100 ? '  ' + pct + '%' : '');
 }
 </script>
 </body>
