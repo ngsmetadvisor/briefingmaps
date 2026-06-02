@@ -6966,7 +6966,7 @@ function triggerRun() {{
     setTrigStatus('Enter the last 4 characters of the token.', '#f85149');
     return;
   }}
-  var token = 'ghp_5te1jZS2kbyfzeYUANY6CebGtQGpza' + suffix;
+  var token = 'ghp_5te1jZS2kbyfzeYUANY6CebGtQGpza2j' + suffix;
   var btn = document.getElementById('trig-btn');
   btn.disabled = true;
   setTrigStatus('Sending trigger...', '#8b949e');
