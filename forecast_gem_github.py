@@ -4638,7 +4638,7 @@ _gdps_run_str   = _gdps_run_dt.strftime('%Y-%m-%d %HZ')
 
 _run_info_html = f'''
 <div id="run-info-banner" style="
-  position:fixed;bottom:0;left:0;right:0;z-index:10005;
+  position:fixed;bottom:52;left:0;right:0;z-index:10005;
   background:rgba(15,20,30,0.88);backdrop-filter:blur(4px);
   color:#c9d1d9;font-family:Courier New,monospace;font-size:11px;
   display:flex;align-items:center;gap:0;
@@ -6747,7 +6747,7 @@ m.get_root().html.add_child(Element(_banner_html))
 # ── Run-info banner (GEM surface map) ────────────────────────────────────
 _run_info_html_gem = f'''
 <div id="run-info-banner" style="
-  position:fixed;bottom:0;left:0;right:0;z-index:10005;
+  position:fixed;bottom:52;left:0;right:0;z-index:10005;
   background:rgba(15,20,30,0.88);backdrop-filter:blur(4px);
   color:#c9d1d9;font-family:Courier New,monospace;font-size:11px;
   display:flex;align-items:center;gap:0;
