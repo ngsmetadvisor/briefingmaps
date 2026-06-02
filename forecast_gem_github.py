@@ -6921,10 +6921,96 @@ for _fname, _title, _desc in _output_files:
 '''
 
 _index_html += f'''    </div>
+
+    <div style="margin:40px 0 20px;">
+      <h2 style="font-size:14px;color:#8b949e;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 16px;">Run forecast</h2>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px 24px;max-width:480px;">
+        <div style="display:flex;gap:12px;margin-bottom:12px;">
+          <div style="flex:1;">
+            <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">GitHub username</div>
+            <input id="trig-user" type="text" placeholder="your-username" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;">
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">Repository</div>
+            <input id="trig-repo" type="text" placeholder="your-repo" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;">
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:12px;">
+          <div style="flex:1;">
+            <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">Workflow file</div>
+            <input id="trig-workflow" type="text" placeholder="forecast.yml" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;">
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">Branch</div>
+            <input id="trig-branch" type="text" placeholder="main" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;">
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">Personal access token</div>
+          <input id="trig-token" type="password" placeholder="github_pat_..." style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;font-family:monospace;">
+        </div>
+        <button onclick="triggerRun()" id="trig-btn" style="width:100%;padding:9px;background:#1a4a8a;color:#aed4ff;border:1px solid #2a5a9a;border-radius:6px;font-size:14px;font-weight:bold;cursor:pointer;">
+          ▶ Run forecast now
+        </button>
+        <div id="trig-status" style="margin-top:10px;font-size:12px;text-align:center;color:#8b949e;min-height:18px;"></div>
+      </div>
+    </div>
+
   </main>
   <footer>
     Generated {_generated_utc} · Data: Meteorological Service of Canada (dd.weather.gc.ca)
   </footer>
+
+<script>
+var _TRIG_FIELDS = ['trig-user','trig-repo','trig-workflow','trig-branch'];
+_TRIG_FIELDS.forEach(function(id) {{
+  var el = document.getElementById(id);
+  var saved = localStorage.getItem(id);
+  if (saved) el.value = saved;
+  el.addEventListener('input', function() {{ localStorage.setItem(id, el.value); }});
+}});
+function triggerRun() {{
+  var user     = document.getElementById('trig-user').value.trim();
+  var repo     = document.getElementById('trig-repo').value.trim();
+  var workflow = document.getElementById('trig-workflow').value.trim() || 'forecast.yml';
+  var branch   = document.getElementById('trig-branch').value.trim() || 'main';
+  var token    = document.getElementById('trig-token').value.trim();
+  if (!user || !repo || !token) {{
+    document.getElementById('trig-status').textContent = 'Fill in username, repo, and token.';
+    document.getElementById('trig-status').style.color = '#f85149';
+    return;
+  }}
+  var btn = document.getElementById('trig-btn');
+  btn.disabled = true;
+  document.getElementById('trig-status').style.color = '#8b949e';
+  document.getElementById('trig-status').textContent = 'Sending trigger...';
+  fetch('https://api.github.com/repos/' + user + '/' + repo + '/actions/workflows/' + workflow + '/dispatches', {{
+    method: 'POST',
+    headers: {{
+      'Authorization': 'token ' + token,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    }},
+    body: JSON.stringify({{ ref: branch }})
+  }})
+  .then(function(r) {{
+    if (r.status === 204) {{
+      document.getElementById('trig-status').textContent = '✓ Workflow triggered! Check Actions tab for progress.';
+      document.getElementById('trig-status').style.color = '#3fb950';
+    }} else {{
+      return r.json().then(function(j) {{
+        document.getElementById('trig-status').textContent = 'Error ' + r.status + ': ' + (j.message || 'unknown');
+        document.getElementById('trig-status').style.color = '#f85149';
+      }});
+    }}
+  }})
+  .catch(function(e) {{
+    document.getElementById('trig-status').textContent = 'Network error: ' + e.message;
+    document.getElementById('trig-status').style.color = '#f85149';
+  }})
+  .finally(function() {{ btn.disabled = false; }});
+}}
+</script>
 </body>
 </html>
 '''
