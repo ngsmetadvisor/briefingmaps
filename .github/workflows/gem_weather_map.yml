@@ -1,9 +1,8 @@
 name: Generate Forecast Maps
-
 on:
   schedule:
-    - cron: '11 10 * * *'   # 10Z daily, after 06Z model data arrives
-    - cron: '43 18 * * *'   # 18Z daily, after 12Z model data arrives
+    - cron: '11 10 * * *'
+    - cron: '43 18 * * *'
   workflow_dispatch:
 
 permissions:
@@ -28,22 +27,18 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install \
-            requests \
-            scipy \
-            matplotlib \
-            numpy \
-            pykrige \
-            folium \
-            shapely \
-            branca \
-            pandas \
-            cfgrib \
-            eccodes \
-            xarray \
-            metpy
+            requests scipy matplotlib numpy pykrige \
+            folium shapely branca pandas cfgrib \
+            eccodes xarray metpy
 
       - name: Run forecast script
-        run: python forecast_gem_github.py
+        timeout-minutes: 25          # converts a hang into a real failure
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 25        # per-attempt timeout (mirrors step timeout)
+          max_attempts: 3
+          retry_wait_seconds: 120    # wait 2 min between attempts
+          command: python forecast_gem_github.py
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
@@ -55,6 +50,8 @@ jobs:
 
   trigger-downstream:
     runs-on: ubuntu-latest
+    needs: build
+    if: always()
     steps:
       - name: Trigger UAanalysis
         run: |
