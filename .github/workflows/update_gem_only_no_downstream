@@ -1,4 +1,4 @@
-name: Generate Forecast Maps
+name: Generate Forecast Maps (no downstream)
 on:
   schedule:
     - cron: '11 10 * * *'
