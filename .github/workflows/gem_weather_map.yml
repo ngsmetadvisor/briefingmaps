@@ -54,7 +54,6 @@ jobs:
           keep_files: true
 
   trigger-downstream:
-    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Trigger UAanalysis
