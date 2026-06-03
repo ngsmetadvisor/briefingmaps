@@ -52,3 +52,23 @@ jobs:
           publish_dir: ./output
           publish_branch: gh-pages
           keep_files: true
+
+  trigger-downstream:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger UAanalysis
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.DISPATCH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/ngsmetadvisor/UAanalysis/dispatches \
+            -d '{"event_type":"run-analysis"}'
+
+      - name: Trigger SfcMap
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.DISPATCH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/ngsmetadvisor/SfcMap/dispatches \
+            -d '{"event_type":"run-sfcmap"}'
