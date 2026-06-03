@@ -6800,7 +6800,7 @@ _output_files = [
     ('gem_surface_map.html',       '🌧️ QPF',        'MSLP + 12h QPF precipitation accumulation'),
     ('__EXTERNAL__https://ngsmetadvisor.github.io/SfcMap/synoptic_map.html', '🌍 Surface Synoptic Map', 'Interactive surface synoptic map — external hosted version'),
     ('__EXTERNAL__https://ngsmetadvisor.github.io/UAanalysis/', '🌐 Upper Air Analysis', 'Interactive upper air analysis — external hosted version'),
-    ('station_model_examples.svg', '📡 Station Model Examples', 'WMO station model symbol reference chart'),
+    ('__EXTERNAL__https://ngsmetadvisor.github.io/UAanalysis/ua_availability.html', '📡 UA Radiosonde Availability', 'Upper air radiosonde reporting availability — 00Z & 12Z station status'),
     ('temp_band_legend.png',       '🌡️ Temperature Band Legend','850 & 500 hPa normal temperature band colour scale'),
 ]
 
