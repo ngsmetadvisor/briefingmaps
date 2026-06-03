@@ -1,0 +1,48 @@
+name: Generate Forecast Maps
+on:
+  schedule:
+    - cron: '11 10 * * *'
+    - cron: '43 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -q libeccodes-dev
+
+      - name: Install Python dependencies
+        run: |
+          pip install \
+            requests scipy matplotlib numpy pykrige \
+            folium shapely branca pandas cfgrib \
+            eccodes xarray metpy
+
+      - name: Run forecast script
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 25
+          max_attempts: 3
+          retry_wait_seconds: 120
+          command: python forecast_gem_github.py
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./output
+          publish_branch: gh-pages
+          keep_files: true
