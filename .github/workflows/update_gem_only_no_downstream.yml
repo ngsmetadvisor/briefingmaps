@@ -1,8 +1,6 @@
 name: Generate Forecast Maps (no downstream)
 on:
-  schedule:
-    - cron: '11 10 * * *'
-    - cron: '43 18 * * *'
+
   workflow_dispatch:
 
 permissions:
