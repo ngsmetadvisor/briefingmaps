@@ -37,7 +37,7 @@ jobs:
         with:
           timeout_minutes: 25        # per-attempt timeout (mirrors step timeout)
           max_attempts: 3
-          retry_wait_seconds: 120    # wait 2 min between attempts
+          retry_wait_seconds: 60    # wait 2 min between attempts
           command: python forecast_gem_github.py
 
       - name: Deploy to GitHub Pages
