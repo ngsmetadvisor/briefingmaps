@@ -1,0 +1,13 @@
+requests
+scipy
+matplotlib
+numpy
+folium
+shapely
+branca
+pandas
+cfgrib
+eccodes
+xarray
+aiohttp
+metpy
