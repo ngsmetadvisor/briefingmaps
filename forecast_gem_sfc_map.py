@@ -5460,6 +5460,7 @@ function _synCapture(cfg, onDone) {{
   _synLevel = cfg.level;
   _btnOff("btn-850"); _btnOff("btn-500");
   _btnOn("btn-" + cfg.level);
+  synRender();
 
   var hideEls = [
     mapEl.querySelector(".leaflet-control-container"),
@@ -5682,8 +5683,8 @@ function synExportAll() {{
   var total = _SYN_TIME_STEPS.length;
   for (var i = 0; i < total; i++) {{ _exportAllQueue.push({{ stepIdx: i, level: "850" }}); }}
   _exportAllRunning = true;
-  _setExportStatus("Export All: 0/" + (total * 2));
-  _runExportQueue(0, total * 2);
+  _setExportStatus("Export All: 0/" + total);
+  _runExportQueue(0, total);
 }}
 
 function _runExportQueue(done, total) {{
@@ -5920,6 +5921,10 @@ else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700);
 
 m.get_root().html.add_child(Element(_bar_html))
 m.get_root().html.add_child(Element(_js))
+
+os.makedirs('outputs', exist_ok=True)
+m.save('outputs/llj_prog.html')
+print(f'\n✅ LLJ map saved → outputs/llj_prog.html')
 
 # ── Cell 5B. GEM Surface map — MSLP contours + QPF fill, time slider ──────
 
