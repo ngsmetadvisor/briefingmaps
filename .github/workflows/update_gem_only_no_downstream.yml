@@ -1,4 +1,4 @@
-name: Generate GEM Surface Map
+name: Generate GEM Surface Map - no downstream
 on:
   schedule:
     - cron: '0 */6 * * *'
