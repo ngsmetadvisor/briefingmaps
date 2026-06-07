@@ -48,6 +48,7 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run map generator
         run: python forecast_gem_sfc_map.py
+        timeout-minutes: 10
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
