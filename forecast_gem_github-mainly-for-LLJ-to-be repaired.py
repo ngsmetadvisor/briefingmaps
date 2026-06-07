@@ -3800,6 +3800,141 @@ if not SHOW_STATION_SYMBOLS:
 _ts_ua_stn_json_str = _json3.dumps(_ua_stn_data)
 print(f'\n✓ _ts_ua_stn_json_str keys: {sorted(_ua_stn_data.keys())}')
 
+# ══════════════════════════════════════════════════════════════════════════
+#  LLJ PROG — fixed 18-station network station data
+# ══════════════════════════════════════════════════════════════════════════
+
+_LLJ_FORCE_STN_COORDS = {
+    'ANA':  (53.5513, -116.5031), 'B4':   (50.9258, -115.1240),
+    'BRA':  (57.1677, -117.6640), 'BROO': (50.5500, -111.8500),
+    'C4':   (49.6086, -114.4514), 'C5':   (49.6356, -110.3296),
+    'ECA':  (54.7916, -118.2348), 'FLA':  (58.6109, -117.1600),
+    'MUA':  (57.1353, -110.8942), 'PYA':  (58.7684, -111.1061),
+    'FGA':  (58.6860, -114.9947), 'S5':   (57.1443, -115.0798),
+    'SDA':  (54.7283, -115.3556), 'SHA':  (52.2367, -115.1967),
+    'WGM':  (49.1333, -113.8000), 'WJW':  (52.9300, -118.0300),
+    'WRA':  (55.2855, -112.4789), 'WZG':  (51.1934, -115.5522),
+}
+
+import json as _json_llj
+import math as _math_llj
+
+_llj_stn_data = {}
+
+for (date_val, hr), _grp_llj in ua_summary_df.groupby(
+        [ua_summary_df['valid_time'].str[:10], 'hour'], sort=True):
+    _date_str = pd.Timestamp(date_val).strftime('%Y%m%d')
+    _key      = f'{_date_str}_{int(hr):02d}'
+    _stns_llj = []
+
+    _stn_rows_llj = []
+    for _stn_icao, (_slat, _slon) in _LLJ_FORCE_STN_COORDS.items():
+        _dists = (_grp_llj['lat'] - _slat)**2 + (_grp_llj['lon'] - _slon)**2
+        if _dists.empty:
+            continue
+        _nearest = _grp_llj.loc[_dists.idxmin()].copy()
+        _nearest['icao']     = _stn_icao
+        _nearest['stn_name'] = _stn_icao
+        _nearest['lat']      = _slat
+        _nearest['lon']      = _slon
+        _stn_rows_llj.append(_nearest)
+
+    if not _stn_rows_llj:
+        _llj_stn_data[_key] = []
+        continue
+
+    _grp_llj_forced = pd.DataFrame(_stn_rows_llj).reset_index(drop=True)
+
+    for _, _r in _grp_llj_forced.iterrows():
+        def _fmtl(v, dec=1):
+            return f'{v:.{dec}f}' if v is not None and not (isinstance(v, float) and _math_llj.isnan(v)) else '—'
+        def _fmtli(v):
+            return f'{int(round(v))}' if v is not None and not (isinstance(v, float) and _math_llj.isnan(v)) else '—'
+
+        _pop = (f'<div style="font-family:monospace;font-size:11px;min-width:240px">'
+                f'<b style="font-size:13px;color:#cc6600">{_r["icao"]}</b> '
+                f'<span style="color:#888;font-size:10px">{_r["stn_name"]}</span><br>'
+                f'<hr style="margin:4px 0">')
+        for _lvl in [850, 700, 500, 250]:
+            _h   = _fmtli(_r.get(f'HGHT_{_lvl}'))
+            _t   = _fmtl(_r.get(f'TEMP_{_lvl}'))
+            _td  = _fmtl(_r.get(f'DWPT_{_lvl}'))
+            _tv, _tdv = _r.get(f'TEMP_{_lvl}'), _r.get(f'DWPT_{_lvl}')
+            _ttd = (f'{_tv - _tdv:.1f}'
+                    if _tv is not None and _tdv is not None
+                    and not (isinstance(_tv, float) and _math_llj.isnan(_tv))
+                    and not (isinstance(_tdv, float) and _math_llj.isnan(_tdv)) else '—')
+            _wd  = _fmtli(_r.get(f'DRCT_{_lvl}'))
+            _ws  = _fmtl(_r.get(f'SPED_{_lvl}'))
+            _pop += (f'<b style="color:#cc6600">{_lvl} hPa</b> '
+                     f'Hgt:<b>{_h}m</b> T:<b>{_t}°C</b> '
+                     f'Td:<b>{_td}°C</b> T-Td:<b>{_ttd}°C</b> '
+                     f'Wnd:<b>{_wd}/{_ws}kt</b><br>')
+
+        _t5 = _r.get('TEMP_500')
+        _t7 = _r.get('TEMP_700')
+        _instab_str, _instab_cat = '—', ''
+        if (_t5 is not None and _t7 is not None
+                and not (isinstance(_t5, float) and _math_llj.isnan(_t5))
+                and not (isinstance(_t7, float) and _math_llj.isnan(_t7))):
+            _tdiff = _t7 - _t5
+            _instab_str = f'{_tdiff:.1f}'
+            if _tdiff >= 18:
+                _instab_cat = ' <span style="color:#cc2200;font-weight:bold">CB</span>'
+            elif _tdiff >= 16:
+                _instab_cat = ' <span style="color:#cc5500;font-weight:bold">TCU</span>'
+        _pop += (f'<hr style="margin:4px 0">T700-500: <b>{_instab_str}°C</b>{_instab_cat}<br>'
+                 f'</div>')
+
+        _level_svgs_llj = {}
+        for _lvl in [850, 700, 500, 250]:
+            _lt  = _r.get(f'TEMP_{_lvl}')
+            _ltd = _r.get(f'DWPT_{_lvl}')
+            _lwd = _r.get(f'DRCT_{_lvl}')
+            _lws = _r.get(f'SPED_{_lvl}')
+            _lh  = _r.get(f'HGHT_{_lvl}')
+            _lttd_llj = None
+            if (_lt is not None and _ltd is not None
+                    and not (isinstance(_lt, float) and _math_llj.isnan(_lt))
+                    and not (isinstance(_ltd, float) and _math_llj.isnan(_ltd))):
+                _lttd_llj = round(_lt - _ltd, 1)
+            _lh_label = ''
+            if _lh is not None and not (isinstance(_lh, float) and _math_llj.isnan(_lh)):
+                _lh_label = str(int(round(_lh / 10)))[1:]
+            _lws_kt = None
+            if _lws is not None and not (isinstance(_lws, float) and _math_llj.isnan(_lws)):
+                _lws_kt = _lws * 1
+            _ua_d_llj = {
+                'icao': str(_r['icao']),
+                'temp': round(_lt, 1) if _lt is not None and not (isinstance(_lt, float) and _math_llj.isnan(_lt)) else None,
+                'dew':  round(_lttd_llj, 1) if _lttd_llj is not None else None,
+                'wind_dir': int(_lwd) if _lwd is not None and not (isinstance(_lwd, float) and _math_llj.isnan(_lwd)) else None,
+                'wind_spd': _lws_kt, 'wind_gust': 0,
+                'vis': None, 'weather': '', 'slp_label': _lh_label,
+                'oktas': 8, 'has_sky_obs': True, 'clouds': [], 'lowest_sig': None,
+                'ceiling': 99999, 'flt_cat': 'VFR',
+                'lat': 0, 'lon': 0, 'timestamp': '', 'rh': 0,
+                'tendency': None, 'pressure_change': None, 'is_surface': False,
+            }
+            _svg_str_llj, _sw_llj, _sh_llj = station_model_svg(_ua_d_llj, S=34)
+            _level_svgs_llj[str(_lvl)] = {'svg': _svg_str_llj, 'w': int(_sw_llj), 'h': int(_sh_llj)}
+
+        _stns_llj.append({
+            'lat':   float(_r['lat']),
+            'lon':   float(_r['lon']),
+            'icao':  str(_r['icao']),
+            'name':  str(_r['stn_name']),
+            'popup': _pop,
+            'tip':   f'{_r["icao"]} | 850:{_fmtl(_r.get("TEMP_850"))}°C 500:{_fmtl(_r.get("TEMP_500"))}°C',
+            'svgs':  _level_svgs_llj,
+        })
+
+    _llj_stn_data[_key] = _stns_llj
+    print(f'  LLJ stn key {_key!r}: {len(_stns_llj)} stations')
+
+_ts_llj_stn_json_str = _json_llj.dumps(_llj_stn_data)
+print(f'\n✓ LLJ station data built: {sorted(_llj_stn_data.keys())}')
+
 folium.LayerControl(collapsed=False).add_to(m)
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -4668,9 +4803,34 @@ _run_info_html = f'''
 m.get_root().html.add_child(Element(_run_info_html))
 
 # ── Save map ───────────────────────────────────────────────────────────────
-out_path = os.path.join(_OUTPUT_DIR, 'synoptic_map.html')
+os.makedirs('outputs', exist_ok=True)
+out_path = 'outputs/synoptic_map.html'
 m.save(out_path)
-print(f'\n✅ Synoptic map saved to: {out_path}')
+print(f'\n✅ Synoptic map saved → {out_path}')
+
+# ── Build LLJ Prog map — same base as synoptic, LLJ stations injected ────
+_mllj = folium.Map(location=[center_lat, center_lon], zoom_start=5,
+                   tiles=None, prefer_canvas=True)
+folium.TileLayer(tiles='about:blank', attr=' ', name='Blank', max_zoom=19, show=True).add_to(_mllj)
+_mllj.get_root().html.add_child(Element(
+    '<style>.leaflet-container{background:#e0f2ff!important;}</style>'
+))
+_mllj.get_root().html.add_child(Element(borders_js))
+if 'fire_zones_html' in globals():
+    _mllj.get_root().html.add_child(Element(fire_zones_html))
+_mllj.get_root().html.add_child(Element(fullscreen_html))
+folium.LayerControl(collapsed=False).add_to(_mllj)
+_mllj.get_root().html.add_child(Element(_bar_html))
+
+_llj_js = _js.replace(
+    f'var _SYN_UA_STNS     = {_ts_ua_stn_json_str};',
+    f'var _SYN_UA_STNS     = {_ts_llj_stn_json_str};'
+)
+_mllj.get_root().html.add_child(Element(_llj_js))
+
+_llj_path = 'outputs/llj_prog.html'
+_mllj.save(_llj_path)
+print(f'✅ LLJ Prog map saved → {_llj_path}')
 print(f'   Script run : {_script_run_utc}')
 print(f'   RDPS run   : {_rdps_run_str}')
 print(f'   GDPS run   : {_gdps_run_str}')
@@ -6716,20 +6876,6 @@ function _gemRunExportQueue(done){{
       out.width=cropW; out.height=cropH+BANNER_H+CREDIT_H;
       var ctx=out.getContext("2d");
       ctx.drawImage(canvas,0,0,cropW,cropH,0,0,cropW,cropH);
-
-      // ── Run time top-left ─────────────────────────────────────────────────
-      var _rdpsRun = {repr(_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else 'unknown')};
-      var _gdpsRun = {repr(_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else 'unknown')};
-      ctx.font         = "26px Arial, sans-serif";
-      ctx.fillStyle    = "rgba(255,255,255,0.75)";
-      ctx.textAlign    = "left";
-      ctx.textBaseline = "top";
-      ctx.fillText("RDPS run: " + _rdpsRun, 10, 10);
-      ctx.fillText("GDPS run: " + _gdpsRun, 10, 38);
-      ctx.font         = "26px Arial, sans-serif";
-      ctx.fillStyle    = "#888888";
-      ctx.fillText("RDPS run: " + _rdpsRun, 10, 10);
-      ctx.fillText("GDPS run: " + _gdpsRun, 10, 38);
 
       var step=_GEM_STEPS[idx]||{{}};
       var key=step.key||"";
