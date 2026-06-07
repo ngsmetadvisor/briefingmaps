@@ -4836,32 +4836,7 @@ print(f'   RDPS run   : {_rdps_run_str}')
 print(f'   GDPS run   : {_gdps_run_str}')
 print(f'   Open this file in a browser to view the interactive map.')
 
-# ══════════════════════════════════════════════════════════════════════════
-#  LLJ PROG MAP  — fixed 18-station network, no decimation
-#  Standalone copy of the synoptic map but station layer replaced with
-#  only _FORCE_STN_COORDS stations (nearest RDPS grid point for each).
-# ══════════════════════════════════════════════════════════════════════════
 
-_LLJ_FORCE_STN_COORDS = {
-    'ANA':  (53.5513, -116.5031), 'B4':   (50.9258, -115.1240),
-    'BRA':  (57.1677, -117.6640), 'BROO': (50.5500, -111.8500),
-    'C4':   (49.6086, -114.4514), 'C5':   (49.6356, -110.3296),
-    'ECA':  (54.7916, -118.2348), 'FLA':  (58.6109, -117.1600),
-    'MUA':  (57.1353, -110.8942), 'PYA':  (58.7684, -111.1061),
-    'FGA':  (58.6860, -114.9947), 'S5':   (57.1443, -115.0798),
-    'SDA':  (54.7283, -115.3556), 'SHA':  (52.2367, -115.1967),
-    'WGM':  (49.1333, -113.8000), 'WJW':  (52.9300, -118.0300),
-    'WRA':  (55.2855, -112.4789), 'WZG':  (51.1934, -115.5522),
-}
-
-# Build LLJ station data — no decimation, fixed coords only
-import json as _json_llj
-import math as _math_llj
-
-_llj_stn_data = {}
-
-for (date_val, hr), _grp_llj in ua_summary_df.groupby(
-        [ua_summary_df['valid_time'].str[:10], 'hour'], sort=True):
     _date_str = pd.Timestamp(date_val).strftime('%Y%m%d')
     _key      = f'{_date_str}_{int(hr):02d}'
     _stns_llj = []
@@ -4996,11 +4971,7 @@ _llj_js = _js.replace(
     f'var _SYN_UA_STNS     = {_ts_llj_stn_json_str};'
 )
 _mllj.get_root().html.add_child(Element(_llj_js))
-_mllj.get_root().html.add_child(Element(_run_info_html))
 
-_llj_path = os.path.join(_OUTPUT_DIR, 'llj_prog.html')
-_mllj.save(_llj_path)
-print(f'\n✅ LLJ Prog map saved to: {_llj_path}')
 
 """Below is LLJ plot. Not running at the moment.
 
