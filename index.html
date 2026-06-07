@@ -170,8 +170,9 @@
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    var runs = (data.workflow_runs || []).filter(function(r) {
-      return r.name === 'Generate GEM Surface Map';
+var runs = (data.workflow_runs || []).filter(function(r) {
+      return r.name === 'Generate GEM Surface Map' ||
+             r.name === 'Generate GEM Surface Map - no downstream';
     });
     if (!runs.length) return;
     var dt = new Date(runs[0].updated_at);
