@@ -94,16 +94,16 @@
       <h1>⛅ AWCC Forecast Maps</h1>
       <p>Based on GEM RDPS &amp; GDPS model data — Meteorological Service of Canada</p>
     </div>
-    <span class="badge">Updated 2026-06-06 20:01Z</span>
+    <span class="badge" id="last-run-badge">Updated —</span>
   </header>
   <main>
     <h2>Available Maps</h2>
     <div class="card-grid">
-      <a class="card" href="synoptic_map.html">
-        <div class="card-title">🗺️ Upper Air Forecst</div>
+      <a class="card" href="synoptic_map.html" target="_blank" rel="noopener noreferrer">
+        <div class="card-title">🗺️ Upper Air Forecast</div>
         <div class="card-desc">Upper-air analysis — 850 & 500 hPa heights, temperature, wind</div>
       </a>
-      <a class="card" href="gem_surface_map.html">
+      <a class="card" href="gem_surface_map.html" target="_blank" rel="noopener noreferrer">
         <div class="card-title">🌧️ QPF</div>
         <div class="card-desc">MSLP + 12h QPF precipitation accumulation</div>
       </a>
@@ -119,11 +119,11 @@
         <div class="card-title">📡 UA Radiosonde Availability ↗</div>
         <div class="card-desc">Upper air radiosonde reporting availability — 00Z & 12Z station status</div>
       </a>
-      <a class="card" href="llj_prog.html">
+      <a class="card" href="llj_prog.html" target="_blank" rel="noopener noreferrer">
         <div class="card-title">🌬️ LLJ Prog</div>
         <div class="card-desc">850 hPa LLJ station network — fixed 18-station Alberta grid, heights, isotherms & wind barbs</div>
       </a>
-      <a class="card" href="temp_band_legend.png">
+      <a class="card" href="temp_band_legend.png" target="_blank" rel="noopener noreferrer">
         <div class="card-title">🌡️ Temperature Band Legend</div>
         <div class="card-desc">850 & 500 hPa normal temperature band colour scale</div>
       </a>
@@ -132,7 +132,7 @@
     <div style="margin:40px 0 20px;">
       <h2 style="font-size:14px;color:#8b949e;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 16px;">Run forecast</h2>
       <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px 24px;max-width:480px;">
-<input id="trig-user"     type="hidden" value="ngsmetadvisor">
+        <input id="trig-user"     type="hidden" value="ngsmetadvisor">
         <input id="trig-repo"     type="hidden" value="briefingmaps">
         <input id="trig-workflow" type="hidden" value="gem_weather_map.yml">
         <input id="trig-branch"   type="hidden" value="main">
@@ -143,7 +143,7 @@
         <button onclick="triggerRun()" id="trig-btn" style="width:100%;padding:9px;background:#1a4a8a;color:#aed4ff;border:1px solid #2a5a9a;border-radius:6px;font-size:14px;font-weight:bold;cursor:pointer;">
           ▶ Run forecast now for Upper Air Forecast & QPF
         </button>
-<div id="trig-bar" style="display:none;margin-top:12px;">
+        <div id="trig-bar" style="display:none;margin-top:12px;">
           <div style="display:flex;justify-content:space-between;font-size:11px;color:#8b949e;margin-bottom:4px;">
             <span id="trig-bar-label">—</span>
           </div>
@@ -157,18 +157,43 @@
 
   </main>
   <footer>
-    Generated 2026-06-06 20:01Z · Data: Meteorological Service of Canada (dd.weather.gc.ca)
+    Generated <span id="last-run-footer">—</span> · Data: Meteorological Service of Canada (dd.weather.gc.ca)
   </footer>
 
 <script>
 
+(function fetchLastRun() {
+  var user = 'ngsmetadvisor';
+  var repo = 'briefingmaps';
+  fetch('https://api.github.com/repos/' + user + '/' + repo + '/actions/runs?per_page=10&status=success', {
+    headers: { 'Accept': 'application/vnd.github.v3+json' }
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    var runs = (data.workflow_runs || []).filter(function(r) {
+      return r.name === 'Generate GEM Surface Map';
+    });
+    if (!runs.length) return;
+    var dt = new Date(runs[0].updated_at);
+    var iso = dt.getUTCFullYear() + '-' +
+      String(dt.getUTCMonth()+1).padStart(2,'0') + '-' +
+      String(dt.getUTCDate()).padStart(2,'0') + ' ' +
+      String(dt.getUTCHours()).padStart(2,'0') + ':' +
+      String(dt.getUTCMinutes()).padStart(2,'0') + 'Z';
+    var badge  = document.getElementById('last-run-badge');
+    var footer = document.getElementById('last-run-footer');
+    if (badge)  badge.textContent  = 'Updated ' + iso;
+    if (footer) footer.textContent = iso;
+  })
+  .catch(function() {});
+})();
 
 function triggerRun() {
   var user     = document.getElementById('trig-user').value.trim();
   var repo     = document.getElementById('trig-repo').value.trim();
   var workflow = document.getElementById('trig-workflow').value.trim() || 'forecast.yml';
   var branch   = document.getElementById('trig-branch').value.trim() || 'main';
-  var suffix = document.getElementById('trig-token-suffix').value.trim();
+  var suffix   = document.getElementById('trig-token-suffix').value.trim();
   if (suffix.length !== 4) {
     setTrigStatus('Enter the last 4 characters of the token.', '#f85149');
     return;
@@ -230,7 +255,7 @@ function pollRun(user, repo, token, startedAt, attempt) {
     }
     if (!run) {
       setTrigProgress(5, 'Waiting for runner...');
-      _trigPollTimer = setTimeout(function() { pollRun(user, repo, token, startedAt, attempt + 1); }, 5000);
+      setTimeout(function() { pollRun(user, repo, token, startedAt, attempt + 1); }, 5000);
       return;
     }
 
@@ -252,6 +277,7 @@ function pollRun(user, repo, token, startedAt, attempt) {
       if (conclusion === 'success') {
         setTrigProgress(100, 'Complete');
         setTrigStatus('✓ Run completed successfully! <a href="' + runUrl + '" target="_blank" style="color:#3fb950;">view on GitHub ↗</a>', '#3fb950');
+        fetchLastRun();
       } else {
         setTrigProgress(100, conclusion || 'completed');
         setTrigStatus('✗ Run ended: ' + conclusion + ' — <a href="' + runUrl + '" target="_blank" style="color:#f85149;">view on GitHub ↗</a>', '#f85149');
@@ -260,7 +286,7 @@ function pollRun(user, repo, token, startedAt, attempt) {
       return;
     }
 
-    _trigPollTimer = setTimeout(function() { pollRun(user, repo, token, startedAt, attempt + 1); }, 5000);
+    setTimeout(function() { pollRun(user, repo, token, startedAt, attempt + 1); }, 5000);
   })
   .catch(function(e) {
     setTrigProgress(0, 'Poll error');
