@@ -1844,11 +1844,16 @@ def _qpf_build_grid(df, sigma=0.5, lon_vec=None, lat_vec=None):
 def _fetch_grib(url, tag=''):
     import cfgrib
     print(f'  Downloading {tag} ...', end=' ', flush=True)
-    r = requests.get(url, stream=True, timeout=120)
+    r = requests.get(url, stream=True, timeout=(15, 90))
     r.raise_for_status()
     tmp = tempfile.NamedTemporaryFile(suffix='.grib2', delete=False)
-    for chunk in r.iter_content(1 << 20):
-        tmp.write(chunk)
+    try:
+        for chunk in r.iter_content(1 << 20):
+            tmp.write(chunk)
+    except requests.exceptions.ChunkedEncodingError as e:
+        tmp.close()
+        os.unlink(tmp.name)
+        raise RuntimeError(f'Stream stalled for {tag}: {e}')
     tmp.close()
     print(f'{os.path.getsize(tmp.name)/1e6:.1f} MB')
     return tmp.name
