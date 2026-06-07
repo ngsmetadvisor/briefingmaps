@@ -37,7 +37,7 @@ print('✓ All packages ready')
 
 
 
-CSV_URL         = 'http://orangecore.net/met/wxchart/AP_location.csv'
+CSV_URL         = 'https://raw.githubusercontent.com/ngsmetadvisor/SfcMap/main/AP_location.csv'
 METAR_API       = 'https://aviationweather.gov/api/data/metar'
 COVERAGE        = 'essential'       # essential | standard | all | chart
 EXPORT_TIME     = '1200Z'          # 0000Z | 0600Z | 1200Z | 1800Z
