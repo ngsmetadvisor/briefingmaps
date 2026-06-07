@@ -1841,22 +1841,30 @@ def _qpf_build_grid(df, sigma=0.5, lon_vec=None, lat_vec=None):
     return np.clip(grid, 0.0, None)
 
 # ── MSLP helpers — identical to Cell A ───────────────────────────────────────
-def _fetch_grib(url, tag=''):
+def _fetch_grib(url, tag='', retries=3, retry_delay=5):
     import cfgrib
     print(f'  Downloading {tag} ...', end=' ', flush=True)
-    r = requests.get(url, stream=True, timeout=(15, 90))
+    for attempt in range(retries):
+        try:
+            r = requests.get(url, stream=True, timeout=(15, 90))
     r.raise_for_status()
-    tmp = tempfile.NamedTemporaryFile(suffix='.grib2', delete=False)
-    try:
-        for chunk in r.iter_content(1 << 20):
-            tmp.write(chunk)
-    except requests.exceptions.ChunkedEncodingError as e:
-        tmp.close()
-        os.unlink(tmp.name)
-        raise RuntimeError(f'Stream stalled for {tag}: {e}')
-    tmp.close()
-    print(f'{os.path.getsize(tmp.name)/1e6:.1f} MB')
-    return tmp.name
+            tmp = tempfile.NamedTemporaryFile(suffix='.grib2', delete=False)
+            try:
+                for chunk in r.iter_content(1 << 20):
+                    tmp.write(chunk)
+            except requests.exceptions.ChunkedEncodingError as e:
+                tmp.close()
+                os.unlink(tmp.name)
+                raise RuntimeError(f'Stream stalled for {tag}: {e}')
+            tmp.close()
+            print(f'{os.path.getsize(tmp.name)/1e6:.1f} MB')
+            return tmp.name
+        except Exception as e:
+            if attempt < retries - 1:
+                print(f'\n  ⚠ Attempt {attempt+1}/{retries} failed ({e}) — retrying in {retry_delay}s...')
+                time.sleep(retry_delay)
+            else:
+                raise RuntimeError(f'_fetch_grib failed after {retries} attempts for {tag}: {e}')
 
 def _open_and_load_mslp(url, tag=''):
     path = _fetch_grib(url, tag)
