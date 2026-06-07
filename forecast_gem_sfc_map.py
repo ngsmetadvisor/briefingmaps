@@ -1847,7 +1847,7 @@ def _fetch_grib(url, tag='', retries=3, retry_delay=5):
     for attempt in range(retries):
         try:
             r = requests.get(url, stream=True, timeout=(15, 90))
-    r.raise_for_status()
+            r.raise_for_status()
             tmp = tempfile.NamedTemporaryFile(suffix='.grib2', delete=False)
             try:
                 for chunk in r.iter_content(1 << 20):
@@ -4656,1270 +4656,1270 @@ Ctrl A & Ctrl / to cancel comment out.
 # # @title
 print('this is LLJ for future use')
 
-# # Cell 9 — Synoptic map
-# # Layers: height + temp always on, 850/500 selector, time slider
-# # Export 850, Export 500, Export All (all timesteps both levels)
-
-
-# ###########################################################
-# ###########################################################
-
-# ##     Ctrl + / to cancel comment out
-
-# ###########################################################
-# ###########################################################
-
-
-
-
-# import folium
-# from folium import Element
-# import json as _json
-# import numpy as np
-# import pandas as pd
-# from datetime import date as _date_kh, datetime, timezone, timedelta
-
-# # ── 500 hPa key height ────────────────────────────────────────────────────
-# _HEIGHT_CONTROL = {
-#     "Jan 1":  5400, "Apr 3":  5460, "Apr 19": 5520, "May 11": 5580,
-#     "May 30": 5640, "Jun 27": 5700, "Jul 26": 5760, "Aug 7":  5700,
-#     "Aug 31": 5640, "Oct 1":  5580, "Oct 17": 5520, "Oct 29": 5460,
-#     "Nov 17": 5400,
-# }
-
-# def _parse_height_entry(label_str, ref_year=2001):
-#     return datetime.strptime(f"{label_str} {ref_year}", "%b %d %Y").timetuple().tm_yday
-
-# def _get_key_hgt_500(today=None):
-#     if today is None:
-#         today = _date_kh.today()
-#     today_doy = today.timetuple().tm_yday
-#     best_val, best_doy = None, -1
-#     for label_str, hgt in _HEIGHT_CONTROL.items():
-#         entry_doy = _parse_height_entry(label_str)
-#         if entry_doy <= today_doy and entry_doy > best_doy:
-#             best_doy = entry_doy
-#             best_val = hgt
-#     if best_val is None:
-#         best_val = list(_HEIGHT_CONTROL.values())[-1]
-#     return best_val
-
-# _today_kh   = _date_kh.today()
-# KEY_HGT_500 = _get_key_hgt_500(_today_kh)
-# KEY_HGT_850 = 0
-# KEY_HGT_700 = 0
-# KEY_HGT_250 = 0
-# print(f'  500 hPa key height: {KEY_HGT_500} m  (date: {_today_kh})')
-
-# def _decimate_stations(records, spacing_km=500):
-#     if not records:
-#         return records
-#     dlat = spacing_km / 111.32
-#     seen = {}
-#     out  = []
-#     for d in records:
-#         lat = d.get('lat')
-#         lon = d.get('lon')
-#         if lat is None or lon is None:
-#             continue
-#         dlon = spacing_km / (111.32 * np.cos(np.radians(lat)))
-#         cell = (int(lat / dlat), int(lon / dlon))
-#         if cell not in seen:
-#             seen[cell] = True
-#             out.append(d)
-#     return out
-
-# center_lat = 53.3097
-# center_lon = -113.5797
-
-# # ── Safeguards ────────────────────────────────────────────────────────────
-# if '_ts_ua_json_str' not in globals():
-#     print("⚠ _ts_ua_json_str missing — run Cell 7.6 first.")
-#     _ts_ua_json_str = _json.dumps({})
-# if '_ts_ua_stn_json_str' not in globals():
-#     print("⚠ _ts_ua_stn_json_str missing.")
-#     _ts_ua_stn_json_str = _json.dumps({})
-# if '_ts_slp_json_str' not in globals():
-#     print("⚠ _ts_slp_json_str missing — run Cell 7.5 first.")
-#     _ts_slp_json_str = _json.dumps({})
-# if '_ua_date_map' not in globals():
-#     print("⚠ _ua_date_map missing.")
-#     _ua_date_map = {}
-
-# # ── Build timestamp→key maps ──────────────────────────────────────────────
-# _metar_ts_to_key = {}
-# for (_date_val, _hr) in _synoptic_times:
-#     _date_str = pd.Timestamp(_date_val).strftime('%Y%m%d')
-#     _key      = f'{_date_str}_{int(_hr):02d}'
-#     _day      = pd.Timestamp(_date_val).day
-#     for _d in metar_records:
-#         _ts = _d.get('timestamp', '')
-#         if len(_ts) < 5: continue
-#         try:
-#             _rec_day  = int(_ts[0:2])
-#             _rec_hour = int(_ts[2:4])
-#         except ValueError:
-#             continue
-#         if _rec_day == _day and abs(_rec_hour - _hr) <= 3:
-#             _metar_ts_to_key[_ts] = _key
-
-# _ua_hour_to_key = {}
-# for (_date_val, _hr) in reversed(_synoptic_times):
-#     _date_str = pd.Timestamp(_date_val).strftime('%Y%m%d')
-#     _key      = f'{_date_str}_{int(_hr):02d}'
-#     _short    = str(int(_hr))
-#     if _short not in _ua_hour_to_key:
-#         _ua_hour_to_key[_short] = _key
-
-# _ua_date_map = {}
-# for (_date_val, _hr) in _synoptic_times:
-#     _ua_date_map[str(int(_hr))] = f'{pd.Timestamp(_date_val).strftime("%Y-%m-%d")} {int(_hr):02d}Z'
-
-# # ── Build ordered time steps for slider ───────────────────────────────────
-# _EDMONTON_OFFSET = timedelta(hours=-6)
-# _now_edmonton    = datetime.now(timezone.utc) + _EDMONTON_OFFSET
-# _edmonton_today  = _now_edmonton.date()
-
-# _time_steps = []
-# for (_date_val, _hr) in _synoptic_times:
-#     if int(_hr) != 12:
-#         continue
-#     _date_str = pd.Timestamp(_date_val).strftime('%Y%m%d')
-#     _key      = f'{_date_str}_{int(_hr):02d}'
-#     _dt       = pd.Timestamp(_date_val).date()
-#     _months   = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-#     _dows     = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-#     _dow      = _dows[_dt.weekday()]
-#     _mon      = _months[_dt.month - 1]
-#     _label    = f'{_dow} {_mon} {_dt.day} {int(_hr):02d}Z'
-#     _time_steps.append({'key': _key, 'label': _label, 'hour': int(_hr)})
-
-# _time_steps_str      = _json.dumps(_time_steps)
-# _metar_ts_to_key_str = _json.dumps(_metar_ts_to_key)
-# _ua_hour_to_key_str  = _json.dumps(_ua_hour_to_key)
-
-# print(f"Time steps: {[s['label'] for s in _time_steps]}")
-
-# # ── Build map ─────────────────────────────────────────────────────────────
-# m = folium.Map(location=[center_lat, center_lon], zoom_start=5,
-#                tiles=None, prefer_canvas=True)
-# folium.TileLayer(tiles='about:blank', attr=' ', name='Blank', max_zoom=19, show=True).add_to(m)
-# m.get_root().html.add_child(Element(
-#     '<style>.leaflet-container{background:#e0f2ff!important;}</style>'
-# ))
-
-
-# # ── Borders ───────────────────────────────────────────────────────────────
-# borders_js = (
-#     '<script>\n'
-#     '(function(){\n'
-#     '  function loadBorders(){\n'
-#     '    var keys=Object.keys(window).filter(function(k){return k.startsWith("map_");});\n'
-#     '    if(!keys.length){setTimeout(loadBorders,200);return;}\n'
-#     '    var MAP=window[keys[0]];\n'
-#     '    if(!MAP.getPane("albertaPane")){\n'
-#     '      MAP.createPane("albertaPane");\n'
-#     '      MAP.getPane("albertaPane").style.zIndex="210";\n'
-#     '      MAP.getPane("albertaPane").style.pointerEvents="none";\n'
-#     '    }\n'
-#     '    if(!MAP.getPane("bordersPane")){\n'
-#     '      MAP.createPane("bordersPane");\n'
-#     '      MAP.getPane("bordersPane").style.zIndex="220";\n'
-#     '      MAP.getPane("bordersPane").style.pointerEvents="none";\n'
-#     '    }\n'
-#     '    if(!MAP.getPane("landPane")){\n'
-#     '      MAP.createPane("landPane");\n'
-#     '      MAP.getPane("landPane").style.zIndex="205";\n'
-#     '      MAP.getPane("landPane").style.pointerEvents="none";\n'
-#     '    }\n'
-#     '    if(!MAP.getPane("heightPane")){\n'
-#     '      MAP.createPane("heightPane");\n'
-#     '      MAP.getPane("heightPane").style.zIndex="490";\n'
-#     '      MAP.getPane("heightPane").style.pointerEvents="none";\n'
-#     '    }\n'
-#     '    fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson")\n'
-#     '      .then(function(r){return r.json();})\n'
-#     '      .then(function(gj){\n'
-#     '        L.geoJSON(gj,{style:function(){return {color:"none",weight:0,fill:true,fillColor:"#d4d4d4",fillOpacity:1.0};},pane:"landPane"}).addTo(MAP);\n'
-#     '      }).catch(function(e){console.warn("land fill load failed",e);});\n'
-#     '    var items=[\n'
-#     '      ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_coastline.geojson",\n'
-#     '       {color:"#444",weight:2.5,opacity:1.0,fill:false}],\n'
-#     '      ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_boundary_lines_land.geojson",\n'
-#     '       {color:"#ffffff",weight:2.2,opacity:1.0,fill:false}],\n'
-#     '      ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_1_states_provinces_lines.geojson",\n'
-#     '       {color:"#ffffff",weight:1.8,opacity:0.85,fill:false}],\n'
-#     '      ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_lakes.geojson",\n'
-#     '       {color:"#5588aa",weight:1.8,opacity:0.9,fill:false}]\n'
-#     '    ];\n'
-
-#     '    items.forEach(function(item){\n'
-#     '      fetch(item[0]).then(function(r){return r.json();}).then(function(gj){\n'
-#     '        L.geoJSON(gj,{style:function(){return item[1];},pane:"bordersPane"}).addTo(MAP);\n'
-#     '      }).catch(function(e){console.warn("border load failed",e);});\n'
-#     '    });\n'
-#     '    fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_1_states_provinces.geojson")\n'
-#     '      .then(function(r){return r.json();})\n'
-#     '      .then(function(gj){\n'
-#     '        var ab={type:"FeatureCollection",features:gj.features.filter(function(f){return f.properties.name==="Alberta";})};\n'
-#     '        L.geoJSON(ab,{style:function(){return {color:"#444444",weight:2.5,opacity:1.0,fill:true,fillColor:"#ffffff",fillOpacity:1.0};},pane:"albertaPane"}).addTo(MAP);\n'
-#     '      }).catch(function(e){console.warn("Alberta border load failed",e);});\n'
-#     '  }\n'
-#     '  if(document.readyState==="complete"){setTimeout(loadBorders,600);}\n'
-#     '  else{window.addEventListener("load",function(){setTimeout(loadBorders,600);});}\n'
-#     '})();\n'
-#     '</script>'
-# )
-# m.get_root().html.add_child(Element(borders_js))
-
-# # ── KML / fire zones ──────────────────────────────────────────────────────
-# if 'fire_zones_html' in globals():
-#     m.get_root().html.add_child(Element(fire_zones_html))
-
-# # ── Fullscreen button ─────────────────────────────────────────────────────
-# fullscreen_html = (
-#     '<style>\n'
-#     '#syn-fs-btn{\n'
-#     '  position:fixed;top:10px;left:10px;z-index:10001;\n'
-#     '  background:rgba(255,255,255,0.96);border:1px solid #aaa;border-radius:6px;\n'
-#     '  padding:5px 10px;font-family:Courier New,monospace;font-size:12px;\n'
-#     '  box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer;color:#1a3a6a;\n'
-#     '}\n'
-#     '#syn-fs-btn:hover{background:#e8f0fe;}\n'
-#     '</style>\n'
-#     '<button id="syn-fs-btn" onclick="synToggleFS()">&#x26F6; Fullscreen</button>\n'
-#     '<script>\n'
-#     'var _synFS=false,_synMapEl=null,_synOrigStyle="";\n'
-#     'function synToggleFS(){\n'
-#     '  var btn=document.getElementById("syn-fs-btn");\n'
-#     '  var keys=Object.keys(window).filter(function(k){return k.startsWith("map_");});\n'
-#     '  if(!keys.length)return;\n'
-#     '  var MAP=window[keys[0]];\n'
-#     '  if(!_synMapEl){_synMapEl=document.getElementById(keys[0])||document.querySelector(".leaflet-container");}\n'
-#     '  if(!_synMapEl)return;\n'
-#     '  _synFS=!_synFS;\n'
-#     '  if(_synFS){\n'
-#     '    _synOrigStyle=_synMapEl.getAttribute("style")||"";\n'
-#     '    _synMapEl.setAttribute("style","position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:9999!important;margin:0!important;");\n'
-#     '    btn.innerHTML="&#x274C; Exit Fullscreen";\n'
-#     '  } else {\n'
-#     '    _synMapEl.setAttribute("style",_synOrigStyle);\n'
-#     '    btn.innerHTML="&#x26F6; Fullscreen";\n'
-#     '  }\n'
-#     '  setTimeout(function(){MAP.invalidateSize();},100);\n'
-#     '}\n'
-#     '</script>\n'
-# )
-# m.get_root().html.add_child(Element(fullscreen_html))
-
-# # ── Build per-timestamp surface station data ──────────────────────────────
-# import json as _json2
-# _ts_all = sorted(set(d['timestamp'] for d in metar_records if d['timestamp']))
-
-# for _mr in metar_records:
-#     _mr.setdefault('tendency', None)
-#     _mr.setdefault('pressure_change', None)
-
-# _ts_data = {}
-# for _ts in _ts_all:
-#     _entries = []
-#     _display_set = {id(d) for d in _decimate_stations(
-#         [d for d in metar_records if d['timestamp'] == _ts], spacing_km=SURFACE_STN_SPACING_KM)}
-
-#     for _d in metar_records:
-#         if _d['timestamp'] != _ts: continue
-#         if id(_d) not in _display_set: continue
-#         _fc  = {'VFR':'green','MVFR':'steelblue','IFR':'crimson','LIFR':'red'}.get(_d['flt_cat'],'#888')
-#         _wg  = f' G{_d["wind_gust"]}' if _d.get('wind_gust') else ''
-#         _tend_raw = _d.get('tendency')
-#         _pc_raw   = _d.get('pressure_change')
-#         _TEND_SYM   = {'rising':'/','falling':'\\','steady':'—','rising_falling':'∧','falling_rising':'V','rising_steady':'⌐','falling_steady':'∟'}
-#         _TEND_LABEL = {'rising':'Rising','falling':'Falling','steady':'Steady','rising_falling':'Rising then falling','falling_rising':'Falling then rising','rising_steady':'Rising then steady','falling_steady':'Falling then steady'}
-#         if _tend_raw:
-#             _sym    = _TEND_SYM.get(_tend_raw, '?')
-#             _lbl    = _TEND_LABEL.get(_tend_raw, _tend_raw)
-#             _pc_str = ''
-#             if _pc_raw is not None and _tend_raw != 'steady':
-#                 _sign   = '+' if _pc_raw > 0 else ''
-#                 _pc_str = f' ({_sign}{_pc_raw/10:.1f} hPa)'
-#             _tend_html = (f'<span style="font-weight:bold;font-size:13px;font-family:Courier New,monospace">{_sym}</span> {_lbl}{_pc_str}')
-#         else:
-#             _tend_html = '<span style="color:#aaa">insufficient history</span>'
-#         _pop = (f'<div style="font-family:monospace;font-size:12px;min-width:200px">'
-#                 f'<b style="font-size:14px;color:#1a4a8a">{_d["icao"]}</b> '
-#                 f'<span style="color:{_fc};font-weight:bold">{_d["flt_cat"]}</span><br>'
-#                 f'<span style="color:#888;font-size:10px">{_d["name"]}</span>'
-#                 f'<hr style="margin:4px 0">'
-#                 f'Temp/Dew: <b>{_d["temp"]}C / {_d["dew"]}C</b><br>'
-#                 f'Wind: <b>{_d["wind_dir"]}/{_d["wind_spd"]}kt{_wg}</b><br>'
-#                 f'Vis: <b>{_d["vis"]} SM</b> Wx: <b>{_d["weather"] or "NIL"}</b><br>'
-#                 f'SLP: <b>{_d["slp"]} hPa</b> RH: <b>{_d["rh"]}%</b><br>'
-#                 f'Tendency: {_tend_html}<br>'
-#                 f'Cloud: <b>' + ' '.join(c['raw'] for c in _d['clouds']) + '</b><br>'
-#                 + f'<a href="https://aviationweather.gov/api/data/metar?ids={_d["icao"]}&hours=24&taf=1" '
-#                 f'target="_blank" style="font-size:10px;color:#1a4a8a;">METAR+TAF: {_d["icao"]} ↗</a></div>')
-#         _svg_str, _sw, _sh = station_model_svg({**_d, 'is_surface': True, 'slp_label': '', 'lowest_sig': None}, S=34)
-#         _ttd_val = round(_d['temp'] - _d['dew'], 1) if _d.get('temp') is not None and _d.get('dew') is not None else None
-#         _pc_hpa  = (_d.get('pressure_change') or 0) / 10.0
-#         if   _pc_hpa <= -3: _tend_color = '#8B0000'
-#         elif _pc_hpa <= -2: _tend_color = '#cc0000'
-#         elif _pc_hpa <= -1: _tend_color = '#ff6666'
-#         elif _pc_hpa >=  3: _tend_color = '#00008B'
-#         elif _pc_hpa >=  2: _tend_color = '#1a4a8a'
-#         elif _pc_hpa >=  1: _tend_color = '#66aaff'
-#         else:                _tend_color = None
-#         _entries.append({
-#             'lat': _d['lat'], 'lon': _d['lon'], 'popup': _pop,
-#             'tip': f'{_d["icao"]} {_d["temp"]}C/{_d["dew"]}C {_d["wind_dir"]}/{_d["wind_spd"]}kt',
-#             'svg': _svg_str, 'svg_w': int(_sw), 'svg_h': int(_sh),
-#             'ttd': _ttd_val, 'tend_color': _tend_color,
-#         })
-#     _ts_data[_ts] = _entries
-
-# if not SHOW_STATION_SYMBOLS:
-#     _ts_data = {}
-# _ts_json_str = _json2.dumps(_ts_data)
-# _ts_list_str = _json2.dumps(_ts_all)
-# _latest_ts   = _ts_all[-1] if _ts_all else ''
-
-# # ── Build UA station data — keyed by full date+hour e.g. "20260507_12" ───
-# import json as _json3
-# import math
-
-# _ua_stn_data = {}
-
-# for (date_val, hr), _grp in ua_summary_df.groupby(
-#         [ua_summary_df['valid_time'].str[:10], 'hour'], sort=True):
-#     _date_str = pd.Timestamp(date_val).strftime('%Y%m%d')
-#     _key      = f'{_date_str}_{int(hr):02d}'
-#     _stns     = []
-
-#     _FORCE_STN_COORDS = {
-#         'ANA':  (53.5513, -116.5031), 'B4':   (50.9258, -115.1240),
-#         'BRA':  (57.1677, -117.6640), 'BROO': (50.5500, -111.8500),
-#         'C4':   (49.6086, -114.4514), 'C5':   (49.6356, -110.3296),
-#         'ECA':  (54.7916, -118.2348), 'FLA':  (58.6109, -117.1600),
-#         'MUA':  (57.1353, -110.8942), 'PYA':  (58.7684, -111.1061),
-#         'FGA':  (58.6860, -114.9947), 'S5':   (57.1443, -115.0798),
-#         'SDA':  (54.7283, -115.3556), 'SHA':  (52.2367, -115.1967),
-#         'WGM':  (49.1333, -113.8000), 'WJW':  (52.9300, -118.0300),
-#         'WRA':  (55.2855, -112.4789), 'WZG':  (51.1934, -115.5522),
-#     }
-
-#     # Find nearest RDPS grid point to each station and build synthetic rows
-#     import numpy as _np2
-#     _stn_rows = []
-#     for _stn_icao, (_slat, _slon) in _FORCE_STN_COORDS.items():
-#         _dists = (_grp['lat'] - _slat)**2 + (_grp['lon'] - _slon)**2
-#         if _dists.empty: continue
-#         _nearest = _grp.loc[_dists.idxmin()].copy()
-#         _nearest['icao']     = _stn_icao
-#         _nearest['stn_name'] = _stn_icao
-#         _nearest['lat']      = _slat
-#         _nearest['lon']      = _slon
-#         _stn_rows.append(_nearest)
-#     if not _stn_rows: continue
-#     _grp = pd.DataFrame(_stn_rows).reset_index(drop=True)
-#     _grp['_force850'] = True
-#     for _, _r in _grp.iterrows():
-#         def _fmt(v, dec=1):
-#             return f'{v:.{dec}f}' if v is not None and not (isinstance(v, float) and math.isnan(v)) else '—'
-#         def _fmti(v):
-#             return f'{int(round(v))}' if v is not None and not (isinstance(v, float) and math.isnan(v)) else '—'
-
-#         _pop = (f'<div style="font-family:monospace;font-size:11px;min-width:240px">'
-#                 f'<b style="font-size:13px;color:#cc6600">{_r["icao"]}</b> '
-#                 f'<span style="color:#888;font-size:10px">{_r["stn_name"]}</span><br>'
-#                 f'<hr style="margin:4px 0">')
-#         for _lvl in [850, 700, 500, 250]:
-#             _h   = _fmti(_r.get(f'HGHT_{_lvl}'))
-#             _t   = _fmt(_r.get(f'TEMP_{_lvl}'))
-#             _td  = _fmt(_r.get(f'DWPT_{_lvl}'))
-#             _tv, _tdv = _r.get(f'TEMP_{_lvl}'), _r.get(f'DWPT_{_lvl}')
-#             _ttd = (f'{_tv - _tdv:.1f}'
-#                     if _tv is not None and _tdv is not None
-#                     and not (isinstance(_tv, float) and math.isnan(_tv))
-#                     and not (isinstance(_tdv, float) and math.isnan(_tdv)) else '—')
-#             _wd  = _fmti(_r.get(f'DRCT_{_lvl}'))
-#             _ws  = _fmt(_r.get(f'SPED_{_lvl}'))
-#             _pop += (f'<b style="color:#cc6600">{_lvl} hPa</b> '
-#                      f'Hgt:<b>{_h}m</b> T:<b>{_t}°C</b> '
-#                      f'Td:<b>{_td}°C</b> T-Td:<b>{_ttd}°C</b> '
-#                      f'Wnd:<b>{_wd}/{_ws}kt</b><br>')
-
-#         _t5 = _r.get('TEMP_500')
-#         _t7 = _r.get('TEMP_700')
-#         _instab_str, _instab_cat = '—', ''
-#         if (_t5 is not None and _t7 is not None
-#                 and not (isinstance(_t5, float) and math.isnan(_t5))
-#                 and not (isinstance(_t7, float) and math.isnan(_t7))):
-#             _tdiff = _t7 - _t5
-#             _instab_str = f'{_tdiff:.1f}'
-#             if _tdiff >= 18:
-#                 _instab_cat = ' <span style="color:#cc2200;font-weight:bold">CB</span>'
-#             elif _tdiff >= 16:
-#                 _instab_cat = ' <span style="color:#cc5500;font-weight:bold">TCU</span>'
-#         _pop += (f'<hr style="margin:4px 0">T700-500: <b>{_instab_str}°C</b>{_instab_cat}<br>'
-#                  f'</div>')
-
-#         _level_svgs = {}
-#         for _lvl in [850, 700, 500, 250]:
-#             _lt  = _r.get(f'TEMP_{_lvl}')
-#             _ltd = _r.get(f'DWPT_{_lvl}')
-#             _lwd = _r.get(f'DRCT_{_lvl}')
-#             _lws = _r.get(f'SPED_{_lvl}')
-#             _lh  = _r.get(f'HGHT_{_lvl}')
-#             _lttd = None
-#             if (_lt is not None and _ltd is not None
-#                     and not (isinstance(_lt, float) and math.isnan(_lt))
-#                     and not (isinstance(_ltd, float) and math.isnan(_ltd))):
-#                 _lttd = round(_lt - _ltd, 1)
-#             _lh_label = ''
-#             if _lh is not None and not (isinstance(_lh, float) and math.isnan(_lh)):
-#                 _lh_label = str(int(round(_lh / 10)))[1:]
-#             _lws_kt = None
-#             if _lws is not None and not (isinstance(_lws, float) and math.isnan(_lws)):
-#                 _lws_kt = _lws * 1
-#             _ua_d = {
-#                 'icao': str(_r['icao']),
-#                 'temp': None,
-#                 'dew':  None,
-#                 'wind_dir': int(_lwd) if _lwd is not None and not (isinstance(_lwd, float) and math.isnan(_lwd)) else None,
-#                 'wind_spd': _lws_kt, 'wind_gust': 0,
-#                 'vis': None, 'weather': '', 'slp_label': None,
-#                 'oktas': 8, 'has_sky_obs': True, 'clouds': [], 'lowest_sig': None,
-#                 'ceiling': 99999, 'flt_cat': 'VFR',
-#                 'lat': 0, 'lon': 0, 'timestamp': '', 'rh': 0,
-#                 'tendency': None, 'pressure_change': None, 'is_surface': False,
-#             }
-#             _svg_str, _sw, _sh = station_model_svg(_ua_d, S=34)
-#             _level_svgs[str(_lvl)] = {'svg': _svg_str, 'w': int(_sw), 'h': int(_sh)}
-
-#         _stns.append({
-#             'lat':   float(_r['lat']),
-#             'lon':   float(_r['lon']),
-#             'icao':  str(_r['icao']),
-#             'force850': bool(_r.get('_force850', False)),
-#             'name':  str(_r['stn_name']),
-#             'popup': _pop,
-#             'tip':   f'{_r["icao"]} | 850:{_fmt(_r.get("TEMP_850"))}°C 500:{_fmt(_r.get("TEMP_500"))}°C',
-#             'svgs':  _level_svgs,
-#         })
-
-#     _ua_stn_data[_key] = _stns
-#     print(f'  UA stn key {_key!r}: {len(_stns)} stations')
-
-# if not SHOW_STATION_SYMBOLS:
-#     _ua_stn_data = {}
-# _ts_ua_stn_json_str = _json3.dumps(_ua_stn_data)
-# print(f'\n✓ _ts_ua_stn_json_str keys: {sorted(_ua_stn_data.keys())}')
-
-# folium.LayerControl(collapsed=False).add_to(m)
-
-# # ═══════════════════════════════════════════════════════════════════════════
-# #  CONTROL BAR  — level (850/500) + time slider
-# # ═══════════════════════════════════════════════════════════════════════════
-# _bar_html = '''
-# <style>
-# #syn-bar {
-#   position: fixed;
-#   bottom: 0; left: 0; right: 0;
-#   z-index: 10000;
-#   background: #1a1a2e;
-#   border-top: 2px solid #4a7fc1;
-#   padding: 8px 16px;
-#   display: flex;
-#   align-items: center;
-#   gap: 14px;
-#   font-family: "Courier New", monospace;
-#   font-size: 11px;
-#   color: #e0e0e0;
-#   box-shadow: 0 -3px 12px rgba(0,0,0,0.5);
-#   min-height: 52px;
-# }
-# #syn-bar .bar-label {
-#   font-size: 8px; color: #8888aa; font-weight: bold;
-#   text-transform: uppercase; letter-spacing: 0.5px;
-#   white-space: nowrap;
-# }
-# #syn-bar .bar-section {
-#   display: flex; align-items: center; gap: 6px;
-#   border-right: 1px solid #3a3a5a;
-#   padding-right: 14px;
-#   white-space: nowrap;
-# }
-# #syn-bar .bar-section:last-child { border-right: none; }
-# .syn-lvl-btn {
-#   font-size: 12px; padding: 4px 14px;
-#   cursor: pointer;
-#   border: 1px solid #3a4a6a;
-#   border-radius: 4px;
-#   background: #2a2a4a;
-#   color: #c0c8e0;
-#   font-family: "Courier New", monospace;
-#   font-weight: bold;
-#   transition: background 0.15s;
-# }
-# .syn-lvl-btn:hover { background: #3a4a7a; }
-# .syn-lvl-btn.active { background: #4a7fc1; color: #fff; border-color: #6a9fe1; }
-# .syn-exp-btn {
-#   font-size: 11px; padding: 4px 12px;
-#   cursor: pointer;
-#   border: 1px solid #4a7fc1;
-#   border-radius: 4px;
-#   background: #2a3a5a;
-#   color: #c0d0ff;
-#   font-family: "Courier New", monospace;
-#   font-weight: bold;
-# }
-# .syn-exp-btn:hover { background: #4a7fc1; color: #fff; }
-# .syn-exp-btn.export-all { border-color: #cc8800; color: #ffcc66; background: #3a2a00; }
-# .syn-exp-btn.export-all:hover { background: #cc8800; color: #fff; }
-# #syn-time-slider {
-#   width: 320px;
-#   accent-color: #4a7fc1;
-#   cursor: pointer;
-# }
-# #syn-ts-label {
-#   color: #c0d0ff;
-#   font-size: 11px;
-#   min-width: 200px;
-# }
-# #syn-export-status {
-#   color: #ffcc66;
-#   font-size: 10px;
-#   min-width: 120px;
-# }
-# #syn-export-panel {
-#   position: fixed;
-#   top: 50px; left: 10px;
-#   z-index: 10001;
-#   background: rgba(26,26,46,0.95);
-#   border: 1px solid #4a7fc1;
-#   border-radius: 6px;
-#   padding: 8px 10px;
-#   font-family: "Courier New", monospace;
-#   font-size: 11px;
-#   color: #e0e0e0;
-#   box-shadow: 0 2px 10px rgba(0,0,0,0.4);
-#   min-width: 130px;
-# }
-# </style>
-
-# <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
-# <!-- Export panel — top left -->
-# <div id="syn-export-panel">
-#   <div class="bar-label" style="margin-bottom:4px;">Export</div>
-#   <button class="syn-exp-btn" style="display:block;width:100%;margin-top:4px;border-color:#cc2200;color:#ffaaaa;background:#440000;" onclick="synExportBothPDFs()">Export PDFs</button>
-#   <button class="syn-exp-btn export-all" style="display:block;width:100%;border-color:#9944cc;color:#ddaaff;background:#2a0044;" onclick="synExportAll()">Export 850LLJ Prog</button>
-#   <div id="syn-export-status" style="margin-top:5px;min-height:14px;"></div>
-# </div>
-
-# <!-- Bottom control bar -->
-# <div id="syn-bar">
-#   <div class="bar-section">
-#     <span class="bar-label">Export</span>
-#     <button class="syn-exp-btn export-all" style="border-color:#9944cc;color:#ddaaff;background:#2a0044;" onclick="synExportAll()">Export 850LLJ Prog</button>
-#     <button class="syn-exp-btn" style="border-color:#cc2200;color:#ffaaaa;background:#440000;" onclick="synExportBothPDFs()">Export 850LLJ Prog PDF</button>
-
-#     <span id="syn-export-status"></span>
-#   </div>
-#   <div class="bar-section">
-#     <span class="bar-label">Level</span>
-#     <button class="syn-lvl-btn active" id="btn-850" onclick="synSetLevel(\'850\')">850 hPa</button>
-#     <button class="syn-lvl-btn"        id="btn-500" onclick="synSetLevel(\'500\')">500 hPa</button>
-#   </div>
-#   <div class="bar-section">
-#     <span class="bar-label">Time</span>
-#     <input type="range" id="syn-time-slider" min="0" value="0"
-#            oninput="synSliderChange(this.value)">
-#   </div>
-#   <div class="bar-section">
-#     <span id="syn-ts-label">—</span>
-#   </div>
-# </div>
-# '''
-
-# # ── JavaScript ─────────────────────────────────────────────────────────────
-# _js = f'''
-# <script>
-# // ── Data ──────────────────────────────────────────────────────────────────
-# var _SYN_TIME_STEPS  = {_time_steps_str};
-# var _SYN_UA_STNS     = {_ts_ua_stn_json_str};
-# var _SYN_UA          = {_ts_ua_json_str};
-# var KEY_HGT_DAM      = {{"850":{int(KEY_HGT_850/10)},"700":{int(KEY_HGT_700/10)},"500":{int(KEY_HGT_500/10)},"250":{int(KEY_HGT_250/10)}}};
-# var KEY_HGT_M        = {{"850":{int(KEY_HGT_850)},"700":{int(KEY_HGT_700)},"500":{int(KEY_HGT_500)},"250":{int(KEY_HGT_250)}}};
-
-# // ── State ─────────────────────────────────────────────────────────────────
-# var _synLevel        = "850";
-# var _synStepIdx      = 0;
-# var _synUALayer      = null;
-# var _synStnLayer     = null;
-# var _synShowStations = {'true' if SHOW_STATION_SYMBOLS else 'false'};
-# var _synShowTooltips = {'true' if SHOW_TOOLTIPS else 'false'};
-
-# // ── Helpers ───────────────────────────────────────────────────────────────
-# function _getMap() {{
-#   var k = Object.keys(window).filter(function(k) {{ return k.startsWith("map_"); }});
-#   return k.length ? window[k[0]] : null;
-# }}
-# function _btnOn(id)  {{ var b = document.getElementById(id); if (b) b.classList.add("active"); }}
-# function _btnOff(id) {{ var b = document.getElementById(id); if (b) b.classList.remove("active"); }}
-# function _setExportStatus(msg) {{
-#   var el = document.getElementById("syn-export-status");
-#   if (el) el.textContent = msg;
-# }}
-
-# // ── Level selector ────────────────────────────────────────────────────────
-# function synSetLevel(lvl) {{
-#   _synLevel = lvl;
-#   _btnOff("btn-850"); _btnOff("btn-500");
-#   _btnOn("btn-" + lvl);
-#   synRender();
-# }}
-
-# // ── Time slider ───────────────────────────────────────────────────────────
-# function synSliderChange(v) {{
-#   _synStepIdx = parseInt(v);
-#   synRender();
-# }}
-
-# // ── Main render ───────────────────────────────────────────────────────────
-# function synRender() {{
-#   var MAP  = _getMap(); if (!MAP) return;
-#   var step = _SYN_TIME_STEPS[_synStepIdx];
-#   if (!step) return;
-#   var lbl  = document.getElementById("syn-ts-label");
-#   if (lbl) lbl.textContent = step.label;
-#   synRenderUA(step.key, step.label);
-# }}
-
-# // ── UA render: contours + colouring + station barbs ───────────────────────
-# function synRenderUA(fullKey, stepLabel) {{
-#   var MAP = _getMap(); if (!MAP) return;
-#   if (_synUALayer)  {{ MAP.removeLayer(_synUALayer);  _synUALayer  = null; }}
-#   if (_synStnLayer) {{ MAP.removeLayer(_synStnLayer); _synStnLayer = null; }}
-#   if (!fullKey || !_synLevel) return;
-
-#   var uaData   = (_SYN_UA[fullKey] || {{levels:{{}}}}).levels[_synLevel] || {{}};
-#   _synUALayer  = L.layerGroup();
-
-#   // ── Temperature band fills ────────────────────────────────────────────
-#   var _tbFills = uaData.temp_band_fills || [];
-#   if (_tbFills.length) {{
-#     if (!MAP.getPane("tempbandsPane")) {{
-#       MAP.createPane("tempbandsPane");
-#       MAP.getPane("tempbandsPane").style.zIndex       = 380;
-#       MAP.getPane("tempbandsPane").style.pointerEvents = "none";
-#     }}
-#     _tbFills.forEach(function(poly) {{
-#       if (!poly.coords || poly.coords.length < 3) return;
-#       var outerLL = poly.coords.map(function(c) {{ return [c[0], c[1]]; }});
-#       var holes = (poly.holes || []).map(function(hole) {{
-#         return hole.map(function(c) {{ return [c[0], c[1]]; }});
-#       }});
-#       var rings = [outerLL].concat(holes);
-#       var fillColor = poly.color === "#ffffff" ? "#ffffff" : poly.color;
-#       if (poly.color === "#ffffff") return;
-#       L.polygon(rings, {{
-#         color: "none", weight: 0,
-#         fillColor: poly.color, fillOpacity: 0.25,
-#         fillRule: "evenodd",
-#         interactive: false, pane: "tempbandsPane"
-#       }}).addTo(_synUALayer);
-#     }});
-#   }}
-
-#   // ── Height contours ───────────────────────────────────────────────────
-#   (uaData.hght || []).forEach(function(ct) {{
-#     var ll    = ct.coords.map(function(c) {{ return [c[1], c[0]]; }});
-#     var isKey = (KEY_HGT_DAM[_synLevel] && (
-#       Math.round(ct.level) === KEY_HGT_DAM[_synLevel] ||
-#       Math.round(ct.level) === KEY_HGT_M[_synLevel]));
-#     var _hLine = L.polyline(ll, {{
-#       color:   "#000000",
-#       weight:  isKey ? 4.5 : 1.5,
-#       opacity: isKey ? 1.0 : 0.85,
-#       pane:    "heightPane"
-#     }});
-#     if (_synShowTooltips) _hLine.bindTooltip(_synLevel + " hPa Hgt=" + Math.round(ct.level) + "dam");
-#     _hLine.addTo(_synUALayer);
-
-#     // Contour label near Saskatchewan
-#     var hgtInterval = (_synLevel === "850") ? 30  : (_synLevel === "700") ? 60  : (_synLevel === "500") ? 60  : 120;
-#     var hgtAnchor   = (_synLevel === "850") ? 1140 : (_synLevel === "700") ? 2520 : (_synLevel === "500") ? 4800 : 9600;
-#     var hgtRem = Math.round(ct.level - hgtAnchor);
-#     if (hgtRem >= 0 && hgtRem % hgtInterval < 1) {{
-#       var _skLat = 54.0, _skLon = -106.0, _best = null, _bestDist = 1e9;
-#       ct.coords.forEach(function(c) {{
-#         var d = (c[1]-_skLat)*(c[1]-_skLat) + (c[0]-_skLon)*(c[0]-_skLon);
-#         if (d < _bestDist) {{ _bestDist = d; _best = c; }}
-#       }});
-#       var _lblLat = _best ? _best[1] : ct.label_lat;
-#       var _lblLon = _best ? _best[0] : ct.label_lon;
-#       L.marker([_lblLat, _lblLon], {{ icon: L.divIcon({{
-#         html: '<div style="font-size:14px;font-weight:bold;color:#fff;'
-#             + 'font-family:Courier New,monospace;background:#000000;'
-#             + 'padding:0 3px;line-height:1.4;text-align:center;min-width:28px;">'
-#             + Math.round(ct.level / 10) + '</div>',
-#         iconSize: [32,14], iconAnchor: [16,7], className: ""
-#       }}), pane: "heightPane" }}).addTo(_synUALayer);
-#     }}
-#   }});
-
-#   // ── Temperature isotherms ─────────────────────────────────────────────
-#   (uaData.temp || []).forEach(function(ct) {{
-#     var t   = ct.level;
-#     var col = t > 0
-#       ? "rgb(" + Math.round(180 + 75*Math.min(t/40, 1)) + ",0,0)"
-#       : t < 0
-#       ? "rgb(0,0," + Math.round(180 + 75*Math.min(Math.abs(t)/40, 1)) + ")"
-#       : "#00bb00";
-#     var ll     = ct.coords.map(function(c) {{ return [c[1], c[0]]; }});
-#     var isBold = (Math.round(t) % 10 === 0);
-#     var _tLine = L.polyline(ll, {{
-#       color: col, weight: isBold ? 1.2 : 0.8,
-#       opacity: isBold ? 1.0 : 0.8, dashArray: "6 4"
-#     }});
-#     if (_synShowTooltips) _tLine.bindTooltip(_synLevel + " hPa T=" + t.toFixed(1) + "°C");
-#     _tLine.addTo(_synUALayer);
-
-#     // Isotherm label near BC coast
-#     var _bcLat = 54.0, _bcLon = -130.0, _bcBest = null, _bcBestDist = 1e9;
-#     ct.coords.forEach(function(c) {{
-#       var d = (c[1]-_bcLat)*(c[1]-_bcLat) + (c[0]-_bcLon)*(c[0]-_bcLon);
-#       if (d < _bcBestDist) {{ _bcBestDist = d; _bcBest = c; }}
-#     }});
-#     var _bcLblLat = _bcBest ? _bcBest[1] : ct.label_lat;
-#     var _bcLblLon = _bcBest ? _bcBest[0] : ct.label_lon;
-#     var _tVal = Math.round(t);
-#     var _tBg  = _tVal > 0 ? '#cc0000' : _tVal < 0 ? '#0044cc' : '#008800';
-#     L.marker([_bcLblLat, _bcLblLon], {{ icon: L.divIcon({{
-#       html: '<div style="font-size:12px;font-weight:' + (isBold ? "900" : "bold") + ';'
-#           + 'color:#ffffff;background:transparent;'
-#           + 'font-family:Courier New,monospace;'
-#           + 'text-shadow:-2px -2px 0 ' + _tBg + ',2px -2px 0 ' + _tBg + ',-2px 2px 0 ' + _tBg + ',2px 2px 0 ' + _tBg + ','
-#           + '-2px 0 0 ' + _tBg + ',2px 0 0 ' + _tBg + ',0 -2px 0 ' + _tBg + ',0 2px 0 ' + _tBg + ';'
-#           + 'padding:0 2px;line-height:1.4;text-align:center;">'
-#           + _tVal + '</div>',
-#       iconSize: [32,16], iconAnchor: [16,8], className: ""
-#     }}) }}).addTo(_synUALayer);
-#   }});
-
-#   // ── UA H/L centres ────────────────────────────────────────────────────
-#   var _uaHL = (_SYN_UA[fullKey] || {{}})["hl_" + _synLevel] || [];
-#   _uaHL.forEach(function(c) {{
-#     var _shadow = "1px 1px 0 white,-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white";
-#     var _html   = '<div style="font-size:61px;font-weight:bold;color:#000000;'
-#       + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
-#       + 'text-shadow:' + _shadow + ';pointer-events:none;">' + c.type + '</div>';
-#     var _hlMark = L.marker([c.lat, c.lon], {{
-#       icon: L.divIcon({{ html: _html, iconSize: [70,65], iconAnchor: [35,32], className: "" }}),
-#       zIndexOffset: 200
-#     }});
-#     if (_synShowTooltips) _hlMark.bindTooltip(_synLevel + " hPa " + c.type);
-#     _hlMark.addTo(_synUALayer);
-#   }});
-
-#   _synUALayer.addTo(MAP);
-
-#   // ── Station wind barbs ────────────────────────────────────────────────
-#   var stns = _SYN_UA_STNS[fullKey] || [];
-#   if (!stns.length) console.warn("No UA stns for key:", fullKey);
-#   _synStnLayer = L.layerGroup();
-#   stns.forEach(function(s) {{
-#     if (_synLevel !== "850") return;
-#     var svgInfo = (s.svgs || {{}})[_synLevel];
-#     if (!svgInfo) return;
-#     var icon = L.divIcon({{
-#       html:       svgInfo.svg,
-#       iconSize:   [svgInfo.w, svgInfo.h],
-#       iconAnchor: [Math.round(svgInfo.w/2), Math.round(svgInfo.h/2)],
-#       className:  ""
-#     }});
-#     var _sMark = L.marker([s.lat, s.lon], {{ icon: icon }})
-#       .bindPopup(s.popup, {{ maxWidth: 320 }});
-#     if (_synShowTooltips) _sMark.bindTooltip(s.tip + " | " + (stepLabel || ""));
-#     _sMark.addTo(_synStnLayer);
-#   }});
-#   if (_synShowStations) _synStnLayer.addTo(MAP);
-# }}
-
-# // ═══════════════════════════════════════════════════════════════════════════
-# //  EXPORT: shared capture engine
-# // ═══════════════════════════════════════════════════════════════════════════
-
-# function _synCapture(cfg, onDone) {{
-#   var MAP  = _getMap();
-#   var keys = Object.keys(window).filter(function(k) {{ return k.startsWith("map_"); }});
-#   if (!keys.length) {{ _setExportStatus("Map not found"); if (onDone) onDone(false); return; }}
-#   var mapEl = document.getElementById(keys[0]) || document.querySelector(".leaflet-container");
-#   if (!mapEl)  {{ _setExportStatus("Map el not found"); if (onDone) onDone(false); return; }}
-
-#   _synLevel = cfg.level;
-#   _btnOff("btn-850"); _btnOff("btn-500");
-#   _btnOn("btn-" + cfg.level);
-
-#   var hideEls = [
-#     mapEl.querySelector(".leaflet-control-container"),
-#     document.querySelector(".leaflet-control-layers"),
-#     document.querySelector(".leaflet-control-zoom"),
-#     document.querySelector(".leaflet-control-attribution"),
-#     document.getElementById("syn-bar"),
-#     document.getElementById("syn-export-panel"),
-#     document.getElementById("syn-fs-btn")
-#   ].filter(Boolean);
-#   var prevVis = hideEls.map(function(el) {{ return el.style.visibility; }});
-#   hideEls.forEach(function(el) {{ el.style.visibility = "hidden"; }});
-#   // Hide all Leaflet tooltips during export
-#   document.querySelectorAll(".leaflet-tooltip").forEach(function(t) {{ t.style.display = "none"; }});
-
-#   var origW = mapEl.style.width;
-#   var origH = mapEl.style.height;
-#   function restore() {{
-#     mapEl.style.width  = origW;
-#     mapEl.style.height = origH;
-#     MAP.invalidateSize();
-#     hideEls.forEach(function(el, i) {{ el.style.visibility = prevVis[i]; }});
-#     document.querySelectorAll(".leaflet-tooltip").forEach(function(t) {{ t.style.display = ""; }});
-#   }}
-
-#   mapEl.style.width  = cfg.targetW + "px";
-#   mapEl.style.height = cfg.targetH + "px";
-#   MAP.invalidateSize();
-#   MAP.setView(cfg.center, cfg.zoom, {{ animate: false }});
-
-#   setTimeout(function() {{
-#     html2canvas(mapEl, {{
-#       useCORS: true, allowTaint: true,
-#       scale: 2, logging: false,
-#       width: cfg.targetW, height: cfg.targetH
-#     }}).then(function(canvas) {{
-
-#       var cropH = canvas.height;
-#       var cropW = Math.min(Math.round(cropH * cfg.cropRatioW / cfg.cropRatioH), canvas.width);
-
-#       var BANNER_H = 90;
-#       var CREDIT_H = 22;
-
-#       var out = document.createElement("canvas");
-#       out.width  = cropW;
-#       out.height = cropH + BANNER_H + CREDIT_H;
-#       var ctx = out.getContext("2d");
-#       ctx.drawImage(canvas, 0, 0, cropW, cropH, 0, 0, cropW, cropH);
-
-#       var step   = _SYN_TIME_STEPS[_synStepIdx] || {{}};
-#       var _key   = step.key || "";
-#       var _dYear = parseInt(_key.substring(0,4), 10);
-#       var _dMon  = parseInt(_key.substring(4,6), 10) - 1;
-#       var _dDay  = parseInt(_key.substring(6,8), 10);
-#       var _dH    = step.hour || 0;
-
-#       var _MONTHS_L = ["January","February","March","April","May","June",
-#                        "July","August","September","October","November","December"];
-#       var _MONTHS_S = ["JAN","FEB","MAR","APR","MAY","JUN",
-#                        "JUL","AUG","SEP","OCT","NOV","DEC"];
-#       var _DOWS_L   = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-#       var _DOWS_S   = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
-
-#       var _utcDate = new Date(Date.UTC(_dYear, _dMon, _dDay, _dH, 0, 0));
-#       var _yr      = _utcDate.getUTCFullYear();
-
-#       var _mar1     = new Date(Date.UTC(_yr, 2, 1));
-#       var _dstStart = new Date(Date.UTC(_yr, 2, 1 + (7 - _mar1.getUTCDay()) % 7 + 7));
-#       _dstStart.setUTCHours(8);
-#       var _nov1     = new Date(Date.UTC(_yr, 10, 1));
-#       var _dstEnd   = new Date(Date.UTC(_yr, 10, 1 + (7 - _nov1.getUTCDay()) % 7));
-#       _dstEnd.setUTCHours(7);
-
-#       var _offsetH  = (_utcDate >= _dstStart && _utcDate < _dstEnd) ? -6 : -7;
-#       var _tzLabel  = _offsetH === -6 ? "MDT" : "MST";
-#       var _localDate = new Date(_utcDate.getTime() + _offsetH * 3600000);
-#       var _lYear    = _localDate.getUTCFullYear();
-#       var _lMon     = _localDate.getUTCMonth();
-#       var _lDay     = _localDate.getUTCDate();
-#       var _lH       = _localDate.getUTCHours();
-#       var _ampm     = _lH < 12 ? "AM" : "PM";
-#       var _hr12     = _lH === 0 ? 12 : (_lH > 12 ? _lH - 12 : _lH);
-
-#       var TITLE_H = BANNER_H;
-#       out.height = cropH + BANNER_H + TITLE_H + CREDIT_H;
-#       ctx.drawImage(canvas, 0, 0, cropW, cropH, 0, 0, cropW, cropH);
-
-#       var blackW = Math.round(cropW * 0.28);
-#       ctx.fillStyle = "#ffffff";
-#       ctx.fillRect(0, cropH, cropW, BANNER_H);
-#       ctx.fillStyle = "#111111";
-#       ctx.fillRect(0, cropH, blackW, BANNER_H);
-
-#       var _tsStr = _DOWS_L[_localDate.getUTCDay()]
-#                  + " " + _MONTHS_L[_lMon]
-#                  + " " + _lDay + ", " + _lYear
-#                  + " - " + _hr12 + " " + _ampm;
-
-#       ctx.font         = "bold 32px Arial, sans-serif";
-#       ctx.fillStyle    = "#ffffff";
-#       ctx.textAlign    = "center";
-#       ctx.textBaseline = "middle";
-#       ctx.fillText(_tsStr, blackW / 2, cropH + BANNER_H / 2);
-
-#       var _lvlTitle = cfg.level === "500"
-#         ? "500 hPa Heights and Isotherms"
-#         : "850 hPa Heights and Isotherms";
-
-#       ctx.font         = "bold 42px Arial, sans-serif";
-#       ctx.fillStyle    = "#111111";
-#       ctx.textAlign    = "left";
-#       ctx.textBaseline = "middle";
-#       ctx.fillText(_lvlTitle, blackW + 24, cropH + BANNER_H / 2);
-
-#       ctx.font         = "bold 38px Arial, sans-serif";
-#       ctx.fillStyle    = "#333333";
-#       ctx.textAlign    = "right";
-#       ctx.textBaseline = "middle";
-#       ctx.fillText("AWCC Weather Office", cropW - 24, cropH + BANNER_H / 2);
-
-#       var creditY = cropH + BANNER_H;
-#       ctx.fillStyle = "#f0f0f0";
-#       ctx.fillRect(0, creditY, cropW, CREDIT_H);
-
-#       ctx.font         = "13px Arial, sans-serif";
-#       ctx.fillStyle    = "#777777";
-#       ctx.textAlign    = "right";
-#       ctx.textBaseline = "middle";
-#       ctx.fillText("Based on data issued by Meteorological Service of Canada",
-#                    cropW - 14, creditY + CREDIT_H / 2);
-
-#       var _exportNow = new Date();
-#       var _expStr = "Exported "
-#         + String(_exportNow.getUTCFullYear())
-#         + "-" + String(_exportNow.getUTCMonth()+1).padStart(2,"0")
-#         + "-" + String(_exportNow.getUTCDate()).padStart(2,"0")
-#         + " " + String(_exportNow.getUTCHours()).padStart(2,"0")
-#         + ":" + String(_exportNow.getUTCMinutes()).padStart(2,"0") + "Z";
-#       ctx.font         = "13px Arial, sans-serif";
-#       ctx.fillStyle    = "#777777";
-#       ctx.textAlign    = "left";
-#       ctx.fillText(_expStr, 14, creditY + CREDIT_H / 2);
-
-#       var _exportNow = new Date();
-#       var _expStr = "Exported "
-#         + String(_exportNow.getUTCFullYear())
-#         + "-" + String(_exportNow.getUTCMonth()+1).padStart(2,"0")
-#         + "-" + String(_exportNow.getUTCDate()).padStart(2,"0")
-#         + " " + String(_exportNow.getUTCHours()).padStart(2,"0")
-#         + ":" + String(_exportNow.getUTCMinutes()).padStart(2,"0") + "Z";
-#       ctx.font         = "20px Arial, sans-serif";
-#       ctx.fillStyle    = "#555555";
-#       ctx.textAlign = "left";
-#       ctx.fillText(_expStr, 20, creditY + CREDIT_H / 2);
-
-#       var _expDay   = _DOWS_S[_localDate.getUTCDay()];
-#       var _expMon   = _MONTHS_S[_lMon];
-#       var _hrStr    = String(_hr12).padStart(2,"0") + _ampm + _tzLabel;
-#       var _thisDate = _key.substring(0,8);
-#       var _seenDates = [];
-#       for (var _di = 0; _di < _SYN_TIME_STEPS.length; _di++) {{
-#         var _dkey = (_SYN_TIME_STEPS[_di].key || "").substring(0,8);
-#         if (_seenDates.indexOf(_dkey) === -1) _seenDates.push(_dkey);
-#         if (_dkey === _thisDate) break;
-#       }}
-#       var _dayNum  = String(_seenDates.length).padStart(2,"0");
-#       var _lvlPfx  = cfg.level === "500" ? "500mb" : "850mb";
-#       var _localDD = String(_lDay).padStart(2,"0");
-#       var fname = _lvlPfx + "LLJ-Day" + _dayNum + "-" + _hrStr
-#                 + "_" + _expDay + "_" + _expMon
-#                 + "_" + _localDD + "_" + _lYear + ".png";
-
-#       var link   = document.createElement("a");
-#       link.download = fname;
-#       link.href     = out.toDataURL("image/png");
-#       link.click();
-
-#       restore();
-#       if (onDone) onDone(true);
-
-#     }}).catch(function(e) {{
-#       console.error("html2canvas failed:", e);
-#       restore();
-#       _setExportStatus("✗ Capture error: " + e.message);
-#       if (onDone) onDone(false);
-#     }});
-#   }}, 600);
-# }}
-
-# // ── Export single level at current timestep ───────────────────────────────
-# function synSave850() {{
-#   _setExportStatus("Capturing 850mb...");
-#   _synCapture({{
-#     level: "850", center: [55, -104], zoom: 5,
-#     targetW: 1400, targetH: 1100, cropRatioW: 8.5, cropRatioH: 11.0
-#   }}, function(ok) {{
-#     _setExportStatus(ok ? "✓ 850mb saved!" : "✗ Failed");
-#     if (ok) setTimeout(function() {{ _setExportStatus(""); }}, 3000);
-#   }});
-# }}
-
-# function synSave500() {{
-#   _setExportStatus("Capturing 500mb...");
-#   _synCapture({{
-#     level: "500", center: [55, -118], zoom: 5,
-#     targetW: 1400, targetH: 1141, cropRatioW: 2944.0, cropRatioH: 2400.0
-#   }}, function(ok) {{
-#     _setExportStatus(ok ? "✓ 500mb saved!" : "✗ Failed");
-#     if (ok) setTimeout(function() {{ _setExportStatus(""); }}, 3000);
-#   }});
-# }}
-
-# // ── Export All: every timestep × both levels ──────────────────────────────
-# var _exportAllQueue   = [];
-# var _exportAllRunning = false;
-
-# function synExportAll() {{
-#   if (_exportAllRunning) {{ _setExportStatus("Already running..."); return; }}
-#   _exportAllQueue = [];
-#   var total = _SYN_TIME_STEPS.length;
-#   for (var i = 0; i < total; i++) {{ _exportAllQueue.push({{ stepIdx: i, level: "850" }}); }}
-#   _exportAllRunning = true;
-#   _setExportStatus("Export All: 0/" + (total * 2));
-#   _runExportQueue(0, total * 2);
-# }}
-
-# function _runExportQueue(done, total) {{
-#   if (_exportAllQueue.length === 0) {{
-#     _exportAllRunning = false;
-#     _setExportStatus("✓ All " + total + " images saved!");
-#     setTimeout(function() {{ _setExportStatus(""); }}, 5000);
-#     return;
-#   }}
-#   var job = _exportAllQueue.shift();
-#   _synStepIdx = job.stepIdx;
-#   var slider  = document.getElementById("syn-time-slider");
-#   if (slider) slider.value = String(job.stepIdx);
-#   var step = _SYN_TIME_STEPS[job.stepIdx] || {{}};
-#   var lbl  = document.getElementById("syn-ts-label");
-#   if (lbl) lbl.textContent = step.label || "";
-#   synRenderUA(step.key, step.label);
-
-#   var cfg = (job.level === "850")
-#     ? {{ level: "850", center: [55,-104], zoom: 5, targetW: 1400, targetH: 1100, cropRatioW: 8.5,    cropRatioH: 11.0   }}
-#     : {{ level: "500", center: [55,-118], zoom: 5, targetW: 1400, targetH: 1141, cropRatioW: 2944.0, cropRatioH: 2400.0 }};
-
-#   _setExportStatus("Exporting " + job.level + " step " + (job.stepIdx+1) + "/" + _SYN_TIME_STEPS.length + " (" + (done+1) + "/" + total + ")");
-#   setTimeout(function() {{
-#     _synCapture(cfg, function() {{
-#       setTimeout(function() {{ _runExportQueue(done + 1, total); }}, 1000);
-#     }});
-#   }}, 600);
-# }}
-
-# // ── jsPDF multi-page PDF export ───────────────────────────────────────────
-# var _pdfRunning = false;
-
-# function _ensureJsPDF(cb) {{
-#   if (typeof window.jspdf !== "undefined") {{ cb(); return; }}
-#   _setExportStatus("Loading jsPDF...");
-#   var s = document.createElement("script");
-#   s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-#   s.onload  = function() {{ cb(); }};
-#   s.onerror = function() {{ _setExportStatus("✗ jsPDF load failed"); _pdfRunning = false; }};
-#   document.head.appendChild(s);
-# }}
-
-# // ── Single-level PDF builder (calls onComplete when done) ─────────────────
-# function _doExportPDF(level, onComplete) {{
-#   _pdfRunning = true;
-#   var total = _SYN_TIME_STEPS.length;
-#   var queue = [];
-#   for (var i = 0; i < total; i++) queue.push(i);
-
-#   var PAGE_W_MM = 279.4;
-#   var PAGE_H_MM = 215.9;
-#   var doc = new window.jspdf.jsPDF({{ orientation: "landscape", unit: "mm", format: [PAGE_W_MM, PAGE_H_MM] }});
-
-#   var cfg = (level === "850")
-#     ? {{ level: "850", center: [55,-118], zoom: 5, targetW: 1400, targetH: 1141, cropRatioW: 2944,    cropRatioH: 2400   }}
-#     : {{ level: "500", center: [55,-118], zoom: 5, targetW: 1400, targetH: 1141, cropRatioW: 2944.0, cropRatioH: 2400.0 }};
-
-#   _setExportStatus("PDF " + level + ": 0/" + total);
-
-#   function processNext(idx) {{
-#     _synLevel = level;
-#     _btnOff("btn-850"); _btnOff("btn-500");
-#     _btnOn("btn-" + level);
-#     if (idx >= queue.length) {{
-#       var now   = new Date();
-#       var fname = level + "mb_ALL_"
-#         + now.getUTCFullYear()
-#         + String(now.getUTCMonth()+1).padStart(2,"0")
-#         + String(now.getUTCDate()).padStart(2,"0")
-#         + "_" + String(now.getUTCHours()).padStart(2,"0")
-#         + String(now.getUTCMinutes()).padStart(2,"0") + "Z.pdf";
-#       doc.save(fname);
-#       _pdfRunning = false;
-#       _setExportStatus("✓ " + level + "mb PDF saved (" + total + " pages)!");
-#       if (onComplete) onComplete();
-#       return;
-#     }}
-
-#     var stepIdx = queue[idx];
-#     _synStepIdx = stepIdx;
-#     var slider = document.getElementById("syn-time-slider");
-#     if (slider) slider.value = String(stepIdx);
-#     var step = _SYN_TIME_STEPS[stepIdx] || {{}};
-#     var lbl  = document.getElementById("syn-ts-label");
-#     if (lbl) lbl.textContent = step.label || "";
-#     synRenderUA(step.key, step.label);
-#     _setExportStatus("PDF " + level + ": " + (idx+1) + "/" + total);
-
-#     setTimeout(function() {{
-#       var MAP  = _getMap();
-#       var keys = Object.keys(window).filter(function(k) {{ return k.startsWith("map_"); }});
-#       if (!keys.length) {{ processNext(idx+1); return; }}
-#       var mapEl = document.getElementById(keys[0]) || document.querySelector(".leaflet-container");
-#       if (!mapEl)  {{ processNext(idx+1); return; }}
-
-#       var hideEls = [
-#         mapEl.querySelector(".leaflet-control-container"),
-#         document.querySelector(".leaflet-control-layers"),
-#         document.querySelector(".leaflet-control-zoom"),
-#         document.querySelector(".leaflet-control-attribution"),
-#         document.getElementById("syn-bar"),
-#         document.getElementById("syn-export-panel"),
-#         document.getElementById("syn-fs-btn")
-#       ].filter(Boolean);
-#       var prevVis = hideEls.map(function(el) {{ return el.style.visibility; }});
-#       hideEls.forEach(function(el) {{ el.style.visibility = "hidden"; }});
-#       // Hide all Leaflet tooltips during export
-#       document.querySelectorAll(".leaflet-tooltip").forEach(function(t) {{ t.style.display = "none"; }});
-
-#       var origW = mapEl.style.width, origH = mapEl.style.height;
-#       function restore() {{
-#         mapEl.style.width  = origW;
-#         mapEl.style.height = origH;
-#         MAP.invalidateSize();
-#         hideEls.forEach(function(el, i) {{ el.style.visibility = prevVis[i]; }});
-#         document.querySelectorAll(".leaflet-tooltip").forEach(function(t) {{ t.style.display = ""; }});
-#       }}
-
-#       mapEl.style.width  = cfg.targetW + "px";
-#       mapEl.style.height = cfg.targetH + "px";
-#       MAP.invalidateSize();
-#       MAP.setView(cfg.center, cfg.zoom, {{ animate: false }});
-
-#       setTimeout(function() {{
-#         html2canvas(mapEl, {{
-#           useCORS: true, allowTaint: true,
-#           scale: 1.5, logging: false,
-#           width: cfg.targetW, height: cfg.targetH
-#         }}).then(function(canvas) {{
-
-#           var cropH    = canvas.height;
-#           var cropW    = Math.min(Math.round(cropH * cfg.cropRatioW / cfg.cropRatioH), canvas.width);
-#           var BANNER_H = 80, TITLE_H = 80, CREDIT_H = 28;
-
-#           var out    = document.createElement("canvas");
-#           out.width  = cropW;
-#           out.height = cropH + BANNER_H + TITLE_H + CREDIT_H;
-#           var ctx    = out.getContext("2d");
-#           ctx.drawImage(canvas, 0, 0, cropW, cropH, 0, 0, cropW, cropH);
-
-#           var _key   = step.key || "";
-#           var _dYear = parseInt(_key.substring(0,4),10);
-#           var _dMon  = parseInt(_key.substring(4,6),10)-1;
-#           var _dDay  = parseInt(_key.substring(6,8),10);
-#           var _dH    = step.hour || 0;
-#           var _ML    = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-#           var _DL    = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-#           var _utc   = new Date(Date.UTC(_dYear,_dMon,_dDay,_dH,0,0));
-#           var _yr    = _utc.getUTCFullYear();
-#           var _m1    = new Date(Date.UTC(_yr,2,1));
-#           var _ds    = new Date(Date.UTC(_yr,2,1+(7-_m1.getUTCDay())%7+7)); _ds.setUTCHours(8);
-#           var _n1    = new Date(Date.UTC(_yr,10,1));
-#           var _de    = new Date(Date.UTC(_yr,10,1+(7-_n1.getUTCDay())%7));  _de.setUTCHours(7);
-#           var _off   = (_utc>=_ds && _utc<_de) ? -6 : -7;
-#           var _loc   = new Date(_utc.getTime()+_off*3600000);
-#           var _lH    = _loc.getUTCHours();
-#           var _ampm  = _lH<12?"AM":"PM";
-#           var _h12   = _lH===0?12:(_lH>12?_lH-12:_lH);
-#           var _tsStr = _DL[_loc.getUTCDay()]+" "+_ML[_loc.getUTCMonth()]+" "+_loc.getUTCDate()+", "+_loc.getUTCFullYear()+" - "+_h12+" "+_ampm;
-
-#           var blackW = Math.round(cropW*0.33);
-#           ctx.fillStyle="#ffffff"; ctx.fillRect(0,cropH,cropW,BANNER_H * 1);
-#           ctx.fillStyle="#111111"; ctx.fillRect(0,cropH,blackW,BANNER_H * 1);
-#           ctx.font="bold 30px Arial,sans-serif"; ctx.fillStyle="#ffffff";
-#           ctx.textAlign="center"; ctx.textBaseline="middle";
-#           ctx.fillText(_tsStr,blackW/2,cropH+BANNER_H/2);
-
-#           var titleY=cropH+BANNER_H;
-#           ctx.fillStyle="#ffffff"; ctx.fillRect(0,titleY,cropW,TITLE_H);
-#           ctx.font="bold 32px Arial,sans-serif"; ctx.fillStyle="#111111";
-#           ctx.textAlign="left"; ctx.textBaseline="middle";
-#           ctx.fillText(cfg.level==="500"?"500 hPa Heights and Isotherms":"850hPa LLJ Prog",24,titleY+TITLE_H/2);
-#           ctx.font="24px Arial,sans-serif"; ctx.fillStyle="#333333";
-#           ctx.textAlign="right";
-#           ctx.fillText("AWCC Weather Office",cropW-24,titleY+TITLE_H/2);
-
-#           var creditY=titleY+TITLE_H;
-#           ctx.fillStyle="#ffffff"; ctx.fillRect(0,creditY,cropW,CREDIT_H);
-#           ctx.font="12px Arial,sans-serif"; ctx.fillStyle="#555555";
-#           ctx.textAlign="right"; ctx.textBaseline="middle";
-#           ctx.fillText("Based on data issued by Meteorological Service of Canada",cropW-20,creditY+CREDIT_H/2);
-
-#           var imgData = out.toDataURL("image/jpeg", 0.88);
-#           if (idx > 0) doc.addPage([PAGE_W_MM, PAGE_H_MM], "landscape");
-#           doc.addImage(imgData, "JPEG", 0, 0, PAGE_W_MM, PAGE_H_MM);
-
-#           restore();
-#           setTimeout(function() {{ processNext(idx+1); }}, 800);
-
-#         }}).catch(function(e) {{
-#           console.error("html2canvas error:", e);
-#           restore();
-#           processNext(idx+1);
-#         }});
-#       }}, 600);
-#     }}, 400);
-#   }}
-
-#   processNext(0);
-# }}
-
-# // ── One button → two PDFs ─────────────────────────────────────────────────
-# function synExportBothPDFs() {{
-#   if (_pdfRunning) {{ _setExportStatus("PDF already running..."); return; }}
-#   _ensureJsPDF(function() {{
-#     _setExportStatus("Starting 850mb PDF...");
-#     _doExportPDF("850", function() {{
-#       _setExportStatus("✓ 850mb PDF saved!");
-#       setTimeout(function() {{ _setExportStatus(""); }}, 5000);
-#     }});
-#   }});
-# }}
-
-# // ── Init ──────────────────────────────────────────────────────────────────
-# function _maybeTip(marker, text) {{
-#   if (_synShowTooltips) marker.bindTooltip(text);
-#   return marker;
-# }}
-# function _synInit() {{
-#   var slider = document.getElementById("syn-time-slider");
-#   if (slider) {{
-#     slider.max   = String(Math.max(0, _SYN_TIME_STEPS.length - 1));
-#     slider.value = "0";
-#   }}
-#   synSetLevel("850");
-#   synRender();
-# }}
-
-# if (document.readyState === "complete") {{ setTimeout(_synInit, 700); }}
-# else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700); }}); }}
-# </script>
-# '''
-
-# m.get_root().html.add_child(Element(_bar_html))
-# m.get_root().html.add_child(Element(_js))
+# Cell 9 — Synoptic map
+# Layers: height + temp always on, 850/500 selector, time slider
+# Export 850, Export 500, Export All (all timesteps both levels)
+
+
+###########################################################
+###########################################################
+
+##     Ctrl + / to cancel comment out
+
+###########################################################
+###########################################################
+
+
+
+
+import folium
+from folium import Element
+import json as _json
+import numpy as np
+import pandas as pd
+from datetime import date as _date_kh, datetime, timezone, timedelta
+
+# ── 500 hPa key height ────────────────────────────────────────────────────
+_HEIGHT_CONTROL = {
+    "Jan 1":  5400, "Apr 3":  5460, "Apr 19": 5520, "May 11": 5580,
+    "May 30": 5640, "Jun 27": 5700, "Jul 26": 5760, "Aug 7":  5700,
+    "Aug 31": 5640, "Oct 1":  5580, "Oct 17": 5520, "Oct 29": 5460,
+    "Nov 17": 5400,
+}
+
+def _parse_height_entry(label_str, ref_year=2001):
+    return datetime.strptime(f"{label_str} {ref_year}", "%b %d %Y").timetuple().tm_yday
+
+def _get_key_hgt_500(today=None):
+    if today is None:
+        today = _date_kh.today()
+    today_doy = today.timetuple().tm_yday
+    best_val, best_doy = None, -1
+    for label_str, hgt in _HEIGHT_CONTROL.items():
+        entry_doy = _parse_height_entry(label_str)
+        if entry_doy <= today_doy and entry_doy > best_doy:
+            best_doy = entry_doy
+            best_val = hgt
+    if best_val is None:
+        best_val = list(_HEIGHT_CONTROL.values())[-1]
+    return best_val
+
+_today_kh   = _date_kh.today()
+KEY_HGT_500 = _get_key_hgt_500(_today_kh)
+KEY_HGT_850 = 0
+KEY_HGT_700 = 0
+KEY_HGT_250 = 0
+print(f'  500 hPa key height: {KEY_HGT_500} m  (date: {_today_kh})')
+
+def _decimate_stations(records, spacing_km=500):
+    if not records:
+        return records
+    dlat = spacing_km / 111.32
+    seen = {}
+    out  = []
+    for d in records:
+        lat = d.get('lat')
+        lon = d.get('lon')
+        if lat is None or lon is None:
+            continue
+        dlon = spacing_km / (111.32 * np.cos(np.radians(lat)))
+        cell = (int(lat / dlat), int(lon / dlon))
+        if cell not in seen:
+            seen[cell] = True
+            out.append(d)
+    return out
+
+center_lat = 53.3097
+center_lon = -113.5797
+
+# ── Safeguards ────────────────────────────────────────────────────────────
+if '_ts_ua_json_str' not in globals():
+    print("⚠ _ts_ua_json_str missing — run Cell 7.6 first.")
+    _ts_ua_json_str = _json.dumps({})
+if '_ts_ua_stn_json_str' not in globals():
+    print("⚠ _ts_ua_stn_json_str missing.")
+    _ts_ua_stn_json_str = _json.dumps({})
+if '_ts_slp_json_str' not in globals():
+    print("⚠ _ts_slp_json_str missing — run Cell 7.5 first.")
+    _ts_slp_json_str = _json.dumps({})
+if '_ua_date_map' not in globals():
+    print("⚠ _ua_date_map missing.")
+    _ua_date_map = {}
+
+# ── Build timestamp→key maps ──────────────────────────────────────────────
+_metar_ts_to_key = {}
+for (_date_val, _hr) in _synoptic_times:
+    _date_str = pd.Timestamp(_date_val).strftime('%Y%m%d')
+    _key      = f'{_date_str}_{int(_hr):02d}'
+    _day      = pd.Timestamp(_date_val).day
+    for _d in metar_records:
+        _ts = _d.get('timestamp', '')
+        if len(_ts) < 5: continue
+        try:
+            _rec_day  = int(_ts[0:2])
+            _rec_hour = int(_ts[2:4])
+        except ValueError:
+            continue
+        if _rec_day == _day and abs(_rec_hour - _hr) <= 3:
+            _metar_ts_to_key[_ts] = _key
+
+_ua_hour_to_key = {}
+for (_date_val, _hr) in reversed(_synoptic_times):
+    _date_str = pd.Timestamp(_date_val).strftime('%Y%m%d')
+    _key      = f'{_date_str}_{int(_hr):02d}'
+    _short    = str(int(_hr))
+    if _short not in _ua_hour_to_key:
+        _ua_hour_to_key[_short] = _key
+
+_ua_date_map = {}
+for (_date_val, _hr) in _synoptic_times:
+    _ua_date_map[str(int(_hr))] = f'{pd.Timestamp(_date_val).strftime("%Y-%m-%d")} {int(_hr):02d}Z'
+
+# ── Build ordered time steps for slider ───────────────────────────────────
+_EDMONTON_OFFSET = timedelta(hours=-6)
+_now_edmonton    = datetime.now(timezone.utc) + _EDMONTON_OFFSET
+_edmonton_today  = _now_edmonton.date()
+
+_time_steps = []
+for (_date_val, _hr) in _synoptic_times:
+    if int(_hr) != 12:
+        continue
+    _date_str = pd.Timestamp(_date_val).strftime('%Y%m%d')
+    _key      = f'{_date_str}_{int(_hr):02d}'
+    _dt       = pd.Timestamp(_date_val).date()
+    _months   = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    _dows     = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+    _dow      = _dows[_dt.weekday()]
+    _mon      = _months[_dt.month - 1]
+    _label    = f'{_dow} {_mon} {_dt.day} {int(_hr):02d}Z'
+    _time_steps.append({'key': _key, 'label': _label, 'hour': int(_hr)})
+
+_time_steps_str      = _json.dumps(_time_steps)
+_metar_ts_to_key_str = _json.dumps(_metar_ts_to_key)
+_ua_hour_to_key_str  = _json.dumps(_ua_hour_to_key)
+
+print(f"Time steps: {[s['label'] for s in _time_steps]}")
+
+# ── Build map ─────────────────────────────────────────────────────────────
+m = folium.Map(location=[center_lat, center_lon], zoom_start=5,
+               tiles=None, prefer_canvas=True)
+folium.TileLayer(tiles='about:blank', attr=' ', name='Blank', max_zoom=19, show=True).add_to(m)
+m.get_root().html.add_child(Element(
+    '<style>.leaflet-container{background:#e0f2ff!important;}</style>'
+))
+
+
+# ── Borders ───────────────────────────────────────────────────────────────
+borders_js = (
+    '<script>\n'
+    '(function(){\n'
+    '  function loadBorders(){\n'
+    '    var keys=Object.keys(window).filter(function(k){return k.startsWith("map_");});\n'
+    '    if(!keys.length){setTimeout(loadBorders,200);return;}\n'
+    '    var MAP=window[keys[0]];\n'
+    '    if(!MAP.getPane("albertaPane")){\n'
+    '      MAP.createPane("albertaPane");\n'
+    '      MAP.getPane("albertaPane").style.zIndex="210";\n'
+    '      MAP.getPane("albertaPane").style.pointerEvents="none";\n'
+    '    }\n'
+    '    if(!MAP.getPane("bordersPane")){\n'
+    '      MAP.createPane("bordersPane");\n'
+    '      MAP.getPane("bordersPane").style.zIndex="220";\n'
+    '      MAP.getPane("bordersPane").style.pointerEvents="none";\n'
+    '    }\n'
+    '    if(!MAP.getPane("landPane")){\n'
+    '      MAP.createPane("landPane");\n'
+    '      MAP.getPane("landPane").style.zIndex="205";\n'
+    '      MAP.getPane("landPane").style.pointerEvents="none";\n'
+    '    }\n'
+    '    if(!MAP.getPane("heightPane")){\n'
+    '      MAP.createPane("heightPane");\n'
+    '      MAP.getPane("heightPane").style.zIndex="490";\n'
+    '      MAP.getPane("heightPane").style.pointerEvents="none";\n'
+    '    }\n'
+    '    fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson")\n'
+    '      .then(function(r){return r.json();})\n'
+    '      .then(function(gj){\n'
+    '        L.geoJSON(gj,{style:function(){return {color:"none",weight:0,fill:true,fillColor:"#d4d4d4",fillOpacity:1.0};},pane:"landPane"}).addTo(MAP);\n'
+    '      }).catch(function(e){console.warn("land fill load failed",e);});\n'
+    '    var items=[\n'
+    '      ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_coastline.geojson",\n'
+    '       {color:"#444",weight:2.5,opacity:1.0,fill:false}],\n'
+    '      ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_boundary_lines_land.geojson",\n'
+    '       {color:"#ffffff",weight:2.2,opacity:1.0,fill:false}],\n'
+    '      ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_1_states_provinces_lines.geojson",\n'
+    '       {color:"#ffffff",weight:1.8,opacity:0.85,fill:false}],\n'
+    '      ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_lakes.geojson",\n'
+    '       {color:"#5588aa",weight:1.8,opacity:0.9,fill:false}]\n'
+    '    ];\n'
+
+    '    items.forEach(function(item){\n'
+    '      fetch(item[0]).then(function(r){return r.json();}).then(function(gj){\n'
+    '        L.geoJSON(gj,{style:function(){return item[1];},pane:"bordersPane"}).addTo(MAP);\n'
+    '      }).catch(function(e){console.warn("border load failed",e);});\n'
+    '    });\n'
+    '    fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_1_states_provinces.geojson")\n'
+    '      .then(function(r){return r.json();})\n'
+    '      .then(function(gj){\n'
+    '        var ab={type:"FeatureCollection",features:gj.features.filter(function(f){return f.properties.name==="Alberta";})};\n'
+    '        L.geoJSON(ab,{style:function(){return {color:"#444444",weight:2.5,opacity:1.0,fill:true,fillColor:"#ffffff",fillOpacity:1.0};},pane:"albertaPane"}).addTo(MAP);\n'
+    '      }).catch(function(e){console.warn("Alberta border load failed",e);});\n'
+    '  }\n'
+    '  if(document.readyState==="complete"){setTimeout(loadBorders,600);}\n'
+    '  else{window.addEventListener("load",function(){setTimeout(loadBorders,600);});}\n'
+    '})();\n'
+    '</script>'
+)
+m.get_root().html.add_child(Element(borders_js))
+
+# ── KML / fire zones ──────────────────────────────────────────────────────
+if 'fire_zones_html' in globals():
+    m.get_root().html.add_child(Element(fire_zones_html))
+
+# ── Fullscreen button ─────────────────────────────────────────────────────
+fullscreen_html = (
+    '<style>\n'
+    '#syn-fs-btn{\n'
+    '  position:fixed;top:10px;left:10px;z-index:10001;\n'
+    '  background:rgba(255,255,255,0.96);border:1px solid #aaa;border-radius:6px;\n'
+    '  padding:5px 10px;font-family:Courier New,monospace;font-size:12px;\n'
+    '  box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer;color:#1a3a6a;\n'
+    '}\n'
+    '#syn-fs-btn:hover{background:#e8f0fe;}\n'
+    '</style>\n'
+    '<button id="syn-fs-btn" onclick="synToggleFS()">&#x26F6; Fullscreen</button>\n'
+    '<script>\n'
+    'var _synFS=false,_synMapEl=null,_synOrigStyle="";\n'
+    'function synToggleFS(){\n'
+    '  var btn=document.getElementById("syn-fs-btn");\n'
+    '  var keys=Object.keys(window).filter(function(k){return k.startsWith("map_");});\n'
+    '  if(!keys.length)return;\n'
+    '  var MAP=window[keys[0]];\n'
+    '  if(!_synMapEl){_synMapEl=document.getElementById(keys[0])||document.querySelector(".leaflet-container");}\n'
+    '  if(!_synMapEl)return;\n'
+    '  _synFS=!_synFS;\n'
+    '  if(_synFS){\n'
+    '    _synOrigStyle=_synMapEl.getAttribute("style")||"";\n'
+    '    _synMapEl.setAttribute("style","position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:9999!important;margin:0!important;");\n'
+    '    btn.innerHTML="&#x274C; Exit Fullscreen";\n'
+    '  } else {\n'
+    '    _synMapEl.setAttribute("style",_synOrigStyle);\n'
+    '    btn.innerHTML="&#x26F6; Fullscreen";\n'
+    '  }\n'
+    '  setTimeout(function(){MAP.invalidateSize();},100);\n'
+    '}\n'
+    '</script>\n'
+)
+m.get_root().html.add_child(Element(fullscreen_html))
+
+# ── Build per-timestamp surface station data ──────────────────────────────
+import json as _json2
+_ts_all = sorted(set(d['timestamp'] for d in metar_records if d['timestamp']))
+
+for _mr in metar_records:
+    _mr.setdefault('tendency', None)
+    _mr.setdefault('pressure_change', None)
+
+_ts_data = {}
+for _ts in _ts_all:
+    _entries = []
+    _display_set = {id(d) for d in _decimate_stations(
+        [d for d in metar_records if d['timestamp'] == _ts], spacing_km=SURFACE_STN_SPACING_KM)}
+
+    for _d in metar_records:
+        if _d['timestamp'] != _ts: continue
+        if id(_d) not in _display_set: continue
+        _fc  = {'VFR':'green','MVFR':'steelblue','IFR':'crimson','LIFR':'red'}.get(_d['flt_cat'],'#888')
+        _wg  = f' G{_d["wind_gust"]}' if _d.get('wind_gust') else ''
+        _tend_raw = _d.get('tendency')
+        _pc_raw   = _d.get('pressure_change')
+        _TEND_SYM   = {'rising':'/','falling':'\\','steady':'—','rising_falling':'∧','falling_rising':'V','rising_steady':'⌐','falling_steady':'∟'}
+        _TEND_LABEL = {'rising':'Rising','falling':'Falling','steady':'Steady','rising_falling':'Rising then falling','falling_rising':'Falling then rising','rising_steady':'Rising then steady','falling_steady':'Falling then steady'}
+        if _tend_raw:
+            _sym    = _TEND_SYM.get(_tend_raw, '?')
+            _lbl    = _TEND_LABEL.get(_tend_raw, _tend_raw)
+            _pc_str = ''
+            if _pc_raw is not None and _tend_raw != 'steady':
+                _sign   = '+' if _pc_raw > 0 else ''
+                _pc_str = f' ({_sign}{_pc_raw/10:.1f} hPa)'
+            _tend_html = (f'<span style="font-weight:bold;font-size:13px;font-family:Courier New,monospace">{_sym}</span> {_lbl}{_pc_str}')
+        else:
+            _tend_html = '<span style="color:#aaa">insufficient history</span>'
+        _pop = (f'<div style="font-family:monospace;font-size:12px;min-width:200px">'
+                f'<b style="font-size:14px;color:#1a4a8a">{_d["icao"]}</b> '
+                f'<span style="color:{_fc};font-weight:bold">{_d["flt_cat"]}</span><br>'
+                f'<span style="color:#888;font-size:10px">{_d["name"]}</span>'
+                f'<hr style="margin:4px 0">'
+                f'Temp/Dew: <b>{_d["temp"]}C / {_d["dew"]}C</b><br>'
+                f'Wind: <b>{_d["wind_dir"]}/{_d["wind_spd"]}kt{_wg}</b><br>'
+                f'Vis: <b>{_d["vis"]} SM</b> Wx: <b>{_d["weather"] or "NIL"}</b><br>'
+                f'SLP: <b>{_d["slp"]} hPa</b> RH: <b>{_d["rh"]}%</b><br>'
+                f'Tendency: {_tend_html}<br>'
+                f'Cloud: <b>' + ' '.join(c['raw'] for c in _d['clouds']) + '</b><br>'
+                + f'<a href="https://aviationweather.gov/api/data/metar?ids={_d["icao"]}&hours=24&taf=1" '
+                f'target="_blank" style="font-size:10px;color:#1a4a8a;">METAR+TAF: {_d["icao"]} ↗</a></div>')
+        _svg_str, _sw, _sh = station_model_svg({**_d, 'is_surface': True, 'slp_label': '', 'lowest_sig': None}, S=34)
+        _ttd_val = round(_d['temp'] - _d['dew'], 1) if _d.get('temp') is not None and _d.get('dew') is not None else None
+        _pc_hpa  = (_d.get('pressure_change') or 0) / 10.0
+        if   _pc_hpa <= -3: _tend_color = '#8B0000'
+        elif _pc_hpa <= -2: _tend_color = '#cc0000'
+        elif _pc_hpa <= -1: _tend_color = '#ff6666'
+        elif _pc_hpa >=  3: _tend_color = '#00008B'
+        elif _pc_hpa >=  2: _tend_color = '#1a4a8a'
+        elif _pc_hpa >=  1: _tend_color = '#66aaff'
+        else:                _tend_color = None
+        _entries.append({
+            'lat': _d['lat'], 'lon': _d['lon'], 'popup': _pop,
+            'tip': f'{_d["icao"]} {_d["temp"]}C/{_d["dew"]}C {_d["wind_dir"]}/{_d["wind_spd"]}kt',
+            'svg': _svg_str, 'svg_w': int(_sw), 'svg_h': int(_sh),
+            'ttd': _ttd_val, 'tend_color': _tend_color,
+        })
+    _ts_data[_ts] = _entries
+
+if not SHOW_STATION_SYMBOLS:
+    _ts_data = {}
+_ts_json_str = _json2.dumps(_ts_data)
+_ts_list_str = _json2.dumps(_ts_all)
+_latest_ts   = _ts_all[-1] if _ts_all else ''
+
+# ── Build UA station data — keyed by full date+hour e.g. "20260507_12" ───
+import json as _json3
+import math
+
+_ua_stn_data = {}
+
+for (date_val, hr), _grp in ua_summary_df.groupby(
+        [ua_summary_df['valid_time'].str[:10], 'hour'], sort=True):
+    _date_str = pd.Timestamp(date_val).strftime('%Y%m%d')
+    _key      = f'{_date_str}_{int(hr):02d}'
+    _stns     = []
+
+    _FORCE_STN_COORDS = {
+        'ANA':  (53.5513, -116.5031), 'B4':   (50.9258, -115.1240),
+        'BRA':  (57.1677, -117.6640), 'BROO': (50.5500, -111.8500),
+        'C4':   (49.6086, -114.4514), 'C5':   (49.6356, -110.3296),
+        'ECA':  (54.7916, -118.2348), 'FLA':  (58.6109, -117.1600),
+        'MUA':  (57.1353, -110.8942), 'PYA':  (58.7684, -111.1061),
+        'FGA':  (58.6860, -114.9947), 'S5':   (57.1443, -115.0798),
+        'SDA':  (54.7283, -115.3556), 'SHA':  (52.2367, -115.1967),
+        'WGM':  (49.1333, -113.8000), 'WJW':  (52.9300, -118.0300),
+        'WRA':  (55.2855, -112.4789), 'WZG':  (51.1934, -115.5522),
+    }
+
+    # Find nearest RDPS grid point to each station and build synthetic rows
+    import numpy as _np2
+    _stn_rows = []
+    for _stn_icao, (_slat, _slon) in _FORCE_STN_COORDS.items():
+        _dists = (_grp['lat'] - _slat)**2 + (_grp['lon'] - _slon)**2
+        if _dists.empty: continue
+        _nearest = _grp.loc[_dists.idxmin()].copy()
+        _nearest['icao']     = _stn_icao
+        _nearest['stn_name'] = _stn_icao
+        _nearest['lat']      = _slat
+        _nearest['lon']      = _slon
+        _stn_rows.append(_nearest)
+    if not _stn_rows: continue
+    _grp = pd.DataFrame(_stn_rows).reset_index(drop=True)
+    _grp['_force850'] = True
+    for _, _r in _grp.iterrows():
+        def _fmt(v, dec=1):
+            return f'{v:.{dec}f}' if v is not None and not (isinstance(v, float) and math.isnan(v)) else '—'
+        def _fmti(v):
+            return f'{int(round(v))}' if v is not None and not (isinstance(v, float) and math.isnan(v)) else '—'
+
+        _pop = (f'<div style="font-family:monospace;font-size:11px;min-width:240px">'
+                f'<b style="font-size:13px;color:#cc6600">{_r["icao"]}</b> '
+                f'<span style="color:#888;font-size:10px">{_r["stn_name"]}</span><br>'
+                f'<hr style="margin:4px 0">')
+        for _lvl in [850, 700, 500, 250]:
+            _h   = _fmti(_r.get(f'HGHT_{_lvl}'))
+            _t   = _fmt(_r.get(f'TEMP_{_lvl}'))
+            _td  = _fmt(_r.get(f'DWPT_{_lvl}'))
+            _tv, _tdv = _r.get(f'TEMP_{_lvl}'), _r.get(f'DWPT_{_lvl}')
+            _ttd = (f'{_tv - _tdv:.1f}'
+                    if _tv is not None and _tdv is not None
+                    and not (isinstance(_tv, float) and math.isnan(_tv))
+                    and not (isinstance(_tdv, float) and math.isnan(_tdv)) else '—')
+            _wd  = _fmti(_r.get(f'DRCT_{_lvl}'))
+            _ws  = _fmt(_r.get(f'SPED_{_lvl}'))
+            _pop += (f'<b style="color:#cc6600">{_lvl} hPa</b> '
+                     f'Hgt:<b>{_h}m</b> T:<b>{_t}°C</b> '
+                     f'Td:<b>{_td}°C</b> T-Td:<b>{_ttd}°C</b> '
+                     f'Wnd:<b>{_wd}/{_ws}kt</b><br>')
+
+        _t5 = _r.get('TEMP_500')
+        _t7 = _r.get('TEMP_700')
+        _instab_str, _instab_cat = '—', ''
+        if (_t5 is not None and _t7 is not None
+                and not (isinstance(_t5, float) and math.isnan(_t5))
+                and not (isinstance(_t7, float) and math.isnan(_t7))):
+            _tdiff = _t7 - _t5
+            _instab_str = f'{_tdiff:.1f}'
+            if _tdiff >= 18:
+                _instab_cat = ' <span style="color:#cc2200;font-weight:bold">CB</span>'
+            elif _tdiff >= 16:
+                _instab_cat = ' <span style="color:#cc5500;font-weight:bold">TCU</span>'
+        _pop += (f'<hr style="margin:4px 0">T700-500: <b>{_instab_str}°C</b>{_instab_cat}<br>'
+                 f'</div>')
+
+        _level_svgs = {}
+        for _lvl in [850, 700, 500, 250]:
+            _lt  = _r.get(f'TEMP_{_lvl}')
+            _ltd = _r.get(f'DWPT_{_lvl}')
+            _lwd = _r.get(f'DRCT_{_lvl}')
+            _lws = _r.get(f'SPED_{_lvl}')
+            _lh  = _r.get(f'HGHT_{_lvl}')
+            _lttd = None
+            if (_lt is not None and _ltd is not None
+                    and not (isinstance(_lt, float) and math.isnan(_lt))
+                    and not (isinstance(_ltd, float) and math.isnan(_ltd))):
+                _lttd = round(_lt - _ltd, 1)
+            _lh_label = ''
+            if _lh is not None and not (isinstance(_lh, float) and math.isnan(_lh)):
+                _lh_label = str(int(round(_lh / 10)))[1:]
+            _lws_kt = None
+            if _lws is not None and not (isinstance(_lws, float) and math.isnan(_lws)):
+                _lws_kt = _lws * 1
+            _ua_d = {
+                'icao': str(_r['icao']),
+                'temp': None,
+                'dew':  None,
+                'wind_dir': int(_lwd) if _lwd is not None and not (isinstance(_lwd, float) and math.isnan(_lwd)) else None,
+                'wind_spd': _lws_kt, 'wind_gust': 0,
+                'vis': None, 'weather': '', 'slp_label': None,
+                'oktas': 8, 'has_sky_obs': True, 'clouds': [], 'lowest_sig': None,
+                'ceiling': 99999, 'flt_cat': 'VFR',
+                'lat': 0, 'lon': 0, 'timestamp': '', 'rh': 0,
+                'tendency': None, 'pressure_change': None, 'is_surface': False,
+            }
+            _svg_str, _sw, _sh = station_model_svg(_ua_d, S=34)
+            _level_svgs[str(_lvl)] = {'svg': _svg_str, 'w': int(_sw), 'h': int(_sh)}
+
+        _stns.append({
+            'lat':   float(_r['lat']),
+            'lon':   float(_r['lon']),
+            'icao':  str(_r['icao']),
+            'force850': bool(_r.get('_force850', False)),
+            'name':  str(_r['stn_name']),
+            'popup': _pop,
+            'tip':   f'{_r["icao"]} | 850:{_fmt(_r.get("TEMP_850"))}°C 500:{_fmt(_r.get("TEMP_500"))}°C',
+            'svgs':  _level_svgs,
+        })
+
+    _ua_stn_data[_key] = _stns
+    print(f'  UA stn key {_key!r}: {len(_stns)} stations')
+
+if not SHOW_STATION_SYMBOLS:
+    _ua_stn_data = {}
+_ts_ua_stn_json_str = _json3.dumps(_ua_stn_data)
+print(f'\n✓ _ts_ua_stn_json_str keys: {sorted(_ua_stn_data.keys())}')
+
+folium.LayerControl(collapsed=False).add_to(m)
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  CONTROL BAR  — level (850/500) + time slider
+# ═══════════════════════════════════════════════════════════════════════════
+_bar_html = '''
+<style>
+#syn-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 10000;
+  background: #1a1a2e;
+  border-top: 2px solid #4a7fc1;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: "Courier New", monospace;
+  font-size: 11px;
+  color: #e0e0e0;
+  box-shadow: 0 -3px 12px rgba(0,0,0,0.5);
+  min-height: 52px;
+}
+#syn-bar .bar-label {
+  font-size: 8px; color: #8888aa; font-weight: bold;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+#syn-bar .bar-section {
+  display: flex; align-items: center; gap: 6px;
+  border-right: 1px solid #3a3a5a;
+  padding-right: 14px;
+  white-space: nowrap;
+}
+#syn-bar .bar-section:last-child { border-right: none; }
+.syn-lvl-btn {
+  font-size: 12px; padding: 4px 14px;
+  cursor: pointer;
+  border: 1px solid #3a4a6a;
+  border-radius: 4px;
+  background: #2a2a4a;
+  color: #c0c8e0;
+  font-family: "Courier New", monospace;
+  font-weight: bold;
+  transition: background 0.15s;
+}
+.syn-lvl-btn:hover { background: #3a4a7a; }
+.syn-lvl-btn.active { background: #4a7fc1; color: #fff; border-color: #6a9fe1; }
+.syn-exp-btn {
+  font-size: 11px; padding: 4px 12px;
+  cursor: pointer;
+  border: 1px solid #4a7fc1;
+  border-radius: 4px;
+  background: #2a3a5a;
+  color: #c0d0ff;
+  font-family: "Courier New", monospace;
+  font-weight: bold;
+}
+.syn-exp-btn:hover { background: #4a7fc1; color: #fff; }
+.syn-exp-btn.export-all { border-color: #cc8800; color: #ffcc66; background: #3a2a00; }
+.syn-exp-btn.export-all:hover { background: #cc8800; color: #fff; }
+#syn-time-slider {
+  width: 320px;
+  accent-color: #4a7fc1;
+  cursor: pointer;
+}
+#syn-ts-label {
+  color: #c0d0ff;
+  font-size: 11px;
+  min-width: 200px;
+}
+#syn-export-status {
+  color: #ffcc66;
+  font-size: 10px;
+  min-width: 120px;
+}
+#syn-export-panel {
+  position: fixed;
+  top: 50px; left: 10px;
+  z-index: 10001;
+  background: rgba(26,26,46,0.95);
+  border: 1px solid #4a7fc1;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: "Courier New", monospace;
+  font-size: 11px;
+  color: #e0e0e0;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+  min-width: 130px;
+}
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<!-- Export panel — top left -->
+<div id="syn-export-panel">
+  <div class="bar-label" style="margin-bottom:4px;">Export</div>
+  <button class="syn-exp-btn" style="display:block;width:100%;margin-top:4px;border-color:#cc2200;color:#ffaaaa;background:#440000;" onclick="synExportBothPDFs()">Export PDFs</button>
+  <button class="syn-exp-btn export-all" style="display:block;width:100%;border-color:#9944cc;color:#ddaaff;background:#2a0044;" onclick="synExportAll()">Export 850LLJ Prog</button>
+  <div id="syn-export-status" style="margin-top:5px;min-height:14px;"></div>
+</div>
+
+<!-- Bottom control bar -->
+<div id="syn-bar">
+  <div class="bar-section">
+    <span class="bar-label">Export</span>
+    <button class="syn-exp-btn export-all" style="border-color:#9944cc;color:#ddaaff;background:#2a0044;" onclick="synExportAll()">Export 850LLJ Prog</button>
+    <button class="syn-exp-btn" style="border-color:#cc2200;color:#ffaaaa;background:#440000;" onclick="synExportBothPDFs()">Export 850LLJ Prog PDF</button>
+
+    <span id="syn-export-status"></span>
+  </div>
+  <div class="bar-section">
+    <span class="bar-label">Level</span>
+    <button class="syn-lvl-btn active" id="btn-850" onclick="synSetLevel(\'850\')">850 hPa</button>
+    <button class="syn-lvl-btn"        id="btn-500" onclick="synSetLevel(\'500\')">500 hPa</button>
+  </div>
+  <div class="bar-section">
+    <span class="bar-label">Time</span>
+    <input type="range" id="syn-time-slider" min="0" value="0"
+           oninput="synSliderChange(this.value)">
+  </div>
+  <div class="bar-section">
+    <span id="syn-ts-label">—</span>
+  </div>
+</div>
+'''
+
+# ── JavaScript ─────────────────────────────────────────────────────────────
+_js = f'''
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────
+var _SYN_TIME_STEPS  = {_time_steps_str};
+var _SYN_UA_STNS     = {_ts_ua_stn_json_str};
+var _SYN_UA          = {_ts_ua_json_str};
+var KEY_HGT_DAM      = {{"850":{int(KEY_HGT_850/10)},"700":{int(KEY_HGT_700/10)},"500":{int(KEY_HGT_500/10)},"250":{int(KEY_HGT_250/10)}}};
+var KEY_HGT_M        = {{"850":{int(KEY_HGT_850)},"700":{int(KEY_HGT_700)},"500":{int(KEY_HGT_500)},"250":{int(KEY_HGT_250)}}};
+
+// ── State ─────────────────────────────────────────────────────────────────
+var _synLevel        = "850";
+var _synStepIdx      = 0;
+var _synUALayer      = null;
+var _synStnLayer     = null;
+var _synShowStations = {'true' if SHOW_STATION_SYMBOLS else 'false'};
+var _synShowTooltips = {'true' if SHOW_TOOLTIPS else 'false'};
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function _getMap() {{
+  var k = Object.keys(window).filter(function(k) {{ return k.startsWith("map_"); }});
+  return k.length ? window[k[0]] : null;
+}}
+function _btnOn(id)  {{ var b = document.getElementById(id); if (b) b.classList.add("active"); }}
+function _btnOff(id) {{ var b = document.getElementById(id); if (b) b.classList.remove("active"); }}
+function _setExportStatus(msg) {{
+  var el = document.getElementById("syn-export-status");
+  if (el) el.textContent = msg;
+}}
+
+// ── Level selector ────────────────────────────────────────────────────────
+function synSetLevel(lvl) {{
+  _synLevel = lvl;
+  _btnOff("btn-850"); _btnOff("btn-500");
+  _btnOn("btn-" + lvl);
+  synRender();
+}}
+
+// ── Time slider ───────────────────────────────────────────────────────────
+function synSliderChange(v) {{
+  _synStepIdx = parseInt(v);
+  synRender();
+}}
+
+// ── Main render ───────────────────────────────────────────────────────────
+function synRender() {{
+  var MAP  = _getMap(); if (!MAP) return;
+  var step = _SYN_TIME_STEPS[_synStepIdx];
+  if (!step) return;
+  var lbl  = document.getElementById("syn-ts-label");
+  if (lbl) lbl.textContent = step.label;
+  synRenderUA(step.key, step.label);
+}}
+
+// ── UA render: contours + colouring + station barbs ───────────────────────
+function synRenderUA(fullKey, stepLabel) {{
+  var MAP = _getMap(); if (!MAP) return;
+  if (_synUALayer)  {{ MAP.removeLayer(_synUALayer);  _synUALayer  = null; }}
+  if (_synStnLayer) {{ MAP.removeLayer(_synStnLayer); _synStnLayer = null; }}
+  if (!fullKey || !_synLevel) return;
+
+  var uaData   = (_SYN_UA[fullKey] || {{levels:{{}}}}).levels[_synLevel] || {{}};
+  _synUALayer  = L.layerGroup();
+
+  // ── Temperature band fills ────────────────────────────────────────────
+  var _tbFills = uaData.temp_band_fills || [];
+  if (_tbFills.length) {{
+    if (!MAP.getPane("tempbandsPane")) {{
+      MAP.createPane("tempbandsPane");
+      MAP.getPane("tempbandsPane").style.zIndex       = 380;
+      MAP.getPane("tempbandsPane").style.pointerEvents = "none";
+    }}
+    _tbFills.forEach(function(poly) {{
+      if (!poly.coords || poly.coords.length < 3) return;
+      var outerLL = poly.coords.map(function(c) {{ return [c[0], c[1]]; }});
+      var holes = (poly.holes || []).map(function(hole) {{
+        return hole.map(function(c) {{ return [c[0], c[1]]; }});
+      }});
+      var rings = [outerLL].concat(holes);
+      var fillColor = poly.color === "#ffffff" ? "#ffffff" : poly.color;
+      if (poly.color === "#ffffff") return;
+      L.polygon(rings, {{
+        color: "none", weight: 0,
+        fillColor: poly.color, fillOpacity: 0.25,
+        fillRule: "evenodd",
+        interactive: false, pane: "tempbandsPane"
+      }}).addTo(_synUALayer);
+    }});
+  }}
+
+  // ── Height contours ───────────────────────────────────────────────────
+  (uaData.hght || []).forEach(function(ct) {{
+    var ll    = ct.coords.map(function(c) {{ return [c[1], c[0]]; }});
+    var isKey = (KEY_HGT_DAM[_synLevel] && (
+      Math.round(ct.level) === KEY_HGT_DAM[_synLevel] ||
+      Math.round(ct.level) === KEY_HGT_M[_synLevel]));
+    var _hLine = L.polyline(ll, {{
+      color:   "#000000",
+      weight:  isKey ? 4.5 : 1.5,
+      opacity: isKey ? 1.0 : 0.85,
+      pane:    "heightPane"
+    }});
+    if (_synShowTooltips) _hLine.bindTooltip(_synLevel + " hPa Hgt=" + Math.round(ct.level) + "dam");
+    _hLine.addTo(_synUALayer);
+
+    // Contour label near Saskatchewan
+    var hgtInterval = (_synLevel === "850") ? 30  : (_synLevel === "700") ? 60  : (_synLevel === "500") ? 60  : 120;
+    var hgtAnchor   = (_synLevel === "850") ? 1140 : (_synLevel === "700") ? 2520 : (_synLevel === "500") ? 4800 : 9600;
+    var hgtRem = Math.round(ct.level - hgtAnchor);
+    if (hgtRem >= 0 && hgtRem % hgtInterval < 1) {{
+      var _skLat = 54.0, _skLon = -106.0, _best = null, _bestDist = 1e9;
+      ct.coords.forEach(function(c) {{
+        var d = (c[1]-_skLat)*(c[1]-_skLat) + (c[0]-_skLon)*(c[0]-_skLon);
+        if (d < _bestDist) {{ _bestDist = d; _best = c; }}
+      }});
+      var _lblLat = _best ? _best[1] : ct.label_lat;
+      var _lblLon = _best ? _best[0] : ct.label_lon;
+      L.marker([_lblLat, _lblLon], {{ icon: L.divIcon({{
+        html: '<div style="font-size:14px;font-weight:bold;color:#fff;'
+            + 'font-family:Courier New,monospace;background:#000000;'
+            + 'padding:0 3px;line-height:1.4;text-align:center;min-width:28px;">'
+            + Math.round(ct.level / 10) + '</div>',
+        iconSize: [32,14], iconAnchor: [16,7], className: ""
+      }}), pane: "heightPane" }}).addTo(_synUALayer);
+    }}
+  }});
+
+  // ── Temperature isotherms ─────────────────────────────────────────────
+  (uaData.temp || []).forEach(function(ct) {{
+    var t   = ct.level;
+    var col = t > 0
+      ? "rgb(" + Math.round(180 + 75*Math.min(t/40, 1)) + ",0,0)"
+      : t < 0
+      ? "rgb(0,0," + Math.round(180 + 75*Math.min(Math.abs(t)/40, 1)) + ")"
+      : "#00bb00";
+    var ll     = ct.coords.map(function(c) {{ return [c[1], c[0]]; }});
+    var isBold = (Math.round(t) % 10 === 0);
+    var _tLine = L.polyline(ll, {{
+      color: col, weight: isBold ? 1.2 : 0.8,
+      opacity: isBold ? 1.0 : 0.8, dashArray: "6 4"
+    }});
+    if (_synShowTooltips) _tLine.bindTooltip(_synLevel + " hPa T=" + t.toFixed(1) + "°C");
+    _tLine.addTo(_synUALayer);
+
+    // Isotherm label near BC coast
+    var _bcLat = 54.0, _bcLon = -130.0, _bcBest = null, _bcBestDist = 1e9;
+    ct.coords.forEach(function(c) {{
+      var d = (c[1]-_bcLat)*(c[1]-_bcLat) + (c[0]-_bcLon)*(c[0]-_bcLon);
+      if (d < _bcBestDist) {{ _bcBestDist = d; _bcBest = c; }}
+    }});
+    var _bcLblLat = _bcBest ? _bcBest[1] : ct.label_lat;
+    var _bcLblLon = _bcBest ? _bcBest[0] : ct.label_lon;
+    var _tVal = Math.round(t);
+    var _tBg  = _tVal > 0 ? '#cc0000' : _tVal < 0 ? '#0044cc' : '#008800';
+    L.marker([_bcLblLat, _bcLblLon], {{ icon: L.divIcon({{
+      html: '<div style="font-size:12px;font-weight:' + (isBold ? "900" : "bold") + ';'
+          + 'color:#ffffff;background:transparent;'
+          + 'font-family:Courier New,monospace;'
+          + 'text-shadow:-2px -2px 0 ' + _tBg + ',2px -2px 0 ' + _tBg + ',-2px 2px 0 ' + _tBg + ',2px 2px 0 ' + _tBg + ','
+          + '-2px 0 0 ' + _tBg + ',2px 0 0 ' + _tBg + ',0 -2px 0 ' + _tBg + ',0 2px 0 ' + _tBg + ';'
+          + 'padding:0 2px;line-height:1.4;text-align:center;">'
+          + _tVal + '</div>',
+      iconSize: [32,16], iconAnchor: [16,8], className: ""
+    }}) }}).addTo(_synUALayer);
+  }});
+
+  // ── UA H/L centres ────────────────────────────────────────────────────
+  var _uaHL = (_SYN_UA[fullKey] || {{}})["hl_" + _synLevel] || [];
+  _uaHL.forEach(function(c) {{
+    var _shadow = "1px 1px 0 white,-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white";
+    var _html   = '<div style="font-size:61px;font-weight:bold;color:#000000;'
+      + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
+      + 'text-shadow:' + _shadow + ';pointer-events:none;">' + c.type + '</div>';
+    var _hlMark = L.marker([c.lat, c.lon], {{
+      icon: L.divIcon({{ html: _html, iconSize: [70,65], iconAnchor: [35,32], className: "" }}),
+      zIndexOffset: 200
+    }});
+    if (_synShowTooltips) _hlMark.bindTooltip(_synLevel + " hPa " + c.type);
+    _hlMark.addTo(_synUALayer);
+  }});
+
+  _synUALayer.addTo(MAP);
+
+  // ── Station wind barbs ────────────────────────────────────────────────
+  var stns = _SYN_UA_STNS[fullKey] || [];
+  if (!stns.length) console.warn("No UA stns for key:", fullKey);
+  _synStnLayer = L.layerGroup();
+  stns.forEach(function(s) {{
+    if (_synLevel !== "850") return;
+    var svgInfo = (s.svgs || {{}})[_synLevel];
+    if (!svgInfo) return;
+    var icon = L.divIcon({{
+      html:       svgInfo.svg,
+      iconSize:   [svgInfo.w, svgInfo.h],
+      iconAnchor: [Math.round(svgInfo.w/2), Math.round(svgInfo.h/2)],
+      className:  ""
+    }});
+    var _sMark = L.marker([s.lat, s.lon], {{ icon: icon }})
+      .bindPopup(s.popup, {{ maxWidth: 320 }});
+    if (_synShowTooltips) _sMark.bindTooltip(s.tip + " | " + (stepLabel || ""));
+    _sMark.addTo(_synStnLayer);
+  }});
+  if (_synShowStations) _synStnLayer.addTo(MAP);
+}}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  EXPORT: shared capture engine
+// ═══════════════════════════════════════════════════════════════════════════
+
+function _synCapture(cfg, onDone) {{
+  var MAP  = _getMap();
+  var keys = Object.keys(window).filter(function(k) {{ return k.startsWith("map_"); }});
+  if (!keys.length) {{ _setExportStatus("Map not found"); if (onDone) onDone(false); return; }}
+  var mapEl = document.getElementById(keys[0]) || document.querySelector(".leaflet-container");
+  if (!mapEl)  {{ _setExportStatus("Map el not found"); if (onDone) onDone(false); return; }}
+
+  _synLevel = cfg.level;
+  _btnOff("btn-850"); _btnOff("btn-500");
+  _btnOn("btn-" + cfg.level);
+
+  var hideEls = [
+    mapEl.querySelector(".leaflet-control-container"),
+    document.querySelector(".leaflet-control-layers"),
+    document.querySelector(".leaflet-control-zoom"),
+    document.querySelector(".leaflet-control-attribution"),
+    document.getElementById("syn-bar"),
+    document.getElementById("syn-export-panel"),
+    document.getElementById("syn-fs-btn")
+  ].filter(Boolean);
+  var prevVis = hideEls.map(function(el) {{ return el.style.visibility; }});
+  hideEls.forEach(function(el) {{ el.style.visibility = "hidden"; }});
+  // Hide all Leaflet tooltips during export
+  document.querySelectorAll(".leaflet-tooltip").forEach(function(t) {{ t.style.display = "none"; }});
+
+  var origW = mapEl.style.width;
+  var origH = mapEl.style.height;
+  function restore() {{
+    mapEl.style.width  = origW;
+    mapEl.style.height = origH;
+    MAP.invalidateSize();
+    hideEls.forEach(function(el, i) {{ el.style.visibility = prevVis[i]; }});
+    document.querySelectorAll(".leaflet-tooltip").forEach(function(t) {{ t.style.display = ""; }});
+  }}
+
+  mapEl.style.width  = cfg.targetW + "px";
+  mapEl.style.height = cfg.targetH + "px";
+  MAP.invalidateSize();
+  MAP.setView(cfg.center, cfg.zoom, {{ animate: false }});
+
+  setTimeout(function() {{
+    html2canvas(mapEl, {{
+      useCORS: true, allowTaint: true,
+      scale: 2, logging: false,
+      width: cfg.targetW, height: cfg.targetH
+    }}).then(function(canvas) {{
+
+      var cropH = canvas.height;
+      var cropW = Math.min(Math.round(cropH * cfg.cropRatioW / cfg.cropRatioH), canvas.width);
+
+      var BANNER_H = 90;
+      var CREDIT_H = 22;
+
+      var out = document.createElement("canvas");
+      out.width  = cropW;
+      out.height = cropH + BANNER_H + CREDIT_H;
+      var ctx = out.getContext("2d");
+      ctx.drawImage(canvas, 0, 0, cropW, cropH, 0, 0, cropW, cropH);
+
+      var step   = _SYN_TIME_STEPS[_synStepIdx] || {{}};
+      var _key   = step.key || "";
+      var _dYear = parseInt(_key.substring(0,4), 10);
+      var _dMon  = parseInt(_key.substring(4,6), 10) - 1;
+      var _dDay  = parseInt(_key.substring(6,8), 10);
+      var _dH    = step.hour || 0;
+
+      var _MONTHS_L = ["January","February","March","April","May","June",
+                       "July","August","September","October","November","December"];
+      var _MONTHS_S = ["JAN","FEB","MAR","APR","MAY","JUN",
+                       "JUL","AUG","SEP","OCT","NOV","DEC"];
+      var _DOWS_L   = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+      var _DOWS_S   = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
+
+      var _utcDate = new Date(Date.UTC(_dYear, _dMon, _dDay, _dH, 0, 0));
+      var _yr      = _utcDate.getUTCFullYear();
+
+      var _mar1     = new Date(Date.UTC(_yr, 2, 1));
+      var _dstStart = new Date(Date.UTC(_yr, 2, 1 + (7 - _mar1.getUTCDay()) % 7 + 7));
+      _dstStart.setUTCHours(8);
+      var _nov1     = new Date(Date.UTC(_yr, 10, 1));
+      var _dstEnd   = new Date(Date.UTC(_yr, 10, 1 + (7 - _nov1.getUTCDay()) % 7));
+      _dstEnd.setUTCHours(7);
+
+      var _offsetH  = (_utcDate >= _dstStart && _utcDate < _dstEnd) ? -6 : -7;
+      var _tzLabel  = _offsetH === -6 ? "MDT" : "MST";
+      var _localDate = new Date(_utcDate.getTime() + _offsetH * 3600000);
+      var _lYear    = _localDate.getUTCFullYear();
+      var _lMon     = _localDate.getUTCMonth();
+      var _lDay     = _localDate.getUTCDate();
+      var _lH       = _localDate.getUTCHours();
+      var _ampm     = _lH < 12 ? "AM" : "PM";
+      var _hr12     = _lH === 0 ? 12 : (_lH > 12 ? _lH - 12 : _lH);
+
+      var TITLE_H = BANNER_H;
+      out.height = cropH + BANNER_H + TITLE_H + CREDIT_H;
+      ctx.drawImage(canvas, 0, 0, cropW, cropH, 0, 0, cropW, cropH);
+
+      var blackW = Math.round(cropW * 0.28);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, cropH, cropW, BANNER_H);
+      ctx.fillStyle = "#111111";
+      ctx.fillRect(0, cropH, blackW, BANNER_H);
+
+      var _tsStr = _DOWS_L[_localDate.getUTCDay()]
+                 + " " + _MONTHS_L[_lMon]
+                 + " " + _lDay + ", " + _lYear
+                 + " - " + _hr12 + " " + _ampm;
+
+      ctx.font         = "bold 32px Arial, sans-serif";
+      ctx.fillStyle    = "#ffffff";
+      ctx.textAlign    = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(_tsStr, blackW / 2, cropH + BANNER_H / 2);
+
+      var _lvlTitle = cfg.level === "500"
+        ? "500 hPa Heights and Isotherms"
+        : "850 hPa Heights and Isotherms";
+
+      ctx.font         = "bold 42px Arial, sans-serif";
+      ctx.fillStyle    = "#111111";
+      ctx.textAlign    = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(_lvlTitle, blackW + 24, cropH + BANNER_H / 2);
+
+      ctx.font         = "bold 38px Arial, sans-serif";
+      ctx.fillStyle    = "#333333";
+      ctx.textAlign    = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText("AWCC Weather Office", cropW - 24, cropH + BANNER_H / 2);
+
+      var creditY = cropH + BANNER_H;
+      ctx.fillStyle = "#f0f0f0";
+      ctx.fillRect(0, creditY, cropW, CREDIT_H);
+
+      ctx.font         = "13px Arial, sans-serif";
+      ctx.fillStyle    = "#777777";
+      ctx.textAlign    = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Based on data issued by Meteorological Service of Canada",
+                   cropW - 14, creditY + CREDIT_H / 2);
+
+      var _exportNow = new Date();
+      var _expStr = "Exported "
+        + String(_exportNow.getUTCFullYear())
+        + "-" + String(_exportNow.getUTCMonth()+1).padStart(2,"0")
+        + "-" + String(_exportNow.getUTCDate()).padStart(2,"0")
+        + " " + String(_exportNow.getUTCHours()).padStart(2,"0")
+        + ":" + String(_exportNow.getUTCMinutes()).padStart(2,"0") + "Z";
+      ctx.font         = "13px Arial, sans-serif";
+      ctx.fillStyle    = "#777777";
+      ctx.textAlign    = "left";
+      ctx.fillText(_expStr, 14, creditY + CREDIT_H / 2);
+
+      var _exportNow = new Date();
+      var _expStr = "Exported "
+        + String(_exportNow.getUTCFullYear())
+        + "-" + String(_exportNow.getUTCMonth()+1).padStart(2,"0")
+        + "-" + String(_exportNow.getUTCDate()).padStart(2,"0")
+        + " " + String(_exportNow.getUTCHours()).padStart(2,"0")
+        + ":" + String(_exportNow.getUTCMinutes()).padStart(2,"0") + "Z";
+      ctx.font         = "20px Arial, sans-serif";
+      ctx.fillStyle    = "#555555";
+      ctx.textAlign = "left";
+      ctx.fillText(_expStr, 20, creditY + CREDIT_H / 2);
+
+      var _expDay   = _DOWS_S[_localDate.getUTCDay()];
+      var _expMon   = _MONTHS_S[_lMon];
+      var _hrStr    = String(_hr12).padStart(2,"0") + _ampm + _tzLabel;
+      var _thisDate = _key.substring(0,8);
+      var _seenDates = [];
+      for (var _di = 0; _di < _SYN_TIME_STEPS.length; _di++) {{
+        var _dkey = (_SYN_TIME_STEPS[_di].key || "").substring(0,8);
+        if (_seenDates.indexOf(_dkey) === -1) _seenDates.push(_dkey);
+        if (_dkey === _thisDate) break;
+      }}
+      var _dayNum  = String(_seenDates.length).padStart(2,"0");
+      var _lvlPfx  = cfg.level === "500" ? "500mb" : "850mb";
+      var _localDD = String(_lDay).padStart(2,"0");
+      var fname = _lvlPfx + "LLJ-Day" + _dayNum + "-" + _hrStr
+                + "_" + _expDay + "_" + _expMon
+                + "_" + _localDD + "_" + _lYear + ".png";
+
+      var link   = document.createElement("a");
+      link.download = fname;
+      link.href     = out.toDataURL("image/png");
+      link.click();
+
+      restore();
+      if (onDone) onDone(true);
+
+    }}).catch(function(e) {{
+      console.error("html2canvas failed:", e);
+      restore();
+      _setExportStatus("✗ Capture error: " + e.message);
+      if (onDone) onDone(false);
+    }});
+  }}, 600);
+}}
+
+// ── Export single level at current timestep ───────────────────────────────
+function synSave850() {{
+  _setExportStatus("Capturing 850mb...");
+  _synCapture({{
+    level: "850", center: [55, -104], zoom: 5,
+    targetW: 1400, targetH: 1100, cropRatioW: 8.5, cropRatioH: 11.0
+  }}, function(ok) {{
+    _setExportStatus(ok ? "✓ 850mb saved!" : "✗ Failed");
+    if (ok) setTimeout(function() {{ _setExportStatus(""); }}, 3000);
+  }});
+}}
+
+function synSave500() {{
+  _setExportStatus("Capturing 500mb...");
+  _synCapture({{
+    level: "500", center: [55, -118], zoom: 5,
+    targetW: 1400, targetH: 1141, cropRatioW: 2944.0, cropRatioH: 2400.0
+  }}, function(ok) {{
+    _setExportStatus(ok ? "✓ 500mb saved!" : "✗ Failed");
+    if (ok) setTimeout(function() {{ _setExportStatus(""); }}, 3000);
+  }});
+}}
+
+// ── Export All: every timestep × both levels ──────────────────────────────
+var _exportAllQueue   = [];
+var _exportAllRunning = false;
+
+function synExportAll() {{
+  if (_exportAllRunning) {{ _setExportStatus("Already running..."); return; }}
+  _exportAllQueue = [];
+  var total = _SYN_TIME_STEPS.length;
+  for (var i = 0; i < total; i++) {{ _exportAllQueue.push({{ stepIdx: i, level: "850" }}); }}
+  _exportAllRunning = true;
+  _setExportStatus("Export All: 0/" + (total * 2));
+  _runExportQueue(0, total * 2);
+}}
+
+function _runExportQueue(done, total) {{
+  if (_exportAllQueue.length === 0) {{
+    _exportAllRunning = false;
+    _setExportStatus("✓ All " + total + " images saved!");
+    setTimeout(function() {{ _setExportStatus(""); }}, 5000);
+    return;
+  }}
+  var job = _exportAllQueue.shift();
+  _synStepIdx = job.stepIdx;
+  var slider  = document.getElementById("syn-time-slider");
+  if (slider) slider.value = String(job.stepIdx);
+  var step = _SYN_TIME_STEPS[job.stepIdx] || {{}};
+  var lbl  = document.getElementById("syn-ts-label");
+  if (lbl) lbl.textContent = step.label || "";
+  synRenderUA(step.key, step.label);
+
+  var cfg = (job.level === "850")
+    ? {{ level: "850", center: [55,-104], zoom: 5, targetW: 1400, targetH: 1100, cropRatioW: 8.5,    cropRatioH: 11.0   }}
+    : {{ level: "500", center: [55,-118], zoom: 5, targetW: 1400, targetH: 1141, cropRatioW: 2944.0, cropRatioH: 2400.0 }};
+
+  _setExportStatus("Exporting " + job.level + " step " + (job.stepIdx+1) + "/" + _SYN_TIME_STEPS.length + " (" + (done+1) + "/" + total + ")");
+  setTimeout(function() {{
+    _synCapture(cfg, function() {{
+      setTimeout(function() {{ _runExportQueue(done + 1, total); }}, 1000);
+    }});
+  }}, 600);
+}}
+
+// ── jsPDF multi-page PDF export ───────────────────────────────────────────
+var _pdfRunning = false;
+
+function _ensureJsPDF(cb) {{
+  if (typeof window.jspdf !== "undefined") {{ cb(); return; }}
+  _setExportStatus("Loading jsPDF...");
+  var s = document.createElement("script");
+  s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+  s.onload  = function() {{ cb(); }};
+  s.onerror = function() {{ _setExportStatus("✗ jsPDF load failed"); _pdfRunning = false; }};
+  document.head.appendChild(s);
+}}
+
+// ── Single-level PDF builder (calls onComplete when done) ─────────────────
+function _doExportPDF(level, onComplete) {{
+  _pdfRunning = true;
+  var total = _SYN_TIME_STEPS.length;
+  var queue = [];
+  for (var i = 0; i < total; i++) queue.push(i);
+
+  var PAGE_W_MM = 279.4;
+  var PAGE_H_MM = 215.9;
+  var doc = new window.jspdf.jsPDF({{ orientation: "landscape", unit: "mm", format: [PAGE_W_MM, PAGE_H_MM] }});
+
+  var cfg = (level === "850")
+    ? {{ level: "850", center: [55,-118], zoom: 5, targetW: 1400, targetH: 1141, cropRatioW: 2944,    cropRatioH: 2400   }}
+    : {{ level: "500", center: [55,-118], zoom: 5, targetW: 1400, targetH: 1141, cropRatioW: 2944.0, cropRatioH: 2400.0 }};
+
+  _setExportStatus("PDF " + level + ": 0/" + total);
+
+  function processNext(idx) {{
+    _synLevel = level;
+    _btnOff("btn-850"); _btnOff("btn-500");
+    _btnOn("btn-" + level);
+    if (idx >= queue.length) {{
+      var now   = new Date();
+      var fname = level + "mb_ALL_"
+        + now.getUTCFullYear()
+        + String(now.getUTCMonth()+1).padStart(2,"0")
+        + String(now.getUTCDate()).padStart(2,"0")
+        + "_" + String(now.getUTCHours()).padStart(2,"0")
+        + String(now.getUTCMinutes()).padStart(2,"0") + "Z.pdf";
+      doc.save(fname);
+      _pdfRunning = false;
+      _setExportStatus("✓ " + level + "mb PDF saved (" + total + " pages)!");
+      if (onComplete) onComplete();
+      return;
+    }}
+
+    var stepIdx = queue[idx];
+    _synStepIdx = stepIdx;
+    var slider = document.getElementById("syn-time-slider");
+    if (slider) slider.value = String(stepIdx);
+    var step = _SYN_TIME_STEPS[stepIdx] || {{}};
+    var lbl  = document.getElementById("syn-ts-label");
+    if (lbl) lbl.textContent = step.label || "";
+    synRenderUA(step.key, step.label);
+    _setExportStatus("PDF " + level + ": " + (idx+1) + "/" + total);
+
+    setTimeout(function() {{
+      var MAP  = _getMap();
+      var keys = Object.keys(window).filter(function(k) {{ return k.startsWith("map_"); }});
+      if (!keys.length) {{ processNext(idx+1); return; }}
+      var mapEl = document.getElementById(keys[0]) || document.querySelector(".leaflet-container");
+      if (!mapEl)  {{ processNext(idx+1); return; }}
+
+      var hideEls = [
+        mapEl.querySelector(".leaflet-control-container"),
+        document.querySelector(".leaflet-control-layers"),
+        document.querySelector(".leaflet-control-zoom"),
+        document.querySelector(".leaflet-control-attribution"),
+        document.getElementById("syn-bar"),
+        document.getElementById("syn-export-panel"),
+        document.getElementById("syn-fs-btn")
+      ].filter(Boolean);
+      var prevVis = hideEls.map(function(el) {{ return el.style.visibility; }});
+      hideEls.forEach(function(el) {{ el.style.visibility = "hidden"; }});
+      // Hide all Leaflet tooltips during export
+      document.querySelectorAll(".leaflet-tooltip").forEach(function(t) {{ t.style.display = "none"; }});
+
+      var origW = mapEl.style.width, origH = mapEl.style.height;
+      function restore() {{
+        mapEl.style.width  = origW;
+        mapEl.style.height = origH;
+        MAP.invalidateSize();
+        hideEls.forEach(function(el, i) {{ el.style.visibility = prevVis[i]; }});
+        document.querySelectorAll(".leaflet-tooltip").forEach(function(t) {{ t.style.display = ""; }});
+      }}
+
+      mapEl.style.width  = cfg.targetW + "px";
+      mapEl.style.height = cfg.targetH + "px";
+      MAP.invalidateSize();
+      MAP.setView(cfg.center, cfg.zoom, {{ animate: false }});
+
+      setTimeout(function() {{
+        html2canvas(mapEl, {{
+          useCORS: true, allowTaint: true,
+          scale: 1.5, logging: false,
+          width: cfg.targetW, height: cfg.targetH
+        }}).then(function(canvas) {{
+
+          var cropH    = canvas.height;
+          var cropW    = Math.min(Math.round(cropH * cfg.cropRatioW / cfg.cropRatioH), canvas.width);
+          var BANNER_H = 80, TITLE_H = 80, CREDIT_H = 28;
+
+          var out    = document.createElement("canvas");
+          out.width  = cropW;
+          out.height = cropH + BANNER_H + TITLE_H + CREDIT_H;
+          var ctx    = out.getContext("2d");
+          ctx.drawImage(canvas, 0, 0, cropW, cropH, 0, 0, cropW, cropH);
+
+          var _key   = step.key || "";
+          var _dYear = parseInt(_key.substring(0,4),10);
+          var _dMon  = parseInt(_key.substring(4,6),10)-1;
+          var _dDay  = parseInt(_key.substring(6,8),10);
+          var _dH    = step.hour || 0;
+          var _ML    = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+          var _DL    = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+          var _utc   = new Date(Date.UTC(_dYear,_dMon,_dDay,_dH,0,0));
+          var _yr    = _utc.getUTCFullYear();
+          var _m1    = new Date(Date.UTC(_yr,2,1));
+          var _ds    = new Date(Date.UTC(_yr,2,1+(7-_m1.getUTCDay())%7+7)); _ds.setUTCHours(8);
+          var _n1    = new Date(Date.UTC(_yr,10,1));
+          var _de    = new Date(Date.UTC(_yr,10,1+(7-_n1.getUTCDay())%7));  _de.setUTCHours(7);
+          var _off   = (_utc>=_ds && _utc<_de) ? -6 : -7;
+          var _loc   = new Date(_utc.getTime()+_off*3600000);
+          var _lH    = _loc.getUTCHours();
+          var _ampm  = _lH<12?"AM":"PM";
+          var _h12   = _lH===0?12:(_lH>12?_lH-12:_lH);
+          var _tsStr = _DL[_loc.getUTCDay()]+" "+_ML[_loc.getUTCMonth()]+" "+_loc.getUTCDate()+", "+_loc.getUTCFullYear()+" - "+_h12+" "+_ampm;
+
+          var blackW = Math.round(cropW*0.33);
+          ctx.fillStyle="#ffffff"; ctx.fillRect(0,cropH,cropW,BANNER_H * 1);
+          ctx.fillStyle="#111111"; ctx.fillRect(0,cropH,blackW,BANNER_H * 1);
+          ctx.font="bold 30px Arial,sans-serif"; ctx.fillStyle="#ffffff";
+          ctx.textAlign="center"; ctx.textBaseline="middle";
+          ctx.fillText(_tsStr,blackW/2,cropH+BANNER_H/2);
+
+          var titleY=cropH+BANNER_H;
+          ctx.fillStyle="#ffffff"; ctx.fillRect(0,titleY,cropW,TITLE_H);
+          ctx.font="bold 32px Arial,sans-serif"; ctx.fillStyle="#111111";
+          ctx.textAlign="left"; ctx.textBaseline="middle";
+          ctx.fillText(cfg.level==="500"?"500 hPa Heights and Isotherms":"850hPa LLJ Prog",24,titleY+TITLE_H/2);
+          ctx.font="24px Arial,sans-serif"; ctx.fillStyle="#333333";
+          ctx.textAlign="right";
+          ctx.fillText("AWCC Weather Office",cropW-24,titleY+TITLE_H/2);
+
+          var creditY=titleY+TITLE_H;
+          ctx.fillStyle="#ffffff"; ctx.fillRect(0,creditY,cropW,CREDIT_H);
+          ctx.font="12px Arial,sans-serif"; ctx.fillStyle="#555555";
+          ctx.textAlign="right"; ctx.textBaseline="middle";
+          ctx.fillText("Based on data issued by Meteorological Service of Canada",cropW-20,creditY+CREDIT_H/2);
+
+          var imgData = out.toDataURL("image/jpeg", 0.88);
+          if (idx > 0) doc.addPage([PAGE_W_MM, PAGE_H_MM], "landscape");
+          doc.addImage(imgData, "JPEG", 0, 0, PAGE_W_MM, PAGE_H_MM);
+
+          restore();
+          setTimeout(function() {{ processNext(idx+1); }}, 800);
+
+        }}).catch(function(e) {{
+          console.error("html2canvas error:", e);
+          restore();
+          processNext(idx+1);
+        }});
+      }}, 600);
+    }}, 400);
+  }}
+
+  processNext(0);
+}}
+
+// ── One button → two PDFs ─────────────────────────────────────────────────
+function synExportBothPDFs() {{
+  if (_pdfRunning) {{ _setExportStatus("PDF already running..."); return; }}
+  _ensureJsPDF(function() {{
+    _setExportStatus("Starting 850mb PDF...");
+    _doExportPDF("850", function() {{
+      _setExportStatus("✓ 850mb PDF saved!");
+      setTimeout(function() {{ _setExportStatus(""); }}, 5000);
+    }});
+  }});
+}}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+function _maybeTip(marker, text) {{
+  if (_synShowTooltips) marker.bindTooltip(text);
+  return marker;
+}}
+function _synInit() {{
+  var slider = document.getElementById("syn-time-slider");
+  if (slider) {{
+    slider.max   = String(Math.max(0, _SYN_TIME_STEPS.length - 1));
+    slider.value = "0";
+  }}
+  synSetLevel("850");
+  synRender();
+}}
+
+if (document.readyState === "complete") {{ setTimeout(_synInit, 700); }}
+else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700); }}); }}
+</script>
+'''
+
+m.get_root().html.add_child(Element(_bar_html))
+m.get_root().html.add_child(Element(_js))
 
 # ── Cell 5B. GEM Surface map — MSLP contours + QPF fill, time slider ──────
 
