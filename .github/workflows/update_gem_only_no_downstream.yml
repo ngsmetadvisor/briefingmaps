@@ -1,46 +1,35 @@
-name: Generate Forecast Maps (no downstream)
+name: Generate GEM Surface Map
 on:
-
+  schedule:
+    - cron: '0 */6 * * *'
   workflow_dispatch:
-
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
+      - name: Install system dependencies
+        run: sudo apt-get install -y libeccodes-dev
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -q libeccodes-dev
-
-      - name: Install Python dependencies
-        run: |
-          pip install \
-            requests scipy matplotlib numpy pykrige \
-            folium shapely branca pandas cfgrib \
-            eccodes xarray metpy
-
-      - name: Run forecast script
-        uses: nick-fields/retry@v3
+      - name: Cache pip packages
+        uses: actions/cache@v4
         with:
-          timeout_minutes: 25
-          max_attempts: 3
-          retry_wait_seconds: 120
-          command: python forecast_gem_github.py
-
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Install Python packages
+        run: pip install -r requirements.txt
+      - name: Run map generator
+        run: python forecast_gem_sfc_map.py
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./output
-          publish_branch: gh-pages
+          publish_dir: outputs
           keep_files: true
