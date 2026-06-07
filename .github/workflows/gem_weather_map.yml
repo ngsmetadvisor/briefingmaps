@@ -1,10 +1,31 @@
 name: Generate GEM Surface Map
+
 on:
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
+
 jobs:
+  trigger-downstream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger UAanalysis
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.DISPATCH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/ngsmetadvisor/UAanalysis/dispatches \
+            -d '{"event_type":"run-analysis"}'
+      - name: Trigger SfcMap
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.DISPATCH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/ngsmetadvisor/SfcMap/dispatches \
+            -d '{"event_type":"run-sfcmap"}'
+
   build:
+    needs: trigger-downstream
     runs-on: ubuntu-latest
     permissions:
       contents: write
