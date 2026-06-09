@@ -3417,13 +3417,11 @@ _EDMONTON_OFFSET = timedelta(hours=-6)
 _now_edmonton    = datetime.now(timezone.utc) + _EDMONTON_OFFSET
 _edmonton_today  = _now_edmonton.date()
 
-_time_steps = []
 _ua_export_hour = 12
 print(f"  UA export hour: {_ua_export_hour:02d}Z")
 
+_time_steps = []
 for (_date_val, _hr) in _synoptic_times:
-    if int(_hr) != _ua_export_hour:
-        continue
     _date_str = pd.Timestamp(_date_val).strftime('%Y%m%d')
     _key      = f'{_date_str}_{int(_hr):02d}'
     _dt       = pd.Timestamp(_date_val).date()
@@ -4388,9 +4386,18 @@ var _exportAllRunning = false;
 function synExportAll() {{
   if (_exportAllRunning) {{ _setExportStatus("Already running..."); return; }}
   _exportAllQueue = [];
-  var total = _SYN_TIME_STEPS.length;
-  for (var i = 0; i < total; i++) {{ _exportAllQueue.push({{ stepIdx: i, level: "500" }}); }}
-  for (var i = 0; i < total; i++) {{ _exportAllQueue.push({{ stepIdx: i, level: "850" }}); }}
+  var exportSteps = _SYN_TIME_STEPS.filter(function(s) {{ return s.hour === 12; }});
+  var total = exportSteps.length;
+  for (var i = 0; i < _SYN_TIME_STEPS.length; i++) {{
+    if (_SYN_TIME_STEPS[i].hour === 12) {{
+      _exportAllQueue.push({{ stepIdx: i, level: "500" }});
+    }}
+  }}
+  for (var i = 0; i < _SYN_TIME_STEPS.length; i++) {{
+    if (_SYN_TIME_STEPS[i].hour === 12) {{
+      _exportAllQueue.push({{ stepIdx: i, level: "850" }});
+    }}
+  }}
   _exportAllRunning = true;
   _setExportStatus("Export All: 0/" + (total * 2));
   _runExportQueue(0, total * 2);
@@ -4442,7 +4449,10 @@ function _doExportPDF(level, onComplete) {{
   _pdfRunning = true;
   var total = _SYN_TIME_STEPS.length;
   var queue = [];
-  for (var i = 0; i < total; i++) queue.push(i);
+  for (var i = 0; i < _SYN_TIME_STEPS.length; i++) {{
+    if (_SYN_TIME_STEPS[i].hour === 12) queue.push(i);
+  }}
+  var total = queue.length;
 
   var PAGE_W_MM = 279.4;
   var PAGE_H_MM = 215.9;
@@ -5942,8 +5952,7 @@ if 'ua_raw_df' not in globals():
 _sfc_keys = sorted(
     k.replace('slp_grid_', '')
     for k in globals()
-    if k.startswith('slp_grid_') and k.endswith('_00')
-    and not k.endswith('_12')
+    if k.startswith('slp_grid_')
 )
 if not _sfc_keys:
     raise RuntimeError('❌ No slp_grid_* found — run Cell UA-2c first')
@@ -6445,7 +6454,9 @@ function gemExportAll(){{
   if(_gemExportAllRunning){{_gemSetStatus("Already running...");return;}}
   _gemExportAllRunning=true;
   _gemExportAllQueue=[];
-  for(var i=0;i<_GEM_STEPS.length;i++) _gemExportAllQueue.push(i);
+  for(var i=0;i<_GEM_STEPS.length;i++) {{
+    if(_GEM_STEPS[i].hour === 0) _gemExportAllQueue.push(i);
+  }}
   var btn=document.getElementById("btn-export-all");
   if(btn) btn.classList.add("active");
   _gemSetStatus("Export All: 0/"+_GEM_STEPS.length);
