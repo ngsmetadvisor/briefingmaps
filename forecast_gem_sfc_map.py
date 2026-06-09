@@ -4775,13 +4775,12 @@ _EDMONTON_OFFSET = timedelta(hours=-6)
 _now_edmonton    = datetime.now(timezone.utc) + _EDMONTON_OFFSET
 _edmonton_today  = _now_edmonton.date()
 
-_available_hours = sorted(set(int(_hr) for _, _hr in _synoptic_times))
-_use_hour = _available_hours[0]
-print(f"  Using synoptic hour: {_use_hour:02d}Z")
+_ua_export_hour = 12
+print(f"  UA export hour: {_ua_export_hour:02d}Z")
 
 _time_steps = []
 for (_date_val, _hr) in _synoptic_times:
-    if int(_hr) != _use_hour:
+    if int(_hr) != _ua_export_hour:
         continue
     _date_str = pd.Timestamp(_date_val).strftime('%Y%m%d')
     _key      = f'{_date_str}_{int(_hr):02d}'
