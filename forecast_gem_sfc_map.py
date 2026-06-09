@@ -486,11 +486,11 @@ from datetime import datetime, timezone as _tz, timedelta
 # GDPS covers days RDPS_FORECAST_DAYS → GDPS_FORECAST_DAYS
 # e.g. RDPS=3, GDPS=7 → RDPS days 0-3, GDPS days 3-7
 RDPS_FORECAST_DAYS = 3
-GDPS_FORECAST_DAYS = 7
+GDPS_FORECAST_DAYS = 10
 
 # ── Synoptic hours to fetch ───────────────────────────────────────────────────
-UA_HOURS  = [12]       # isobaric (upper-air) valid times — UTC
-SFC_HOURS = [0]        # surface output rows — UTC
+UA_HOURS  = [0, 12]       # isobaric (upper-air) valid times — UTC
+SFC_HOURS = [0, 12]        # surface output rows — UTC
 # Surface fetch strategy:
 #   MSLP      → fetched at 00Z (matches SFC_HOURS)
 #   QPF12H    → Precip-Accum(06Z) − Precip-Accum(18Z prior day)
@@ -3418,16 +3418,11 @@ _now_edmonton    = datetime.now(timezone.utc) + _EDMONTON_OFFSET
 _edmonton_today  = _now_edmonton.date()
 
 _time_steps = []
-_available_hours = sorted(set(int(_hr) for _, _hr in _synoptic_times))
-_use_hour = _available_hours[0]  # picks 0 if 00Z, 12 if 12Z
-print(f"  Using hour: {_use_hour}Z")
-
-_available_hours = sorted(set(int(_hr) for _, _hr in _synoptic_times))
-_use_hour = _available_hours[0]
-print(f"  Using synoptic hour: {_use_hour:02d}Z")
+_ua_export_hour = 12
+print(f"  UA export hour: {_ua_export_hour:02d}Z")
 
 for (_date_val, _hr) in _synoptic_times:
-    if int(_hr) != _use_hour:
+    if int(_hr) != _ua_export_hour:
         continue
     _date_str = pd.Timestamp(_date_val).strftime('%Y%m%d')
     _key      = f'{_date_str}_{int(_hr):02d}'
@@ -4780,9 +4775,13 @@ _EDMONTON_OFFSET = timedelta(hours=-6)
 _now_edmonton    = datetime.now(timezone.utc) + _EDMONTON_OFFSET
 _edmonton_today  = _now_edmonton.date()
 
+_available_hours = sorted(set(int(_hr) for _, _hr in _synoptic_times))
+_use_hour = _available_hours[0]
+print(f"  Using synoptic hour: {_use_hour:02d}Z")
+
 _time_steps = []
 for (_date_val, _hr) in _synoptic_times:
-    if int(_hr) != 12:
+    if int(_hr) != _use_hour:
         continue
     _date_str = pd.Timestamp(_date_val).strftime('%Y%m%d')
     _key      = f'{_date_str}_{int(_hr):02d}'
@@ -5945,6 +5944,7 @@ _sfc_keys = sorted(
     k.replace('slp_grid_', '')
     for k in globals()
     if k.startswith('slp_grid_') and k.endswith('_00')
+    and not k.endswith('_12')
 )
 if not _sfc_keys:
     raise RuntimeError('❌ No slp_grid_* found — run Cell UA-2c first')
