@@ -17,7 +17,7 @@
             <meta name="viewport" content="width=device-width,
                 initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
             <style>
-                #map_2e12cff643ce91f17c607e975c3cf79c {
+                #map_ef8b6c6d01378a22c745381b9b372d1d {
                     position: relative;
                     width: 100.0%;
                     height: 100.0%;
@@ -451,7 +451,9 @@ function gemExportAll(){
   if(_gemExportAllRunning){_gemSetStatus("Already running...");return;}
   _gemExportAllRunning=true;
   _gemExportAllQueue=[];
-  for(var i=0;i<_GEM_STEPS.length;i++) _gemExportAllQueue.push(i);
+  for(var i=0;i<_GEM_STEPS.length;i++) {
+    if(_GEM_STEPS[i].hour === 0) _gemExportAllQueue.push(i);
+  }
   var btn=document.getElementById("btn-export-all");
   if(btn) btn.classList.add("active");
   _gemSetStatus("Export All: 0/"+_GEM_STEPS.length);
@@ -699,14 +701,14 @@ else{window.addEventListener("load",function(){setTimeout(_gemInit,800);});}
 })();
 </script>
     
-            <div class="folium-map" id="map_2e12cff643ce91f17c607e975c3cf79c" ></div>
+            <div class="folium-map" id="map_ef8b6c6d01378a22c745381b9b372d1d" ></div>
         
 </body>
 <script>
     
     
-            var map_2e12cff643ce91f17c607e975c3cf79c = L.map(
-                "map_2e12cff643ce91f17c607e975c3cf79c",
+            var map_ef8b6c6d01378a22c745381b9b372d1d = L.map(
+                "map_ef8b6c6d01378a22c745381b9b372d1d",
                 {
                     center: [54.225, -113.325],
                     crs: L.CRS.EPSG3857,
@@ -723,7 +725,7 @@ else{window.addEventListener("load",function(){setTimeout(_gemInit,800);});}
 
         
     
-            var tile_layer_f378006e03b8a4a2d7d555466c21e44c = L.tileLayer(
+            var tile_layer_45f94c067361a7be0b6bcebecb9b2986 = L.tileLayer(
                 "about:blank",
                 {
   "minZoom": 0,
@@ -740,7 +742,7 @@ else{window.addEventListener("load",function(){setTimeout(_gemInit,800);});}
             );
         
     
-            tile_layer_f378006e03b8a4a2d7d555466c21e44c.addTo(map_2e12cff643ce91f17c607e975c3cf79c);
+            tile_layer_45f94c067361a7be0b6bcebecb9b2986.addTo(map_ef8b6c6d01378a22c745381b9b372d1d);
         
 </script>
 </html>
