@@ -283,13 +283,14 @@ function frameLoaded(id) {
 
 // ── Patch every frame ──────────────────────────────────────────────────────
 var _p1DefaultDone = false;
+var _mapSyncDone   = { p1: false, p2: false, p3: false };
 
 function patchAll() {
   PANES.forEach(function(p) {
     patchFrame(p);
-    patchMapSync(p);
+    // Map sync is deferred — attached after the first step fires per pane,
+    // guaranteeing Leaflet is fully initialised before we touch it.
   });
-  // p1 default to 500 hPa is triggered after the first real step fires (see message listener)
 }
 
 // ── Set 500 hPa default on p1 (called only after first step fires) ─────────
@@ -351,6 +352,7 @@ function findLeafletMap(win) {
 }
 
 // ── Patch Leaflet moveend on one frame to broadcast view changes ───────────
+// Only called after the first step fires for that pane — map is guaranteed ready.
 function patchMapSync(p) {
   try {
     var win = document.getElementById(p.frameId).contentWindow;
@@ -358,8 +360,7 @@ function patchMapSync(p) {
 
     var lmap = findLeafletMap(win);
     if (!lmap) {
-      // Map may not be initialised yet — retry
-      setTimeout(function() { patchMapSync(p); }, 800);
+      console.warn('[AWCC] patchMapSync: no Leaflet map found in', p.id);
       return;
     }
 
@@ -411,7 +412,13 @@ window.addEventListener('message', function(e) {
 
   var srcIdx = parseInt(e.data.idx);
 
-  // First time p1 fires a step → map is fully ready, safe to set 500 hPa default
+  // First step from any pane → safe to attach map sync (Leaflet is fully ready)
+  if (!_mapSyncDone[src.id]) {
+    _mapSyncDone[src.id] = true;
+    patchMapSync(src);
+  }
+
+  // First step from p1 → safe to switch to 500 hPa default
   if (src.id === 'p1' && !_p1DefaultDone) {
     _p1DefaultDone = true;
     setTimeout(initP1Default, 0);
