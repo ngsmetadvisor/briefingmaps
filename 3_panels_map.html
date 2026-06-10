@@ -175,37 +175,46 @@
     white-space: nowrap;
     text-transform: uppercase;
   }
+#master-slider-wrap {
+    background: #f0f2f5;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    padding: 4px 10px;
+  }
+  #master-label {
+    color: #555e6b !important;
+  }
   #master-slider {
     flex: 1;
     min-width: 80px;
     height: 4px;
     -webkit-appearance: none;
     appearance: none;
-    background: var(--border);
+    background: #ced4da;
     border-radius: 2px;
     outline: none;
     cursor: pointer;
   }
   #master-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 14px; height: 14px;
+    width: 15px; height: 15px;
     border-radius: 50%;
-    background: var(--accent);
+    background: #e03131;
     cursor: pointer;
-    border: 2px solid var(--bg);
-    box-shadow: 0 0 0 1px var(--accent);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #e03131;
   }
   #master-slider::-moz-range-thumb {
-    width: 14px; height: 14px;
+    width: 15px; height: 15px;
     border-radius: 50%;
-    background: var(--accent);
+    background: #e03131;
     cursor: pointer;
-    border: 2px solid var(--bg);
-    box-shadow: 0 0 0 1px var(--accent);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #e03131;
   }
   #master-step-count {
     font-size: 10px;
-    color: var(--muted);
+    color: #555e6b;
     white-space: nowrap;
   }
 
@@ -356,6 +365,15 @@ function patchAll() {
       tryInitMasterSlider();
       _initRetries++;
       if (!_p1DefaultDone) initP1Default();
+      PANES.forEach(function(p) {
+        if (!_mapSyncDone[p.id]) {
+          var win = document.getElementById(p.frameId).contentWindow;
+          if (win && findLeafletMap(win)) {
+            _mapSyncDone[p.id] = true;
+            patchMapSync(p);
+          }
+        }
+      });
       if (_masterSteps || _initRetries >= 20) clearInterval(_initPoll);
     }, 500);
   }
@@ -500,6 +518,17 @@ window.addEventListener('message', function(e) {
 
 // First step from any pane → init master slider if not yet done
   if (!_masterSteps) tryInitMasterSlider();
+
+  // Every step from p1 → ensure 500 hPa is active
+  if (src.id === 'p1') {
+    try {
+      var p1win = document.getElementById('frame-p1').contentWindow;
+      var btn500 = p1win.document.getElementById('btn-500');
+      if (btn500 && !btn500.classList.contains('active')) {
+        btn500.click();
+      }
+    } catch(e) {}
+  }
 
   // First step from any pane → safe to attach map sync (Leaflet is fully ready)
   if (!_mapSyncDone[src.id]) {
