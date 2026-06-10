@@ -346,6 +346,18 @@ function patchAll() {
     // Map sync is deferred — attached after the first step fires per pane,
     // guaranteeing Leaflet is fully initialised before we touch it.
   });
+  // Attempt master slider init immediately — frames are loaded at this point
+  // and steps arrays are likely already populated.
+  tryInitMasterSlider();
+  // If steps weren't ready yet (async data fetch inside the frame), retry.
+  if (!_masterSteps) {
+    var _initRetries = 0;
+    var _initPoll = setInterval(function() {
+      tryInitMasterSlider();
+      _initRetries++;
+      if (_masterSteps || _initRetries >= 20) clearInterval(_initPoll);
+    }, 500);
+  }
 }
 
 // ── Set 500 hPa default on p1 ─────────────────────────────────────────────
