@@ -915,8 +915,10 @@ for _d in range(GDPS_FORECAST_DAYS + 1):
 # Output row labelled 00Z day D
 _sfc_target_vts = []
 for _d in range(1, GDPS_FORECAST_DAYS + 2):
-    _vt = _base_day_mdt + timedelta(days=_d, hours=6)   # 06Z = local midnight
-    _sfc_target_vts.append(_vt)
+    _vt_00z = _base_day_mdt + timedelta(days=_d, hours=6)    # 06Z endpoint → 00Z label
+    _vt_12z = _base_day_mdt + timedelta(days=_d, hours=18)   # 18Z endpoint → 12Z label
+    _sfc_target_vts.append(_vt_00z)
+    _sfc_target_vts.append(_vt_12z)
 
 # Flat coordinate lists for extraction
 _target_lats = [lat for lat in GEM_LATITUDES for _   in GEM_LONGITUDE]
@@ -1062,8 +1064,13 @@ for vt in _sfc_target_vts:
     max_fxx   = 84 if use_rdps else 240
     model_lbl = 'RDPS' if use_rdps else 'GDPS'
 
-    vt_mslp   = vt - timedelta(hours=6)   # 00Z
-    vt_pacc   = vt                         # 06Z
+    # 06Z endpoint → MSLP at 00Z, QPF window 18Z(-1)→06Z, label 00Z
+    # 18Z endpoint → MSLP at 12Z, QPF window 06Z→18Z, label 12Z
+    vt_pacc   = vt
+    if vt_pacc.hour == 6:
+        vt_mslp = vt_pacc - timedelta(hours=6)    # 00Z
+    else:  # hour == 18
+        vt_mslp = vt_pacc - timedelta(hours=6)    # 12Z
     fxx_mslp  = _fxx(run_dt, vt_mslp)
     fxx_tgt   = _fxx(run_dt, vt_pacc)
     fxx_prior = fxx_tgt - 12
@@ -1370,10 +1377,11 @@ rows = []
 
 _target_vt_strs = (
     {vt.strftime('%Y-%m-%d') + f' {vt.hour:02d}Z' for vt in _target_vts} |
-    {(vt - timedelta(hours=6)).strftime('%Y-%m-%d') + f' {(vt - timedelta(hours=6)).hour:02d}Z'
-     for vt in _sfc_target_vts}
+    {(vt - timedelta(hours=6)).strftime('%Y-%m-%d') + f' 00Z'
+     for vt in _sfc_target_vts if vt.hour == 6} |
+    {vt.strftime('%Y-%m-%d') + f' 12Z'
+     for vt in _sfc_target_vts if vt.hour == 18}
 )
-
 # ── Isobaric rows ─────────────────────────────────────────────────────────────
 for (lat, lon, vt_str, pres), fields in _point_data.items():
     if vt_str not in _target_vt_strs:
@@ -1418,7 +1426,9 @@ _sfc_merged = {}
 for (lat, lon, vt_str), fields in _sfc_data.items():
     vt_key = datetime.strptime(vt_str, '%Y-%m-%d %HZ').replace(tzinfo=_tz.utc)
     if vt_key.hour == 6:
-        vt_label = (vt_key - timedelta(hours=6)).strftime('%Y-%m-%d') + f' {(vt_key.hour - 6):02d}Z'
+        vt_label = (vt_key - timedelta(hours=6)).strftime('%Y-%m-%d') + f' 00Z'
+    elif vt_key.hour == 18:
+        vt_label = vt_key.strftime('%Y-%m-%d') + f' 12Z'
     else:
         vt_label = vt_str
     key = (lat, lon, vt_label)
@@ -1952,8 +1962,12 @@ for (_date, _hr) in _sfc_times:
     _date_str  = pd.Timestamp(_date).strftime('%Y%m%d')
     _valid_str = f'{_date_str} {int(_hr):02d}Z'
     _key       = f'{_date_str}_{int(_hr):02d}'
+    # For 00Z label: MSLP was fetched at 00Z (vt itself)
+    # For 12Z label: MSLP was fetched at 12Z (vt itself)
     _vt        = pd.Timestamp(_date).replace(tzinfo=None) + pd.Timedelta(hours=int(_hr))
     _vt        = _vt.to_pydatetime().replace(tzinfo=__import__('datetime').timezone.utc)
+    # Reconstruct the actual GRIB fetch time: 00Z label came from 06Z endpoint, 12Z from 18Z
+    _vt_fetch  = _vt + timedelta(hours=6)
 
     print(f'\n── {_valid_str} ──')
 
@@ -1961,15 +1975,16 @@ for (_date, _hr) in _sfc_times:
     _sub = _sfc_df[(_sfc_df['_date'] == _date) & (_sfc_df['_hour'] == _hr)]
 
     # ── MSLP — download GRIB directly, process like Cell A ───────────────────
-    use_rdps  = _NOW_UTC < _vt < _RDPS_CUTOFF
+    use_rdps  = _NOW_UTC < _vt_fetch < _RDPS_CUTOFF
     run_dt    = _rdps_run_dt if use_rdps else _gdps_run_dt
-    fxx       = int((_vt - run_dt).total_seconds() / 3600)
+    fxx       = int((_vt_fetch - run_dt).total_seconds() / 3600)
     url_mslp  = (_rdps_sfc_url(run_dt, fxx, 'Pressure_MSL') if use_rdps
                  else _gdps_sfc_url(run_dt, fxx, 'Pressure_MSL'))
 
     try:
         # use cached file from UA-2a if available — avoids re-download
-        _vt_mslp_str = f'{_date_str[:4]}-{_date_str[4:6]}-{_date_str[6:8]} {int(_hr):02d}Z'
+        _fetch_hr    = int(_hr) + 6   # 00Z label→06Z fetch, 12Z label→18Z fetch
+        _vt_mslp_str = f'{_date_str[:4]}-{_date_str[4:6]}-{_date_str[6:8]} {_fetch_hr:02d}Z'
         _cache_entry = _raw_grids.get(('Pressure_MSL', _vt_mslp_str), {})
         _cache_path  = _cache_entry.get('cache_path')
 
@@ -4788,17 +4803,22 @@ _edmonton_today  = _now_edmonton.date()
 _ua_export_hour = 12
 print(f"  UA export hour: {_ua_export_hour:02d}Z")
 
+_sfc_keys_llj = sorted(
+    k.replace('slp_grid_', '')
+    for k in globals()
+    if k.startswith('slp_grid_')
+)
+_months   = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+_dows     = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
 _time_steps = []
-for (_date_val, _hr) in _synoptic_times:
-    _date_str = pd.Timestamp(_date_val).strftime('%Y%m%d')
-    _key      = f'{_date_str}_{int(_hr):02d}'
-    _dt       = pd.Timestamp(_date_val).date()
-    _months   = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-    _dows     = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-    _dow      = _dows[_dt.weekday()]
-    _mon      = _months[_dt.month - 1]
-    _label    = f'{_dow} {_mon} {_dt.day} {int(_hr):02d}Z'
-    _time_steps.append({'key': _key, 'label': _label, 'hour': int(_hr)})
+for _key in _sfc_keys_llj:
+    _y, _h   = int(_key[:4]), int(_key[9:])
+    _mo, _dd = int(_key[4:6]), int(_key[6:8])
+    _dt      = pd.Timestamp(year=_y, month=_mo, day=_dd).date()
+    _dow     = _dows[_dt.weekday()]
+    _mon     = _months[_mo - 1]
+    _label   = f'{_dow} {_mon} {_dd} {_h:02d}Z'
+    _time_steps.append({'key': _key, 'label': _label, 'hour': _h})
 
 _time_steps_str      = _json.dumps(_time_steps)
 _metar_ts_to_key_str = _json.dumps(_metar_ts_to_key)
