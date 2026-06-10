@@ -1,321 +1,502 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AWCC Forecast Maps</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #0d1117;
-      color: #e6edf3;
-      margin: 0;
-      padding: 0;
-    }
-    header {
-      background: #111827;
-      border-bottom: 2px solid #1a4a8a;
-      padding: 18px 32px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    header h1 {
-      margin: 0;
-      font-size: 22px;
-      color: #ffffff;
-    }
-    header p {
-      margin: 4px 0 0;
-      font-size: 13px;
-      color: #8b949e;
-    }
-    .badge {
-      background: #1a4a8a;
-      color: #aed4ff;
-      font-size: 11px;
-      padding: 3px 10px;
-      border-radius: 12px;
-      white-space: nowrap;
-    }
-    main {
-      max-width: 860px;
-      margin: 40px auto;
-      padding: 0 24px;
-    }
-    h2 {
-      font-size: 14px;
-      color: #8b949e;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin: 0 0 16px;
-    }
-    .card-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-      gap: 16px;
-    }
-    .card {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 10px;
-      padding: 20px 24px;
-      text-decoration: none;
-      color: inherit;
-      display: block;
-      transition: border-color 0.15s, background 0.15s;
-    }
-    .card:hover {
-      border-color: #1a4a8a;
-      background: #1a2030;
-    }
-    .card-title {
-      font-size: 16px;
-      font-weight: bold;
-      color: #58a6ff;
-      margin-bottom: 6px;
-    }
-    .card-desc {
-      font-size: 13px;
-      color: #8b949e;
-      line-height: 1.5;
-    }
-    footer {
-      text-align: center;
-      font-size: 12px;
-      color: #484f58;
-      margin: 60px 0 24px;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWCC Triple Map Viewer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --border:   #30363d;
+    --accent:   #4a7fc1;
+    --accent2:  #58a868;
+    --accent3:  #e8a020;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --header-h: 54px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Courier New", monospace;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  #header {
+    height: var(--header-h);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+    z-index: 100;
+    position: relative;
+  }
+  #header .logo {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--accent);
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+  #header .divider {
+    width: 1px; height: 22px;
+    background: var(--border);
+  }
+  #header .map-labels {
+    display: flex;
+    gap: 24px;
+    flex: 1;
+  }
+  .map-label {
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .map-label .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-1 { background: var(--accent); }
+  .dot-2 { background: var(--accent2); }
+  .dot-3 { background: var(--accent3); }
+
+  /* ── Map panes ── */
+  #maps {
+    display: flex;
+    height: calc(100vh - var(--header-h));
+    width: 100%;
+  }
+
+  .map-pane {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #1a1f26;
+  }
+  .map-pane + .map-pane { border-left: 2px solid var(--border); }
+  .map-pane iframe { width: 100%; height: 100%; border: none; display: block; }
+
+  /* Pane badge */
+  .pane-badge {
+    position: absolute;
+    top: 8px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 500;
+    background: rgba(13,17,23,0.82);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 10px; font-weight: bold; letter-spacing: 0.5px;
+    color: var(--muted);
+    pointer-events: none; white-space: nowrap;
+    backdrop-filter: blur(4px);
+  }
+  .pane-badge.p1 { color: var(--accent);  border-color: var(--accent); }
+  .pane-badge.p2 { color: var(--accent2); border-color: var(--accent2); }
+  .pane-badge.p3 { color: var(--accent3); border-color: var(--accent3); }
+
+  /* Loading overlay */
+  .pane-loading {
+    position: absolute; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px; z-index: 400;
+    transition: opacity 0.4s;
+  }
+  .pane-loading.hidden { opacity: 0; pointer-events: none; }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .pane-loading.p2 .spinner { border-top-color: var(--accent2); }
+  .pane-loading.p3 .spinner { border-top-color: var(--accent3); }
+  .pane-loading span { font-size: 11px; color: var(--muted); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* No-data blank overlay */
+  .pane-blank {
+    position: absolute; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 10px; z-index: 450;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .pane-blank.visible { opacity: 1; pointer-events: none; }
+  .pane-blank .no-data-icon {
+    font-size: 28px;
+    opacity: 0.3;
+  }
+  .pane-blank .no-data-label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .pane-blank .no-data-ts {
+    font-size: 10px;
+    color: var(--border);
+  }
+
+  #ts-display {
+    font-size: 18px;
+    font-weight: bold;
+    color: #c8d8ff;
+    letter-spacing: 1.5px;
+    white-space: nowrap;
+    min-width: 260px;
+    text-align: right;
+  }
+
+  /* Sync indicator */
+  #sync-indicator {
+    font-size: 10px; color: var(--muted);
+    display: flex; align-items: center; gap: 5px; white-space: nowrap;
+  }
+  .sync-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #2ea043;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+</style>
 </head>
 <body>
-  <header>
-    <div>
-      <h1>⛅ AWCC Forecast Maps</h1>
-      <p>Based on GEM RDPS &amp; GDPS model data — Meteorological Service of Canada</p>
-    </div>
-    <span class="badge" id="last-run-badge">Updated —</span>
-  </header>
-  <main>
-    <h2>Available Maps</h2>
-    <div class="card-grid">
-      <a class="card" href="synoptic_map.html" target="_blank" rel="noopener noreferrer">
-        <div class="card-title">🗺️ Upper Air Forecast</div>
-        <div class="card-desc">Upper-air analysis — 850 & 500 hPa heights, temperature, wind</div>
-      </a>
-      <a class="card" href="gem_surface_map.html" target="_blank" rel="noopener noreferrer">
-        <div class="card-title">🌧️ QPF</div>
-        <div class="card-desc">MSLP + 12h QPF precipitation accumulation</div>
-      </a>
-<a class="card" href="https://ngsmetadvisor.github.io/briefingmaps/3_panels_map.html" target="_blank" rel="noopener noreferrer">
-        <div class="card-title">🗂️ 3-Panel Map ↗</div>
-        <div class="card-desc">Three-panel forecast map — external hosted version</div>
-      </a>
-      <a class="card" href="https://ngsmetadvisor.github.io/SfcMap/synoptic_map.html" target="_blank" rel="noopener noreferrer">
-        <div class="card-title">🌍 Surface Synoptic Map ↗</div>
-        <div class="card-desc">Interactive surface synoptic map — external hosted version</div>
-      </a>
-      <a class="card" href="https://ngsmetadvisor.github.io/UAanalysis/" target="_blank" rel="noopener noreferrer">
-        <div class="card-title">🌐 Upper Air Analysis ↗</div>
-        <div class="card-desc">Interactive upper air analysis — external hosted version</div>
-      </a>
-      <a class="card" href="https://ngsmetadvisor.github.io/UAanalysis/ua_availability.html" target="_blank" rel="noopener noreferrer">
-        <div class="card-title">📡 UA Radiosonde Availability ↗</div>
-        <div class="card-desc">Upper air radiosonde reporting availability — 00Z & 12Z station status</div>
-      </a>
-      <a class="card" href="llj_prog.html" target="_blank" rel="noopener noreferrer">
-        <div class="card-title">🌬️ LLJ Prog</div>
-        <div class="card-desc">850 hPa LLJ station network — fixed 18-station Alberta grid, heights, isotherms & wind barbs</div>
-      </a>
-      <a class="card" href="temp_band_legend.png" target="_blank" rel="noopener noreferrer">
-        <div class="card-title">🌡️ Temperature Band Legend</div>
-        <div class="card-desc">850 & 500 hPa normal temperature band colour scale</div>
-      </a>
-    </div>
 
-    <div style="margin:40px 0 20px;">
-      <h2 style="font-size:14px;color:#8b949e;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 16px;">Run forecast</h2>
-      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px 24px;max-width:480px;">
-        <input id="trig-user"     type="hidden" value="ngsmetadvisor">
-        <input id="trig-repo"     type="hidden" value="briefingmaps">
-        <input id="trig-workflow" type="hidden" value="gem_weather_map.yml">
-        <input id="trig-branch"   type="hidden" value="main">
-        <div style="margin-bottom:12px;">
-          <div style="font-size:12px;color:#8b949e;margin-bottom:4px;">Enter PIN to re-run the charts</div>
-          <input id="trig-token-suffix" type="password" placeholder="Enter here" maxlength="4" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#e6edf3;font-size:13px;font-family:monospace;">
-        </div>
-        <button onclick="triggerRun()" id="trig-btn" style="width:100%;padding:9px;background:#1a4a8a;color:#aed4ff;border:1px solid #2a5a9a;border-radius:6px;font-size:14px;font-weight:bold;cursor:pointer;">
-          ▶ Run forecast now for Upper Air Forecast & QPF
-        </button>
-        <div id="trig-bar" style="display:none;margin-top:12px;">
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:#8b949e;margin-bottom:4px;">
-            <span id="trig-bar-label">—</span>
-          </div>
-          <div style="background:#21262d;border-radius:4px;height:8px;overflow:hidden;">
-            <div id="trig-bar-fill" style="height:100%;width:0%;background:#1a4a8a;border-radius:4px;transition:width 0.6s ease;"></div>
-          </div>
-        </div>
-        <div id="trig-status" style="margin-top:10px;font-size:12px;text-align:center;color:#8b949e;min-height:18px;"></div>
-      </div>
+<!-- Header -->
+<div id="header">
+  <div class="logo">AWCC TRIPLE MAP</div>
+  <div class="divider"></div>
+  <div class="map-labels">
+    <div class="map-label">
+      <span class="dot dot-1"></span>
+      <span>UA 1 — 850 / 500 hPa Heights &amp; Isotherms</span>
     </div>
+    <div class="map-label">
+      <span class="dot dot-2"></span>
+      <span>UA 2 — 850 / 500 hPa Heights &amp; Isotherms</span>
+    </div>
+    <div class="map-label">
+      <span class="dot dot-3"></span>
+      <span>Surface — MSLP &amp; 12h Precipitation</span>
+    </div>
+  </div>
+  <div id="ts-display">—</div>
+  <div class="divider"></div>
+  <div id="sync-indicator">
+    <div class="sync-dot"></div>
+    <span>SYNCED</span>
+  </div>
+</div>
 
-  </main>
-  <footer>
-    Generated <span id="last-run-footer">—</span> · Data: Meteorological Service of Canada (dd.weather.gc.ca)
-  </footer>
+<!-- Map panes -->
+<div id="maps">
+
+  <div class="map-pane">
+    <div class="pane-badge p1">UA 1 — 850 / 500 hPa</div>
+    <div class="pane-loading p1" id="load-p1">
+      <div class="spinner"></div>
+      <span>Loading upper air map 1…</span>
+    </div>
+    <div class="pane-blank" id="blank-p1">
+      <div class="no-data-icon">⊘</div>
+      <div class="no-data-label">No data for this time step</div>
+      <div class="no-data-ts" id="blank-ts-p1"></div>
+    </div>
+    <iframe id="frame-p1"
+      src="https://ngsmetadvisor.github.io/briefingmaps/synoptic_map.html"
+      onload="frameLoaded('p1')"></iframe>
+  </div>
+
+  <div class="map-pane">
+    <div class="pane-badge p2">UA 2 — 850 / 500 hPa</div>
+    <div class="pane-loading p2" id="load-p2">
+      <div class="spinner"></div>
+      <span>Loading upper air map 2…</span>
+    </div>
+    <div class="pane-blank" id="blank-p2">
+      <div class="no-data-icon">⊘</div>
+      <div class="no-data-label">No data for this time step</div>
+      <div class="no-data-ts" id="blank-ts-p2"></div>
+    </div>
+    <iframe id="frame-p2"
+      src="https://ngsmetadvisor.github.io/briefingmaps/synoptic_map.html"
+      onload="frameLoaded('p2')"></iframe>
+  </div>
+
+  <div class="map-pane">
+    <div class="pane-badge p3">SFC — MSLP &amp; QPF 12h</div>
+    <div class="pane-loading p3" id="load-p3">
+      <div class="spinner"></div>
+      <span>Loading surface map…</span>
+    </div>
+    <div class="pane-blank" id="blank-p3">
+      <div class="no-data-icon">⊘</div>
+      <div class="no-data-label">No data for this time step</div>
+      <div class="no-data-ts" id="blank-ts-p3"></div>
+    </div>
+    <iframe id="frame-p3"
+      src="https://ngsmetadvisor.github.io/briefingmaps/gem_surface_map.html"
+      onload="frameLoaded('p3')"></iframe>
+  </div>
+
+</div>
 
 <script>
+// ── Pane config ────────────────────────────────────────────────────────────
+// Each entry describes one pane.
+// fnName    : the step function exposed on that frame's window
+// sliderId  : the <input type=range> id inside that frame
+// stepsVar  : the global steps array variable name in that frame
+// msgType   : postMessage type tag emitted when this pane drives a change
+var PANES = [
+  { id: 'p1', frameId: 'frame-p1', fnName: 'synSliderChange', sliderId: 'syn-time-slider', stepsVar: '_SYN_TIME_STEPS', msgType: 'SYN_STEP_P1' },
+  { id: 'p2', frameId: 'frame-p2', fnName: 'synSliderChange', sliderId: 'syn-time-slider', stepsVar: '_SYN_TIME_STEPS', msgType: 'SYN_STEP_P2' },
+  { id: 'p3', frameId: 'frame-p3', fnName: 'gemSliderChange', sliderId: 'gem-time-slider', stepsVar: '_GEM_STEPS',       msgType: 'GEM_STEP_P3' }
+];
 
-(function fetchLastRun() {
-  var user = 'ngsmetadvisor';
-  var repo = 'briefingmaps';
-  fetch('https://api.github.com/repos/' + user + '/' + repo + '/actions/runs?per_page=10&status=success', {
-    headers: { 'Accept': 'application/vnd.github.v3+json' }
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-var runs = (data.workflow_runs || []).filter(function(r) {
-      return r.name === 'Generate GEM Surface Map' ||
-             r.name === 'Generate GEM Surface Map - no downstream';
+// Build a fast lookup: msgType → pane config
+var MSG_MAP = {};
+PANES.forEach(function(p) { MSG_MAP[p.msgType] = p; });
+
+// ── Ready tracking ─────────────────────────────────────────────────────────
+var _ready = { p1: false, p2: false, p3: false };
+
+function frameLoaded(id) {
+  var el = document.getElementById('load-' + id);
+  if (el) el.classList.add('hidden');
+  _ready[id] = true;
+  if (_ready.p1 && _ready.p2 && _ready.p3) setTimeout(patchAll, 400);
+}
+
+// ── Patch every frame ──────────────────────────────────────────────────────
+var _p1DefaultDone = false;  // unused sentinel kept for safety
+var _mapSyncDone   = { p1: false, p2: false, p3: false };
+
+function patchAll() {
+  PANES.forEach(function(p) {
+    patchFrame(p);
+    // Map sync is deferred — attached after the first step fires per pane,
+    // guaranteeing Leaflet is fully initialised before we touch it.
+  });
+}
+
+// ── Set 500 hPa default on p1 ─────────────────────────────────────────────
+function initP1Default() {
+  try {
+    var win = document.getElementById('frame-p1').contentWindow;
+    if (typeof win.synSetLevel !== 'function') return;
+    win.synSetLevel('500');
+    // Also update the button active state
+    var btn = win.document.getElementById('btn-500');
+    if (btn) btn.click();
+    console.log('[AWCC] p1 → 500 hPa');
+  } catch(e) {
+    console.warn('[AWCC] initP1Default error:', e);
+  }
+}
+
+function patchFrame(p) {
+  try {
+    var win = document.getElementById(p.frameId).contentWindow;
+    if (!win) return;
+    if (typeof win[p.fnName] !== 'function') {
+      setTimeout(function() { patchFrame(p); }, 800);
+      return;
+    }
+    var original = win[p.fnName];
+    var msgType  = p.msgType;
+    win[p.fnName] = function(idx) {
+      original.call(win, idx);
+      if (!win.__awcc_syncing) {
+        window.postMessage({ type: msgType, idx: idx }, '*');
+      }
+    };
+    console.log('[AWCC] Patched', p.fnName, 'in', p.id);
+
+    // p1: set 500 hPa default after current render cycle completes
+    if (p.id === 'p1') {
+      setTimeout(initP1Default, 100);
+    }
+  } catch(e) {
+    console.warn('[AWCC] patch error', p.id, e);
+  }
+}
+
+// ── Find the Leaflet map instance inside a frame window ────────────────────
+// Checks common variable names, then scans all window keys for a Leaflet Map.
+function findLeafletMap(win) {
+  // Common names used in these pages
+  var candidates = ['map', '_map', 'leafletMap', 'myMap', 'MAP'];
+  for (var i = 0; i < candidates.length; i++) {
+    var obj = win[candidates[i]];
+    if (obj && obj.getCenter && obj.getZoom && obj.setView) return obj;
+  }
+  // Fallback: scan all globals for a Leaflet Map instance
+  try {
+    var keys = Object.keys(win);
+    for (var k = 0; k < keys.length; k++) {
+      try {
+        var obj = win[keys[k]];
+        if (obj && obj.getCenter && obj.getZoom && obj.setView &&
+            obj._leaflet_id !== undefined) return obj;
+      } catch(e) {}
+    }
+  } catch(e) {}
+  return null;
+}
+
+// ── Patch Leaflet moveend on one frame to broadcast view changes ───────────
+// Only called after the first step fires for that pane — map is guaranteed ready.
+function patchMapSync(p) {
+  try {
+    var win = document.getElementById(p.frameId).contentWindow;
+    if (!win) return;
+
+    var lmap = findLeafletMap(win);
+    if (!lmap) {
+      console.warn('[AWCC] patchMapSync: no Leaflet map found in', p.id);
+      return;
+    }
+
+    lmap.on('moveend', function() {
+      if (win.__awcc_syncing) return;
+      var c = lmap.getCenter();
+      var z = lmap.getZoom();
+      window.postMessage({
+        type: 'MAP_VIEW',
+        srcId: p.id,
+        lat: c.lat, lng: c.lng, zoom: z
+      }, '*');
     });
-    if (!runs.length) return;
-    var dt = new Date(runs[0].updated_at);
-    var iso = dt.getUTCFullYear() + '-' +
-      String(dt.getUTCMonth()+1).padStart(2,'0') + '-' +
-      String(dt.getUTCDate()).padStart(2,'0') + ' ' +
-      String(dt.getUTCHours()).padStart(2,'0') + ':' +
-      String(dt.getUTCMinutes()).padStart(2,'0') + 'Z';
-    var badge  = document.getElementById('last-run-badge');
-    var footer = document.getElementById('last-run-footer');
-    if (badge)  badge.textContent  = 'Updated ' + iso;
-    if (footer) footer.textContent = iso;
-  })
-  .catch(function() {});
-})();
 
-function triggerRun() {
-  var user     = document.getElementById('trig-user').value.trim();
-  var repo     = document.getElementById('trig-repo').value.trim();
-  var workflow = document.getElementById('trig-workflow').value.trim() || 'forecast.yml';
-  var branch   = document.getElementById('trig-branch').value.trim() || 'main';
-  var suffix   = document.getElementById('trig-token-suffix').value.trim();
-  if (suffix.length !== 4) {
-    setTrigStatus('Enter the last 4 characters of the token.', '#f85149');
-    return;
+    console.log('[AWCC] Map sync patched for', p.id);
+  } catch(e) {
+    console.warn('[AWCC] patchMapSync error', p.id, e);
   }
-  var token = 'ghp_5te1jZS2kbyfzeYUANY6CebGtQGpza2j' + suffix;
-  var btn = document.getElementById('trig-btn');
-  btn.disabled = true;
-  setTrigStatus('Sending trigger...', '#8b949e');
-  setTrigProgress(0, 'Queuing...');
-
-  fetch('https://api.github.com/repos/' + user + '/' + repo + '/actions/workflows/' + workflow + '/dispatches', {
-    method: 'POST',
-    headers: {
-      'Authorization': 'token ' + token,
-      'Accept': 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ ref: branch })
-  })
-  .then(function(r) {
-    if (r.status === 204) {
-      setTrigStatus('Workflow triggered — waiting for run to start...', '#8b949e');
-      setTimeout(function() { pollRun(user, repo, token, Date.now(), 0); }, 4000);
-    } else {
-      return r.json().then(function(j) {
-        setTrigStatus('Error ' + r.status + ': ' + (j.message || 'unknown'), '#f85149');
-        setTrigProgress(0, '');
-        btn.disabled = false;
-      });
-    }
-  })
-  .catch(function(e) {
-    setTrigStatus('Network error: ' + e.message, '#f85149');
-    setTrigProgress(0, '');
-    btn.disabled = false;
-  });
 }
 
-function pollRun(user, repo, token, startedAt, attempt) {
-  if (attempt > 60) {
-    setTrigStatus('Timed out waiting for run.', '#f85149');
-    document.getElementById('trig-btn').disabled = false;
+// ── Listen: broadcast any step change OR map view to all OTHER panes ───────
+window.addEventListener('message', function(e) {
+  if (!e.data) return;
+
+  // ── Map view sync ──────────────────────────────────────────────────────
+  if (e.data.type === 'MAP_VIEW') {
+    var srcId = e.data.srcId;
+    PANES.forEach(function(tgt) {
+      if (tgt.id === srcId) return;
+      try {
+        var tgtWin = document.getElementById(tgt.frameId).contentWindow;
+        if (!tgtWin) return;
+        var lmap = findLeafletMap(tgtWin);
+        if (!lmap) return;
+        tgtWin.__awcc_syncing = true;
+        lmap.setView([e.data.lat, e.data.lng], e.data.zoom, { animate: false });
+        tgtWin.__awcc_syncing = false;
+      } catch(err) {
+        console.warn('[AWCC] map mirror error', tgt.id, err);
+      }
+    });
     return;
   }
-  fetch('https://api.github.com/repos/' + user + '/' + repo + '/actions/runs?per_page=5', {
-    headers: {
-      'Authorization': 'token ' + token,
-      'Accept': 'application/vnd.github.v3+json'
-    }
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    var runs = data.workflow_runs || [];
-    var run  = null;
-    for (var i = 0; i < runs.length; i++) {
-      if (new Date(runs[i].created_at).getTime() >= startedAt - 10000) {
-        run = runs[i]; break;
-      }
-    }
-    if (!run) {
-      setTrigProgress(5, 'Waiting for runner...');
-      setTimeout(function() { pollRun(user, repo, token, startedAt, attempt + 1); }, 5000);
-      return;
-    }
 
-    var status     = run.status;
-    var conclusion = run.conclusion;
-    var runUrl     = run.html_url;
+  // ── Time step sync ─────────────────────────────────────────────────────
+  if (typeof e.data.idx === 'undefined') return;
+  var src = MSG_MAP[e.data.type];
+  if (!src) return;
 
-    if (status === 'queued') {
-      setTrigProgress(10, 'Queued');
-      setTrigStatus('Run queued — <a href="' + runUrl + '" target="_blank" style="color:#58a6ff;">view on GitHub ↗</a>', '#8b949e');
-    } else if (status === 'in_progress') {
-      var elapsed = (Date.now() - new Date(run.created_at).getTime()) / 1000;
-      var pct     = Math.min(15 + Math.round(elapsed / 180 * 75), 90);
-      var mins    = Math.floor(elapsed / 60);
-      var secs    = Math.floor(elapsed % 60);
-      setTrigProgress(pct, 'Running — ' + mins + 'm ' + String(secs).padStart(2,'0') + 's');
-      setTrigStatus('In progress — <a href="' + runUrl + '" target="_blank" style="color:#58a6ff;">view on GitHub ↗</a>', '#8b949e');
-    } else if (status === 'completed') {
-      if (conclusion === 'success') {
-        setTrigProgress(100, 'Complete');
-        setTrigStatus('✓ Run completed successfully! <a href="' + runUrl + '" target="_blank" style="color:#3fb950;">view on GitHub ↗</a>', '#3fb950');
-        fetchLastRun();
+  var srcIdx = parseInt(e.data.idx);
+
+  // First step from any pane → safe to attach map sync (Leaflet is fully ready)
+  if (!_mapSyncDone[src.id]) {
+    _mapSyncDone[src.id] = true;
+    patchMapSync(src);
+  }
+
+  // Update banner timestamp from source frame's steps label
+  try {
+    var srcWin   = document.getElementById(src.frameId).contentWindow;
+    var srcSteps = srcWin[src.stepsVar];
+    if (srcSteps && srcSteps[srcIdx] && srcSteps[srcIdx].label) {
+      document.getElementById('ts-display').textContent = srcSteps[srcIdx].label;
+    }
+  } catch(e2) {}
+
+  PANES.forEach(function(tgt) {
+    if (tgt.id === src.id) return;
+    mirrorStep(src, tgt, srcIdx);
+  });
+});
+
+// ── Blank / unblank a pane ─────────────────────────────────────────────────
+function setPaneBlank(paneId, blank, srcKeyLabel) {
+  var el = document.getElementById('blank-' + paneId);
+  var ts = document.getElementById('blank-ts-' + paneId);
+  if (!el) return;
+  if (blank) {
+    if (ts) ts.textContent = srcKeyLabel ? 'Requested: ' + srcKeyLabel : '';
+    el.classList.add('visible');
+  } else {
+    el.classList.remove('visible');
+  }
+}
+
+// ── Push a step to one target pane ────────────────────────────────────────
+function mirrorStep(src, tgt, srcIdx) {
+  try {
+    var tgtWin = document.getElementById(tgt.frameId).contentWindow;
+    if (!tgtWin || typeof tgtWin[tgt.fnName] !== 'function') return;
+
+    // Resolve matching index via key
+    var targetIdx = -1;
+    var srcKeyLabel = '';
+    try {
+      var srcWin   = document.getElementById(src.frameId).contentWindow;
+      var srcSteps = srcWin[src.stepsVar];
+      var tgtSteps = tgtWin[tgt.stepsVar];
+      if (srcSteps && tgtSteps && srcSteps[srcIdx]) {
+        var srcKey = srcSteps[srcIdx].key;
+        srcKeyLabel = srcSteps[srcIdx].label || srcKey;
+        for (var i = 0; i < tgtSteps.length; i++) {
+          if (tgtSteps[i].key === srcKey) { targetIdx = i; break; }
+        }
       } else {
-        setTrigProgress(100, conclusion || 'completed');
-        setTrigStatus('✗ Run ended: ' + conclusion + ' — <a href="' + runUrl + '" target="_blank" style="color:#f85149;">view on GitHub ↗</a>', '#f85149');
+        // No steps metadata — fall back to numeric index if in range
+        if (tgtSteps && srcIdx < tgtSteps.length) targetIdx = srcIdx;
       }
-      document.getElementById('trig-btn').disabled = false;
+    } catch(e) {
+      // Can't inspect steps — attempt numeric pass-through
+      targetIdx = srcIdx;
+    }
+
+    if (targetIdx < 0) {
+      // No matching step: blank this pane
+      setPaneBlank(tgt.id, true, srcKeyLabel);
       return;
     }
 
-    setTimeout(function() { pollRun(user, repo, token, startedAt, attempt + 1); }, 5000);
-  })
-  .catch(function(e) {
-    setTrigProgress(0, 'Poll error');
-    setTrigStatus('Poll error: ' + e.message, '#f85149');
-    document.getElementById('trig-btn').disabled = false;
-  });
-}
-
-function setTrigStatus(html, color) {
-  var el = document.getElementById('trig-status');
-  el.innerHTML = html;
-  el.style.color = color || '#8b949e';
-}
-
-function setTrigProgress(pct, label) {
-  var bar   = document.getElementById('trig-bar');
-  var barEl = document.getElementById('trig-bar-fill');
-  var lblEl = document.getElementById('trig-bar-label');
-  if (!bar) return;
-  if (pct === 0 && !label) { bar.style.display = 'none'; return; }
-  bar.style.display = 'block';
-  barEl.style.width = pct + '%';
-  barEl.style.background = pct === 100 ? '#3fb950' : '#1a4a8a';
-  lblEl.textContent = label + (pct > 0 && pct < 100 ? '  ' + pct + '%' : '');
+    // Step exists: clear any blank and update
+    setPaneBlank(tgt.id, false, '');
+    tgtWin.__awcc_syncing = true;
+    var slider = tgtWin.document.getElementById(tgt.sliderId);
+    if (slider) slider.value = String(targetIdx);
+    tgtWin[tgt.fnName](targetIdx);
+    tgtWin.__awcc_syncing = false;
+  } catch(e) {
+    console.warn('[AWCC] mirrorStep error', tgt.id, e);
+  }
 }
 </script>
 </body>
