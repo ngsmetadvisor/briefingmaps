@@ -6535,8 +6535,8 @@ function _gemRunExportQueue(done){{
       ctx.drawImage(canvas,0,0,cropW,cropH,0,0,cropW,cropH);
 
       // ── Run time top-left ─────────────────────────────────────────────────
-      var _rdpsRun = {repr(_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else 'unknown')};
-      var _gdpsRun = {repr(_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else 'unknown')};
+      var _rdpsRun = "{_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else 'unknown'}";
+      var _gdpsRun = "{_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else 'unknown'}";
       ctx.font         = "26px Arial, sans-serif";
       ctx.fillStyle    = "rgba(255,255,255,0.75)";
       ctx.textAlign    = "left";
