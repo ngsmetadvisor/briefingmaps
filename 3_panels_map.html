@@ -150,7 +150,7 @@
     color: var(--border);
   }
 
-  #ts-display {
+#ts-display {
     font-size: 18px;
     font-weight: bold;
     color: #c8d8ff;
@@ -158,6 +158,55 @@
     white-space: nowrap;
     min-width: 260px;
     text-align: right;
+  }
+
+  /* ── Master slider ── */
+  #master-slider-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 2;
+    min-width: 0;
+  }
+  #master-label {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    text-transform: uppercase;
+  }
+  #master-slider {
+    flex: 1;
+    min-width: 80px;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  #master-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  #master-slider::-moz-range-thumb {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  #master-step-count {
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
   }
 
   /* Sync indicator */
@@ -192,6 +241,12 @@
       <span class="dot dot-3"></span>
       <span>Surface — MSLP &amp; 12h Precipitation</span>
     </div>
+  </div>
+<div id="master-slider-wrap">
+    <span id="master-label">Step</span>
+    <input type="range" id="master-slider" min="0" max="0" value="0" step="1"
+           oninput="onMasterSlider(this.value)">
+    <span id="master-step-count">— / —</span>
   </div>
   <div id="ts-display">—</div>
   <div class="divider"></div>
@@ -429,6 +484,9 @@ window.addEventListener('message', function(e) {
 
   var srcIdx = parseInt(e.data.idx);
 
+// First step from any pane → init master slider if not yet done
+  if (!_masterSteps) tryInitMasterSlider();
+
   // First step from any pane → safe to attach map sync (Leaflet is fully ready)
   if (!_mapSyncDone[src.id]) {
     _mapSyncDone[src.id] = true;
@@ -450,14 +508,103 @@ window.addEventListener('message', function(e) {
     }
   } catch(e2) {}
 
+// Keep master thumb in sync with per-pane slider moves
+  if (_masterSrcPane && src.id === _masterSrcPane.id) {
+    syncMasterSliderFromIdx(srcIdx);
+  }
+
   PANES.forEach(function(tgt) {
     if (tgt.id === src.id) return;
     mirrorStep(src, tgt, srcIdx);
   });
 });
 
+// ── Master slider ──────────────────────────────────────────────────────────
+var _masterSteps   = null;   // steps array from the reference pane (p1 or p3)
+var _masterSrcPane = null;   // pane config that owns _masterSteps
+var _masterBusy    = false;  // prevent feedback loops
+
+function tryInitMasterSlider() {
+  // Use p1 steps if available, fall back to p3
+  var tryOrder = [PANES[0], PANES[2]];
+  for (var t = 0; t < tryOrder.length; t++) {
+    var p = tryOrder[t];
+    try {
+      var win = document.getElementById(p.frameId).contentWindow;
+      var steps = win[p.stepsVar];
+      if (steps && steps.length > 1) {
+        _masterSteps   = steps;
+        _masterSrcPane = p;
+        var slider = document.getElementById('master-slider');
+        slider.max   = String(steps.length - 1);
+        slider.value = '0';
+        document.getElementById('master-step-count').textContent =
+          '1 / ' + steps.length;
+        console.log('[AWCC] Master slider init from', p.id, '— steps:', steps.length);
+        return;
+      }
+    } catch(e) {}
+  }
+}
+
+function onMasterSlider(val) {
+  if (_masterBusy) return;
+  var idx = parseInt(val);
+  if (!_masterSteps) return;
+  _masterBusy = true;
+
+  var label = (_masterSteps[idx] && _masterSteps[idx].label) ? _masterSteps[idx].label : '';
+  document.getElementById('ts-display').textContent = label || '—';
+  document.getElementById('master-step-count').textContent =
+    (idx + 1) + ' / ' + _masterSteps.length;
+
+  // Drive all panes
+  PANES.forEach(function(p) {
+    try {
+      var win = document.getElementById(p.frameId).contentWindow;
+      if (!win || typeof win[p.fnName] !== 'function') return;
+
+      // Resolve target index via key matching
+      var targetIdx = idx; // default numeric pass-through
+      if (_masterSrcPane && _masterSrcPane.id !== p.id) {
+        var srcSteps = _masterSteps;
+        var tgtSteps = win[p.stepsVar];
+        if (srcSteps && tgtSteps && srcSteps[idx]) {
+          var srcKey = srcSteps[idx].key;
+          targetIdx = -1;
+          for (var i = 0; i < tgtSteps.length; i++) {
+            if (tgtSteps[i].key === srcKey) { targetIdx = i; break; }
+          }
+          if (targetIdx < 0) { setPaneBlank(p.id, true, srcSteps[idx].label || srcKey); return; }
+        }
+      }
+
+      setPaneBlank(p.id, false, '');
+      win.__awcc_syncing = true;
+      var frameSlider = win.document.getElementById(p.sliderId);
+      if (frameSlider) frameSlider.value = String(targetIdx);
+      win[p.fnName](targetIdx);
+      win.__awcc_syncing = false;
+    } catch(e) {
+      console.warn('[AWCC] master drive error', p.id, e);
+    }
+  });
+
+  _masterBusy = false;
+}
+
+// Keep master slider thumb in sync when panes are driven individually
+function syncMasterSliderFromIdx(srcIdx) {
+  if (_masterBusy || !_masterSteps) return;
+  var slider = document.getElementById('master-slider');
+  if (slider.value === String(srcIdx)) return;
+  slider.value = String(srcIdx);
+  document.getElementById('master-step-count').textContent =
+    (srcIdx + 1) + ' / ' + _masterSteps.length;
+}
+
 // ── Blank / unblank a pane ─────────────────────────────────────────────────
-function setPaneBlank(paneId, blank, srcKeyLabel) {
+ function setPaneBlank(paneId, blank, srcKeyLabel) {
   var el = document.getElementById('blank-' + paneId);
   var ts = document.getElementById('blank-ts-' + paneId);
   if (!el) return;
