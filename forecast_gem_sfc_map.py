@@ -732,7 +732,7 @@ async def _probe_run(session, run_dt, is_rdps, target_vts, sfc_target_vts):
             else _SFC_VARS
         )
         for vt in sorted(sfc_target_vts):
-            if v t.hour == 6:
+            if vt.hour == 6:
                 vt_mslp   = vt - timedelta(hours=6)   # 00Z
                 vt_pacc   = vt                         # 06Z target
                 fxx_mslp  = _fxx(run_dt, vt_mslp)
@@ -1071,8 +1071,12 @@ for vt in _sfc_target_vts:
     max_fxx   = 84 if use_rdps else 240
     model_lbl = 'RDPS' if use_rdps else 'GDPS'
 
-    vt_mslp   = vt - timedelta(hours=6)   # 00Z
-    vt_pacc   = vt                         # 06Z
+    if vt.hour == 6:
+        vt_mslp   = vt - timedelta(hours=6)   # 00Z
+        vt_pacc   = vt                         # 06Z target
+    else:  # 18Z
+        vt_mslp   = vt - timedelta(hours=6)   # 12Z
+        vt_pacc   = vt                         # 18Z target
     fxx_mslp  = _fxx(run_dt, vt_mslp)
     fxx_tgt   = _fxx(run_dt, vt_pacc)
     fxx_prior = fxx_tgt - 12
@@ -1124,6 +1128,8 @@ async def _fetch_and_extract_all():
     async def _worker_isob(model, url, var_name, pres, vt):
         vt_str = vt.strftime('%Y-%m-%d') + f' {vt.hour:02d}Z'
         col    = _VAR_MAP[var_name]
+        import datetime as _dt
+        print(f'  → {_dt.datetime.utcnow().strftime("%H:%M:%S")} GET {url.split("/")[-1]}', flush=True)
         async with sem:
             try:
                 async with session.get(
@@ -1131,15 +1137,20 @@ async def _fetch_and_extract_all():
                     raw    = await r.read() if r.status == 200 else None
                     status = r.status
             except Exception as e:
+                print(f'  ✗ {_dt.datetime.utcnow().strftime("%H:%M:%S")} EXCEPTION {url.split("/")[-1]}: {e}', flush=True)
                 errors.append((url, str(e))); return
+        print(f'  ← {_dt.datetime.utcnow().strftime("%H:%M:%S")} HTTP {status} {url.split("/")[-1]}', flush=True)
         if raw is None:
             errors.append((url, f'HTTP {status}')); return
         if len(raw) == 0:
             errors.append((url, 'HTTP 200 but zero bytes')); return
+        print(f'  [cfgrib] {_dt.datetime.utcnow().strftime("%H:%M:%S")} parsing {var_name} {len(raw)} bytes', flush=True)
         try:
             extracted, _rlats, _rlons, _rdata = _extract_points_grib(raw, _target_lats, _target_lons, var_name)
         except Exception as e:
+            print(f'  ✗ {_dt.datetime.utcnow().strftime("%H:%M:%S")} cfgrib FAILED {var_name}: {e}', flush=True)
             errors.append((url, str(e))); return
+        print(f'  [cfgrib] {_dt.datetime.utcnow().strftime("%H:%M:%S")} done {var_name}', flush=True)
         for (lat, lon), val in extracted.items():
             key = (lat, lon, vt_str, float(pres))
             if key not in _point_data:
@@ -1148,12 +1159,15 @@ async def _fetch_and_extract_all():
         _raw_grids[(var_name, vt_str, float(pres))] = {
             'lats': _rlats, 'lons': _rlons, 'data': _rdata
         }
-        print(f'  ✓ {model} {vt_str}  {var_name}@{pres}hPa  ({len(extracted)} pts)')
+        import datetime as _dt
+        print(f'  ✓ {_dt.datetime.utcnow().strftime("%H:%M:%S")} {model} {vt_str}  {var_name}@{pres}hPa  ({len(extracted)} pts)', flush=True)
 
     async def _worker_sfc(model, url, var_name, vt, col_suffix):
         vt_str   = vt.strftime('%Y-%m-%d') + f' {vt.hour:02d}Z'
         base_col = _SFC_VAR_MAP[var_name]
         col      = base_col + col_suffix
+        import datetime as _dt
+        print(f'  → {_dt.datetime.utcnow().strftime("%H:%M:%S")} GET {url.split("/")[-1]}', flush=True)
         async with sem:
             try:
                 async with session.get(
@@ -1161,15 +1175,20 @@ async def _fetch_and_extract_all():
                     raw    = await r.read() if r.status == 200 else None
                     status = r.status
             except Exception as e:
+                print(f'  ✗ {_dt.datetime.utcnow().strftime("%H:%M:%S")} EXCEPTION {url.split("/")[-1]}: {e}', flush=True)
                 errors.append((url, str(e))); return
+        print(f'  ← {_dt.datetime.utcnow().strftime("%H:%M:%S")} HTTP {status} {url.split("/")[-1]}', flush=True)
         if raw is None:
             errors.append((url, f'HTTP {status}')); return
         if len(raw) == 0:
             errors.append((url, 'HTTP 200 but zero bytes')); return
+        print(f'  [cfgrib] {_dt.datetime.utcnow().strftime("%H:%M:%S")} parsing {var_name} {len(raw)} bytes', flush=True)
         try:
             extracted, _rlats, _rlons, _rdata = _extract_points_grib(raw, _target_lats, _target_lons, var_name)
         except Exception as e:
+            print(f'  ✗ {_dt.datetime.utcnow().strftime("%H:%M:%S")} cfgrib FAILED {var_name}: {e}', flush=True)
             errors.append((url, str(e))); return
+        print(f'  [cfgrib] {_dt.datetime.utcnow().strftime("%H:%M:%S")} done {var_name}', flush=True)
         for (lat, lon), val in extracted.items():
             key = (lat, lon, vt_str)
             if key not in _sfc_data:
@@ -1188,7 +1207,7 @@ async def _fetch_and_extract_all():
                     _cf.write(raw)
                 _raw_grids[(var_name, vt_str)]['cache_path'] = _cache_path
         tag = 'PRIOR' if col_suffix else 'TARGET'
-        print(f'  ✓ {model} {vt_str}  {var_name} [{tag}]  ({len(extracted)} pts)')
+        print(f'  ✓ {_dt.datetime.utcnow().strftime("%H:%M:%S")} {model} {vt_str}  {var_name} [{tag}]  ({len(extracted)} pts)', flush=True)
 
     connector = aiohttp.TCPConnector(limit=MAX_CONCURRENT, ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
@@ -1863,8 +1882,8 @@ def _qpf_build_grid(df, sigma=0.5, lon_vec=None, lat_vec=None):
 # ── MSLP helpers — identical to Cell A ───────────────────────────────────────
 def _fetch_grib(url, tag='', retries=3, retry_delay=5):
     import cfgrib
-    print(f'  Downloading {tag} ...', end=' ', flush=True)
-    for attempt in range(retries):
+    import datetime as _dt
+    print(f'  [{_dt.datetime.utcnow().strftime("%H:%M:%S")}] Downloading {tag} ...', end=' ', flush=True)    for attempt in range(retries):
         try:
             r = requests.get(url, stream=True, timeout=(15, 90))
             r.raise_for_status()
