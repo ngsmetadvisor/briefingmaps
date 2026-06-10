@@ -1116,10 +1116,18 @@ async def _fetch_and_extract_all():
         col    = _VAR_MAP[var_name]
         async with sem:
             try:
+                # new
+                # new
                 async with session.get(
-                        url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_S)) as r:
-                    raw    = await r.read() if r.status == 200 else None
+                        url, timeout=aiohttp.ClientTimeout(
+                            total=TIMEOUT_S*2, sock_connect=15, sock_read=TIMEOUT_S)) as r:
+                    if r.status == 200:
+                        raw = await asyncio.wait_for(r.read(), timeout=TIMEOUT_S)
+                    else:
+                        raw = None
                     status = r.status
+            except asyncio.TimeoutError:
+                errors.append((url, 'timeout')); return
             except Exception as e:
                 errors.append((url, str(e))); return
         if raw is None:
@@ -1130,6 +1138,7 @@ async def _fetch_and_extract_all():
             extracted, _rlats, _rlons, _rdata = _extract_points_grib(raw, _target_lats, _target_lons, var_name)
         except Exception as e:
             errors.append((url, str(e))); return
+        # new
         for (lat, lon), val in extracted.items():
             key = (lat, lon, vt_str, float(pres))
             if key not in _point_data:
@@ -1138,18 +1147,25 @@ async def _fetch_and_extract_all():
         _raw_grids[(var_name, vt_str, float(pres))] = {
             'lats': _rlats, 'lons': _rlons, 'data': _rdata
         }
-        print(f'  ✓ {model} {vt_str}  {var_name}@{pres}hPa  ({len(extracted)} pts)')
+        print(f'  ✓ {model} {vt_str}  {var_name}@{pres}hPa  ({len(extracted)} pts)', flush=True)
 
     async def _worker_sfc(model, url, var_name, vt, col_suffix):
         vt_str   = vt.strftime('%Y-%m-%d') + f' {vt.hour:02d}Z'
         base_col = _SFC_VAR_MAP[var_name]
         col      = base_col + col_suffix
         async with sem:
+            # new
             try:
                 async with session.get(
-                        url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_S)) as r:
-                    raw    = await r.read() if r.status == 200 else None
+                        url, timeout=aiohttp.ClientTimeout(
+                            total=TIMEOUT_S*2, sock_connect=15, sock_read=TIMEOUT_S)) as r:
+                    if r.status == 200:
+                        raw = await asyncio.wait_for(r.read(), timeout=TIMEOUT_S)
+                    else:
+                        raw = None
                     status = r.status
+            except asyncio.TimeoutError:
+                errors.append((url, 'timeout')); return
             except Exception as e:
                 errors.append((url, str(e))); return
         if raw is None:
@@ -1180,6 +1196,8 @@ async def _fetch_and_extract_all():
         tag = 'PRIOR' if col_suffix else 'TARGET'
         print(f'  ✓ {model} {vt_str}  {var_name} [{tag}]  ({len(extracted)} pts)')
 
+    
+    print(f'Fetch phase started — {len(_tasks)} isobaric + {len(_sfc_tasks)} surface tasks', flush=True)
     connector = aiohttp.TCPConnector(limit=MAX_CONCURRENT, ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
         await asyncio.gather(
@@ -1285,14 +1303,21 @@ if _tasks_missing or _sfc_tasks_missing:
         sem    = asyncio.Semaphore(MAX_CONCURRENT)
         errors = []
 
+        # new
         async def _worker_isob_r(model, url, var_name, pres, vt):
             vt_str = vt.strftime('%Y-%m-%d') + f' {vt.hour:02d}Z'
             col    = _VAR_MAP[var_name]
             async with sem:
                 try:
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_S)) as r:
-                        raw = await r.read() if r.status == 200 else None
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(
+                            total=TIMEOUT_S*2, sock_connect=15, sock_read=TIMEOUT_S)) as r:
+                        if r.status == 200:
+                            raw = await asyncio.wait_for(r.read(), timeout=TIMEOUT_S)
+                        else:
+                            raw = None
                         status = r.status
+                except asyncio.TimeoutError:
+                    errors.append((url, 'timeout')); return
                 except Exception as e:
                     errors.append((url, str(e))); return
             if raw is None:
@@ -1305,16 +1330,23 @@ if _tasks_missing or _sfc_tasks_missing:
                 key = (lat, lon, vt_str, float(pres))
                 if key not in _point_data: _point_data[key] = {}
                 _point_data[key][col] = val
-            print(f'  ✓ RETRY {model} {vt_str}  {var_name}@{pres}hPa')
+            print(f'  ✓ RETRY {model} {vt_str}  {var_name}@{pres}hPa', flush=True)
 
+        # new
         async def _worker_sfc_r(model, url, var_name, vt, col_suffix):
             vt_str = vt.strftime('%Y-%m-%d') + f' {vt.hour:02d}Z'
             col    = _SFC_VAR_MAP[var_name] + col_suffix
             async with sem:
                 try:
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_S)) as r:
-                        raw = await r.read() if r.status == 200 else None
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(
+                            total=TIMEOUT_S*2, sock_connect=15, sock_read=TIMEOUT_S)) as r:
+                        if r.status == 200:
+                            raw = await asyncio.wait_for(r.read(), timeout=TIMEOUT_S)
+                        else:
+                            raw = None
                         status = r.status
+                except asyncio.TimeoutError:
+                    errors.append((url, 'timeout')); return
                 except Exception as e:
                     errors.append((url, str(e))); return
             if raw is None:
@@ -1327,8 +1359,10 @@ if _tasks_missing or _sfc_tasks_missing:
                 key = (lat, lon, vt_str)
                 if key not in _sfc_data: _sfc_data[key] = {}
                 _sfc_data[key][col] = val
-            print(f'  ✓ RETRY {model} {vt_str}  {var_name} [{"PRIOR" if col_suffix else "TARGET"}]')
+            print(f'  ✓ RETRY {model} {vt_str}  {var_name} [{"PRIOR" if col_suffix else "TARGET"}]', flush=True)
 
+  # new
+        print(f'Retry phase started — {len(_tasks_missing)} isobaric + {len(_sfc_tasks_missing)} surface tasks', flush=True)
         connector = aiohttp.TCPConnector(limit=MAX_CONCURRENT, ssl=False)
         async with aiohttp.ClientSession(connector=connector) as session:
             await asyncio.gather(
