@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,7 +15,6 @@
     --accent2:  #e8a020;
     --text:     #e6edf3;
     --muted:    #8b949e;
-    --bar-h:    56px;
     --header-h: 42px;
   }
 
@@ -73,7 +71,7 @@
   /* ── Map panes ── */
   #maps {
     display: flex;
-    height: calc(100vh - var(--header-h) - var(--bar-h));
+    height: calc(100vh - var(--header-h));
     width: 100%;
     position: relative;
   }
@@ -143,78 +141,6 @@
   .pane-loading span { font-size: 11px; color: var(--muted); }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── Control bar ── */
-  #ctrl-bar {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    height: var(--bar-h);
-    background: var(--surface);
-    border-top: 2px solid var(--accent);
-    display: flex;
-    align-items: center;
-    gap: 0;
-    z-index: 1000;
-    box-shadow: 0 -4px 16px rgba(0,0,0,0.6);
-  }
-
-  .ctrl-section {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 16px;
-    height: 100%;
-    border-right: 1px solid var(--border);
-  }
-  .ctrl-section:last-child { border-right: none; flex: 1; }
-
-  .ctrl-label {
-    font-size: 8px;
-    color: var(--muted);
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    white-space: nowrap;
-  }
-
-  #time-slider {
-    width: 100%;
-    min-width: 200px;
-    accent-color: var(--accent);
-    cursor: pointer;
-    height: 4px;
-  }
-
-  #ts-label {
-    font-size: 12px;
-    font-weight: bold;
-    color: #c0d0ff;
-    white-space: nowrap;
-    min-width: 240px;
-  }
-
-  /* Step buttons */
-  .step-btn {
-    background: none;
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    color: var(--text);
-    font-family: "Courier New", monospace;
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
-    padding: 2px 10px;
-    line-height: 1;
-    transition: background 0.15s, border-color 0.15s;
-  }
-  .step-btn:hover { background: var(--accent); border-color: var(--accent); }
-
-  /* Step counter */
-  #step-counter {
-    font-size: 10px;
-    color: var(--muted);
-    white-space: nowrap;
-  }
-
   /* Sync indicator */
   #sync-indicator {
     font-size: 10px;
@@ -232,7 +158,7 @@
   }
   @keyframes pulse {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+    50%       { opacity: 0.3; }
   }
 </style>
 </head>
@@ -285,33 +211,11 @@
   </div>
 </div>
 
-<!-- Control bar -->
-<div id="ctrl-bar">
-  <div class="ctrl-section">
-    <span class="ctrl-label">Step</span>
-    <button class="step-btn" onclick="stepBy(-1)">&#9664;</button>
-    <button class="step-btn" onclick="stepBy(1)">&#9654;</button>
-    <span id="step-counter">— / —</span>
-  </div>
-
-  <div class="ctrl-section" style="flex:1; gap:12px;">
-    <span class="ctrl-label" style="white-space:nowrap;">Time</span>
-    <input type="range" id="time-slider" min="0" value="0"
-           oninput="onSlider(this.value)">
-  </div>
-
-  <div class="ctrl-section">
-    <span id="ts-label">—</span>
-  </div>
-</div>
-
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
-var _stepIdx   = 0;
-var _maxSteps  = 0;
-var _leftReady = false;
+var _leftReady  = false;
 var _rightReady = false;
-var _steps     = [];   // populated once left frame exposes its data
+var _syncing    = false;   // re-entrancy guard: prevents echo loops
 
 // ── Frame load ─────────────────────────────────────────────────────────────
 function frameLoaded(side) {
@@ -322,129 +226,111 @@ function frameLoaded(side) {
   if (side === 'right') _rightReady = true;
 
   if (_leftReady && _rightReady) {
-    setTimeout(init, 400);
+    setTimeout(patchFrames, 400);
   }
 }
 
-// ── Init: read time steps from left frame ─────────────────────────────────
-function init() {
-  var fl = document.getElementById('frame-left');
-  var fr = document.getElementById('frame-right');
+// ── Patch both frames to emit postMessage on slider change ─────────────────
+//
+// Each child page calls its own slider function (synSliderChange / gemSliderChange).
+// We wrap those functions so every call also fires a postMessage to the parent
+// with the step index. The parent then mirrors the step to the other frame.
+//
+function patchFrames() {
+  patchFrame('left',  'frame-left',  'synSliderChange', 'syn-time-slider', 'SYN_STEP');
+  patchFrame('right', 'frame-right', 'gemSliderChange', 'gem-time-slider', 'GEM_STEP');
+}
 
+function patchFrame(side, frameId, fnName, sliderId, msgType) {
   try {
-    // UA map exposes _SYN_TIME_STEPS
-    var leftWin = fl.contentWindow;
-    if (leftWin && leftWin._SYN_TIME_STEPS && leftWin._SYN_TIME_STEPS.length) {
-      _steps = leftWin._SYN_TIME_STEPS;
-    }
-  } catch(e) {
-    console.warn('Could not read _SYN_TIME_STEPS from left frame:', e);
-  }
-
-  // Fallback: try right frame for GEM steps
-  if (!_steps.length) {
-    try {
-      var rightWin = fr.contentWindow;
-      if (rightWin && rightWin._GEM_STEPS && rightWin._GEM_STEPS.length) {
-        _steps = rightWin._GEM_STEPS;
-      }
-    } catch(e) {
-      console.warn('Could not read _GEM_STEPS from right frame:', e);
-    }
-  }
-
-  _maxSteps = Math.max(0, _steps.length - 1);
-  var slider = document.getElementById('time-slider');
-  slider.max   = String(_maxSteps);
-  slider.value = '0';
-
-  updateCounter();
-  applyStep(0);
-}
-
-// ── Slider input ───────────────────────────────────────────────────────────
-function onSlider(v) {
-  _stepIdx = parseInt(v);
-  updateCounter();
-  applyStep(_stepIdx);
-}
-
-function stepBy(delta) {
-  var next = Math.max(0, Math.min(_maxSteps, _stepIdx + delta));
-  if (next === _stepIdx) return;
-  _stepIdx = next;
-  document.getElementById('time-slider').value = String(_stepIdx);
-  updateCounter();
-  applyStep(_stepIdx);
-}
-
-function updateCounter() {
-  document.getElementById('step-counter').textContent =
-    (_maxSteps > 0) ? (_stepIdx + 1) + ' / ' + (_maxSteps + 1) : '— / —';
-}
-
-// ── Push step to both iframes ──────────────────────────────────────────────
-function applyStep(idx) {
-  var step = _steps[idx];
-  var label = step ? step.label : '—';
-  document.getElementById('ts-label').textContent = label;
-
-  pushToLeft(idx, step);
-  pushToRight(idx, step);
-}
-
-function pushToLeft(idx, step) {
-  try {
-    var win = document.getElementById('frame-left').contentWindow;
+    var win = document.getElementById(frameId).contentWindow;
     if (!win) return;
 
-    // Drive the UA map's internal state directly
-    if (typeof win.synSliderChange === 'function') {
-      win._synStepIdx = idx;
-      // update its own slider if present
-      var s = win.document.getElementById('syn-time-slider');
-      if (s) s.value = String(idx);
-      win.synSliderChange(idx);
+    // Only patch if the function exists in that frame
+    if (typeof win[fnName] !== 'function') {
+      console.warn('[AWCC] ' + fnName + ' not found in ' + side + ' frame — will retry');
+      setTimeout(function() { patchFrame(side, frameId, fnName, sliderId, msgType); }, 800);
+      return;
     }
-  } catch(e) {
-    console.warn('pushToLeft error:', e);
-  }
-}
 
-function pushToRight(idx, step) {
-  try {
-    var win = document.getElementById('frame-right').contentWindow;
-    if (!win) return;
-
-    // The GEM surface map uses _GEM_STEPS keyed differently —
-    // find the matching index by key if step keys align,
-    // otherwise fall back to same numeric index.
-    var targetIdx = idx;
-    if (step && win._GEM_STEPS && win._GEM_STEPS.length) {
-      var match = -1;
-      for (var i = 0; i < win._GEM_STEPS.length; i++) {
-        if (win._GEM_STEPS[i].key === step.key) { match = i; break; }
+    var original = win[fnName];
+    win[fnName] = function(idx) {
+      original.call(win, idx);
+      // Don't echo a step that was pushed from the parent (prevents loop)
+      if (!win.__awcc_syncing) {
+        window.postMessage({ type: msgType, idx: idx }, '*');
       }
-      if (match >= 0) targetIdx = match;
-      else targetIdx = Math.min(idx, win._GEM_STEPS.length - 1);
-    }
+    };
 
-    if (typeof win.gemSliderChange === 'function') {
-      win._gemStepIdx = targetIdx;
-      var s = win.document.getElementById('gem-time-slider');
-      if (s) s.value = String(targetIdx);
-      win.gemSliderChange(targetIdx);
-    }
+    console.log('[AWCC] Patched ' + fnName + ' in ' + side + ' frame');
   } catch(e) {
-    console.warn('pushToRight error:', e);
+    console.warn('[AWCC] Could not patch ' + side + ' frame:', e);
   }
 }
 
-// ── Keyboard nav ───────────────────────────────────────────────────────────
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); stepBy(1); }
-  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { e.preventDefault(); stepBy(-1); }
+// ── Listen for step messages from either frame ─────────────────────────────
+window.addEventListener('message', function(e) {
+  if (!e.data || typeof e.data.idx === 'undefined') return;
+
+  var type = e.data.type;
+  var idx  = parseInt(e.data.idx);
+
+  if (type === 'SYN_STEP') {
+    // Left frame moved — push to right
+    mirrorStep('frame-right', 'gemSliderChange', 'gem-time-slider',
+               idx, '_GEM_STEPS', '_SYN_TIME_STEPS', 'frame-left');
+  } else if (type === 'GEM_STEP') {
+    // Right frame moved — push to left
+    mirrorStep('frame-left', 'synSliderChange', 'syn-time-slider',
+               idx, '_SYN_TIME_STEPS', '_GEM_STEPS', 'frame-right');
+  }
 });
+
+// ── Push a step index to the target frame ─────────────────────────────────
+// srcStepsVar  = variable name for the steps array in the SOURCE frame
+//   (used to resolve a matching key in the target when step counts differ)
+// tgtStepsVar  = variable name for the steps array in the TARGET frame
+//
+function mirrorStep(tgtFrameId, tgtFnName, tgtSliderId, srcIdx,
+                    tgtStepsVar, srcStepsVar, srcFrameId) {
+  try {
+    var tgtWin = document.getElementById(tgtFrameId).contentWindow;
+    if (!tgtWin) return;
+    if (typeof tgtWin[tgtFnName] !== 'function') return;
+
+    // Resolve target index — try key matching first, fall back to clamped index
+    var targetIdx = srcIdx;
+    try {
+      var srcWin   = document.getElementById(srcFrameId).contentWindow;
+      var srcSteps = srcWin[srcStepsVar];
+      var tgtSteps = tgtWin[tgtStepsVar];
+      if (srcSteps && tgtSteps && srcSteps[srcIdx]) {
+        var srcKey = srcSteps[srcIdx].key;
+        for (var i = 0; i < tgtSteps.length; i++) {
+          if (tgtSteps[i].key === srcKey) { targetIdx = i; break; }
+        }
+        // If no key match, clamp to target's length
+        if (targetIdx === srcIdx) {
+          targetIdx = Math.min(srcIdx, tgtSteps.length - 1);
+        }
+      }
+    } catch(e) { /* key-match failed, use srcIdx as-is */ }
+
+    // Mark target frame so its own patched function doesn't echo back
+    tgtWin.__awcc_syncing = true;
+
+    // Update target slider UI
+    var slider = tgtWin.document.getElementById(tgtSliderId);
+    if (slider) slider.value = String(targetIdx);
+
+    // Call target's step function
+    tgtWin[tgtFnName](targetIdx);
+
+    tgtWin.__awcc_syncing = false;
+  } catch(e) {
+    console.warn('[AWCC] mirrorStep error:', e);
+  }
+}
 </script>
 </body>
 </html>
