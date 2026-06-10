@@ -3577,13 +3577,10 @@ m.get_root().html.add_child(Element(
     '      MAP.getPane("kmlPane").style.pointerEvents="none";\n'
     '    }\n'
     '    MAP.eachLayer(function(layer){\n'
-    '      if(layer.options && layer.options.pane === "albertaPane") return;\n'
+    '      if(layer.options && layer.options.pane==="albertaPane") return;\n'
     '      if(layer.setStyle && layer.eachLayer){\n'
     '        layer.eachLayer(function(sub){\n'
-    '          if(sub.options && sub.options.pane === "albertaPane") return;\n'
-    '          if(sub.setStyle){\n'
-    '      if(layer.setStyle && layer.eachLayer){\n'
-    '        layer.eachLayer(function(sub){\n'
+    '          if(sub.options && sub.options.pane==="albertaPane") return;\n'
     '          if(sub.setStyle){\n'
     '            sub.options.pane="kmlPane";\n'
     '            if(sub._path) sub._path.style.stroke="#555555";\n'
@@ -3604,7 +3601,6 @@ m.get_root().html.add_child(Element(
     '})();\n'
     '</script>'
 ))
-
 # ── Fullscreen button ─────────────────────────────────────────────────────
 fullscreen_html = (
     '<style>\n'
