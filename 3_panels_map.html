@@ -124,6 +124,32 @@
   .pane-loading span { font-size: 11px; color: var(--muted); }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* No-data blank overlay */
+  .pane-blank {
+    position: absolute; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 10px; z-index: 450;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .pane-blank.visible { opacity: 1; pointer-events: none; }
+  .pane-blank .no-data-icon {
+    font-size: 28px;
+    opacity: 0.3;
+  }
+  .pane-blank .no-data-label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .pane-blank .no-data-ts {
+    font-size: 10px;
+    color: var(--border);
+  }
+
   /* Sync indicator */
   #sync-indicator {
     font-size: 10px; color: var(--muted);
@@ -172,6 +198,11 @@
       <div class="spinner"></div>
       <span>Loading upper air map 1…</span>
     </div>
+    <div class="pane-blank" id="blank-p1">
+      <div class="no-data-icon">⊘</div>
+      <div class="no-data-label">No data for this time step</div>
+      <div class="no-data-ts" id="blank-ts-p1"></div>
+    </div>
     <iframe id="frame-p1"
       src="https://ngsmetadvisor.github.io/briefingmaps/synoptic_map.html"
       onload="frameLoaded('p1')"></iframe>
@@ -183,6 +214,11 @@
       <div class="spinner"></div>
       <span>Loading upper air map 2…</span>
     </div>
+    <div class="pane-blank" id="blank-p2">
+      <div class="no-data-icon">⊘</div>
+      <div class="no-data-label">No data for this time step</div>
+      <div class="no-data-ts" id="blank-ts-p2"></div>
+    </div>
     <iframe id="frame-p2"
       src="https://ngsmetadvisor.github.io/briefingmaps/synoptic_map.html"
       onload="frameLoaded('p2')"></iframe>
@@ -193,6 +229,11 @@
     <div class="pane-loading p3" id="load-p3">
       <div class="spinner"></div>
       <span>Loading surface map…</span>
+    </div>
+    <div class="pane-blank" id="blank-p3">
+      <div class="no-data-icon">⊘</div>
+      <div class="no-data-label">No data for this time step</div>
+      <div class="no-data-ts" id="blank-ts-p3"></div>
     </div>
     <iframe id="frame-p3"
       src="https://ngsmetadvisor.github.io/briefingmaps/gem_surface_map.html"
@@ -269,28 +310,55 @@ window.addEventListener('message', function(e) {
   });
 });
 
+// ── Blank / unblank a pane ─────────────────────────────────────────────────
+function setPaneBlank(paneId, blank, srcKeyLabel) {
+  var el = document.getElementById('blank-' + paneId);
+  var ts = document.getElementById('blank-ts-' + paneId);
+  if (!el) return;
+  if (blank) {
+    if (ts) ts.textContent = srcKeyLabel ? 'Requested: ' + srcKeyLabel : '';
+    el.classList.add('visible');
+  } else {
+    el.classList.remove('visible');
+  }
+}
+
 // ── Push a step to one target pane ────────────────────────────────────────
 function mirrorStep(src, tgt, srcIdx) {
   try {
     var tgtWin = document.getElementById(tgt.frameId).contentWindow;
     if (!tgtWin || typeof tgtWin[tgt.fnName] !== 'function') return;
 
-    // Resolve matching index via key, else clamp
-    var targetIdx = srcIdx;
+    // Resolve matching index via key
+    var targetIdx = -1;
+    var srcKeyLabel = '';
     try {
       var srcWin   = document.getElementById(src.frameId).contentWindow;
       var srcSteps = srcWin[src.stepsVar];
       var tgtSteps = tgtWin[tgt.stepsVar];
       if (srcSteps && tgtSteps && srcSteps[srcIdx]) {
         var srcKey = srcSteps[srcIdx].key;
-        var matched = false;
+        srcKeyLabel = srcSteps[srcIdx].label || srcKey;
         for (var i = 0; i < tgtSteps.length; i++) {
-          if (tgtSteps[i].key === srcKey) { targetIdx = i; matched = true; break; }
+          if (tgtSteps[i].key === srcKey) { targetIdx = i; break; }
         }
-        if (!matched) targetIdx = Math.min(srcIdx, tgtSteps.length - 1);
+      } else {
+        // No steps metadata — fall back to numeric index if in range
+        if (tgtSteps && srcIdx < tgtSteps.length) targetIdx = srcIdx;
       }
-    } catch(e) { /* use srcIdx */ }
+    } catch(e) {
+      // Can't inspect steps — attempt numeric pass-through
+      targetIdx = srcIdx;
+    }
 
+    if (targetIdx < 0) {
+      // No matching step: blank this pane
+      setPaneBlank(tgt.id, true, srcKeyLabel);
+      return;
+    }
+
+    // Step exists: clear any blank and update
+    setPaneBlank(tgt.id, false, '');
     tgtWin.__awcc_syncing = true;
     var slider = tgtWin.document.getElementById(tgt.sliderId);
     if (slider) slider.value = String(targetIdx);
