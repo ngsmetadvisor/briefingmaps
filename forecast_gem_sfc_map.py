@@ -732,11 +732,18 @@ async def _probe_run(session, run_dt, is_rdps, target_vts, sfc_target_vts):
             else _SFC_VARS
         )
         for vt in sorted(sfc_target_vts):
-            vt_mslp   = vt - timedelta(hours=6)   # 00Z
-            vt_pacc   = vt                         # 06Z target
-            fxx_mslp  = _fxx(run_dt, vt_mslp)
-            fxx_tgt   = _fxx(run_dt, vt_pacc)
-            fxx_prior = fxx_tgt - 12
+            if v t.hour == 6:
+                vt_mslp   = vt - timedelta(hours=6)   # 00Z
+                vt_pacc   = vt                         # 06Z target
+                fxx_mslp  = _fxx(run_dt, vt_mslp)
+                fxx_tgt   = _fxx(run_dt, vt_pacc)
+                fxx_prior = fxx_tgt - 12
+            else:  # 18Z
+                vt_mslp   = vt - timedelta(hours=6)   # 12Z
+                vt_pacc   = vt                         # 18Z target
+                fxx_mslp  = _fxx(run_dt, vt_mslp)
+                fxx_tgt   = _fxx(run_dt, vt_pacc)
+                fxx_prior = fxx_tgt - 12              # 06Z prior
 
             if 'Pressure_MSL' in sfc_vars_to_probe and 0 <= fxx_mslp <= max_fxx:
                 url = url_sfc_fn(run_dt, fxx_mslp, 'Pressure_MSL')
@@ -915,8 +922,10 @@ for _d in range(GDPS_FORECAST_DAYS + 1):
 # Output row labelled 00Z day D
 _sfc_target_vts = []
 for _d in range(1, GDPS_FORECAST_DAYS + 2):
-    _vt = _base_day_mdt + timedelta(days=_d, hours=6)   # 06Z = local midnight
-    _sfc_target_vts.append(_vt)
+    _vt_00 = _base_day_mdt + timedelta(days=_d, hours=6)    # 06Z → label 00Z (midnight)
+    _vt_12 = _base_day_mdt + timedelta(days=_d, hours=18)   # 18Z → label 12Z (noon)
+    _sfc_target_vts.append(_vt_00)
+    _sfc_target_vts.append(_vt_12)
 
 # Flat coordinate lists for extraction
 _target_lats = [lat for lat in GEM_LATITUDES for _   in GEM_LONGITUDE]
@@ -1426,9 +1435,9 @@ _sfc_merged = {}
 for (lat, lon, vt_str), fields in _sfc_data.items():
     vt_key = datetime.strptime(vt_str, '%Y-%m-%d %HZ').replace(tzinfo=_tz.utc)
     if vt_key.hour == 6:
-        vt_label = (vt_key - timedelta(hours=6)).strftime('%Y-%m-%d') + f' {(vt_key.hour - 6):02d}Z'
+        vt_label = (vt_key - timedelta(hours=6)).strftime('%Y-%m-%d') + f' 00Z'
     elif vt_key.hour == 18:
-        vt_label = (vt_key - timedelta(hours=6)).strftime('%Y-%m-%d') + f' {(vt_key.hour - 6):02d}Z'
+        vt_label = vt_key.strftime('%Y-%m-%d') + f' 12Z'
     else:
         vt_label = vt_str
     key = (lat, lon, vt_label)
