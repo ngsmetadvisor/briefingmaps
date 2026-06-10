@@ -1883,7 +1883,8 @@ def _qpf_build_grid(df, sigma=0.5, lon_vec=None, lat_vec=None):
 def _fetch_grib(url, tag='', retries=3, retry_delay=5):
     import cfgrib
     import datetime as _dt
-    print(f'  [{_dt.datetime.utcnow().strftime("%H:%M:%S")}] Downloading {tag} ...', end=' ', flush=True)    for attempt in range(retries):
+    print(f'  [{_dt.datetime.utcnow().strftime("%H:%M:%S")}] Downloading {tag} ...', end=' ', flush=True)
+    for attempt in range(retries):
         try:
             r = requests.get(url, stream=True, timeout=(15, 90))
             r.raise_for_status()
