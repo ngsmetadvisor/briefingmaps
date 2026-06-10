@@ -1077,14 +1077,6 @@ for vt in _sfc_target_vts:
                            url_fn(run_dt, fxx_mslp, 'Pressure_MSL'),
                            'Pressure_MSL', vt_mslp, ''))
 
-    # MSLP at 12Z (for twice-daily SFC map)
-    vt_mslp_12  = vt_mslp + timedelta(hours=12)   # 12Z same day
-    fxx_mslp_12 = _fxx(run_dt, vt_mslp_12)
-    if 0 <= fxx_mslp_12 <= max_fxx:
-        _sfc_tasks.append((model_lbl,
-                           url_fn(run_dt, fxx_mslp_12, 'Pressure_MSL'),
-                           'Pressure_MSL', vt_mslp_12, ''))
-
     # Precip target at 06Z
     _sfc_tasks.append((model_lbl,
                        url_fn(run_dt, fxx_tgt, 'Precip-Accum'),
@@ -1426,8 +1418,6 @@ _sfc_merged = {}
 for (lat, lon, vt_str), fields in _sfc_data.items():
     vt_key = datetime.strptime(vt_str, '%Y-%m-%d %HZ').replace(tzinfo=_tz.utc)
     if vt_key.hour == 6:
-        vt_label = (vt_key - timedelta(hours=6)).strftime('%Y-%m-%d') + f' {(vt_key.hour - 6):02d}Z'
-    elif vt_key.hour == 18:
         vt_label = (vt_key - timedelta(hours=6)).strftime('%Y-%m-%d') + f' {(vt_key.hour - 6):02d}Z'
     else:
         vt_label = vt_str
@@ -1826,7 +1816,6 @@ _sfc_times = sorted(
     .itertuples(index=False, name=None)
 )
 print(f'  Valid times  : {len(_sfc_times)}')
-print(f'  SFC hours present: {sorted(set(h for _,h in _sfc_times))}')
 
 def _qpf_build_grid(df, sigma=0.5, lon_vec=None, lat_vec=None):
     sub = df[['lat', 'lon', 'QPF12H']].dropna(subset=['QPF12H'])
@@ -4801,6 +4790,8 @@ print(f"  UA export hour: {_ua_export_hour:02d}Z")
 
 _time_steps = []
 for (_date_val, _hr) in _synoptic_times:
+    if int(_hr) != _ua_export_hour:
+        continue
     _date_str = pd.Timestamp(_date_val).strftime('%Y%m%d')
     _key      = f'{_date_str}_{int(_hr):02d}'
     _dt       = pd.Timestamp(_date_val).date()
@@ -5962,7 +5953,6 @@ _sfc_keys = sorted(
     k.replace('slp_grid_', '')
     for k in globals()
     if k.startswith('slp_grid_')
-    and not k == 'slp_grid'
 )
 if not _sfc_keys:
     raise RuntimeError('❌ No slp_grid_* found — run Cell UA-2c first')
