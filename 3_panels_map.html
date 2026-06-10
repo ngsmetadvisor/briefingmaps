@@ -358,10 +358,9 @@ function patchAll() {
   // Attempt master slider init immediately — frames are loaded at this point
   // and steps arrays are likely already populated.
   tryInitMasterSlider();
-  // If steps weren't ready yet (async data fetch inside the frame), retry.
-  if (!_masterSteps) {
-    var _initRetries = 0;
-    var _initPoll = setInterval(function() {
+// Always run the poll — master steps AND map sync AND p1 default all need it.
+  var _initRetries = 0;
+  var _initPoll = setInterval(function() {
       tryInitMasterSlider();
       _initRetries++;
       if (!_p1DefaultDone) initP1Default();
@@ -374,9 +373,10 @@ function patchAll() {
           }
         }
       });
-      if (_masterSteps || _initRetries >= 20) clearInterval(_initPoll);
+var allMapsDone = _mapSyncDone.p1 && _mapSyncDone.p2 && _mapSyncDone.p3;
+      if (allMapsDone && _masterSteps && _p1DefaultDone) clearInterval(_initPoll);
+      if (_initRetries >= 40) clearInterval(_initPoll);
     }, 500);
-  }
 }
 
 // ── Set 500 hPa default on p1 ─────────────────────────────────────────────
@@ -622,12 +622,20 @@ function onMasterSlider(val) {
         }
       }
 
-      setPaneBlank(p.id, false, '');
+setPaneBlank(p.id, false, '');
       win.__awcc_syncing = true;
       var frameSlider = win.document.getElementById(p.sliderId);
       if (frameSlider) frameSlider.value = String(targetIdx);
       win[p.fnName](targetIdx);
       win.__awcc_syncing = false;
+
+      // Ensure 500 hPa stays active on p1 after every master-driven step
+      if (p.id === 'p1') {
+        try {
+          var btn500 = win.document.getElementById('btn-500');
+          if (btn500 && !btn500.classList.contains('active')) btn500.click();
+        } catch(e2) {}
+      }
     } catch(e) {
       console.warn('[AWCC] master drive error', p.id, e);
     }
@@ -635,7 +643,6 @@ function onMasterSlider(val) {
 
   _masterBusy = false;
 }
-
 // Keep master slider thumb in sync when panes are driven individually
 function syncMasterSliderFromIdx(srcIdx) {
   if (_masterBusy || !_masterSteps) return;
