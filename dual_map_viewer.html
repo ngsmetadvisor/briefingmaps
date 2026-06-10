@@ -321,8 +321,25 @@ function frameLoaded(side) {
   if (side === 'left')  _leftReady  = true;
   if (side === 'right') _rightReady = true;
 
+  // Force Leaflet to recalculate size after the flex layout settles
+  var frameId = (side === 'left') ? 'frame-left' : 'frame-right';
+  setTimeout(function() {
+    try {
+      var win = document.getElementById(frameId).contentWindow;
+      // Try direct invalidateSize first (works if the map is exposed globally)
+      if (win && win._synMap && typeof win._synMap.invalidateSize === 'function') {
+        win._synMap.invalidateSize();
+      } else if (win && win._gemMap && typeof win._gemMap.invalidateSize === 'function') {
+        win._gemMap.invalidateSize();
+      } else {
+        // Fallback: fire a resize event on the inner window
+        win.dispatchEvent(new Event('resize'));
+      }
+    } catch(e) {}
+  }, 150);
+
   if (_leftReady && _rightReady) {
-    setTimeout(init, 400);
+    waitForFrameData();
   }
 }
 
