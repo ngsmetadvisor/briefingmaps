@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWCC Triple Map Viewer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --border:   #30363d;
+    --accent:   #4a7fc1;
+    --accent2:  #58a868;
+    --accent3:  #e8a020;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --header-h: 42px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Courier New", monospace;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  #header {
+    height: var(--header-h);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+    z-index: 100;
+    position: relative;
+  }
+  #header .logo {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--accent);
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+  #header .divider {
+    width: 1px; height: 22px;
+    background: var(--border);
+  }
+  #header .map-labels {
+    display: flex;
+    gap: 24px;
+    flex: 1;
+  }
+  .map-label {
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .map-label .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-1 { background: var(--accent); }
+  .dot-2 { background: var(--accent2); }
+  .dot-3 { background: var(--accent3); }
+
+  /* ── Map panes ── */
+  #maps {
+    display: flex;
+    height: calc(100vh - var(--header-h));
+    width: 100%;
+  }
+
+  .map-pane {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #1a1f26;
+  }
+  .map-pane + .map-pane { border-left: 2px solid var(--border); }
+  .map-pane iframe { width: 100%; height: 100%; border: none; display: block; }
+
+  /* Pane badge */
+  .pane-badge {
+    position: absolute;
+    top: 8px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 500;
+    background: rgba(13,17,23,0.82);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 10px; font-weight: bold; letter-spacing: 0.5px;
+    color: var(--muted);
+    pointer-events: none; white-space: nowrap;
+    backdrop-filter: blur(4px);
+  }
+  .pane-badge.p1 { color: var(--accent);  border-color: var(--accent); }
+  .pane-badge.p2 { color: var(--accent2); border-color: var(--accent2); }
+  .pane-badge.p3 { color: var(--accent3); border-color: var(--accent3); }
+
+  /* Loading overlay */
+  .pane-loading {
+    position: absolute; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px; z-index: 400;
+    transition: opacity 0.4s;
+  }
+  .pane-loading.hidden { opacity: 0; pointer-events: none; }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .pane-loading.p2 .spinner { border-top-color: var(--accent2); }
+  .pane-loading.p3 .spinner { border-top-color: var(--accent3); }
+  .pane-loading span { font-size: 11px; color: var(--muted); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Sync indicator */
+  #sync-indicator {
+    font-size: 10px; color: var(--muted);
+    display: flex; align-items: center; gap: 5px; white-space: nowrap;
+  }
+  .sync-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #2ea043;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <div class="logo">AWCC TRIPLE MAP</div>
+  <div class="divider"></div>
+  <div class="map-labels">
+    <div class="map-label">
+      <span class="dot dot-1"></span>
+      <span>UA 1 — 850 / 500 hPa Heights &amp; Isotherms</span>
+    </div>
+    <div class="map-label">
+      <span class="dot dot-2"></span>
+      <span>UA 2 — 850 / 500 hPa Heights &amp; Isotherms</span>
+    </div>
+    <div class="map-label">
+      <span class="dot dot-3"></span>
+      <span>Surface — MSLP &amp; 12h Precipitation</span>
+    </div>
+  </div>
+  <div id="sync-indicator">
+    <div class="sync-dot"></div>
+    <span>SYNCED</span>
+  </div>
+</div>
+
+<!-- Map panes -->
+<div id="maps">
+
+  <div class="map-pane">
+    <div class="pane-badge p1">UA 1 — 850 / 500 hPa</div>
+    <div class="pane-loading p1" id="load-p1">
+      <div class="spinner"></div>
+      <span>Loading upper air map 1…</span>
+    </div>
+    <iframe id="frame-p1"
+      src="https://ngsmetadvisor.github.io/briefingmaps/synoptic_map.html"
+      onload="frameLoaded('p1')"></iframe>
+  </div>
+
+  <div class="map-pane">
+    <div class="pane-badge p2">UA 2 — 850 / 500 hPa</div>
+    <div class="pane-loading p2" id="load-p2">
+      <div class="spinner"></div>
+      <span>Loading upper air map 2…</span>
+    </div>
+    <iframe id="frame-p2"
+      src="https://ngsmetadvisor.github.io/briefingmaps/synoptic_map.html"
+      onload="frameLoaded('p2')"></iframe>
+  </div>
+
+  <div class="map-pane">
+    <div class="pane-badge p3">SFC — MSLP &amp; QPF 12h</div>
+    <div class="pane-loading p3" id="load-p3">
+      <div class="spinner"></div>
+      <span>Loading surface map…</span>
+    </div>
+    <iframe id="frame-p3"
+      src="https://ngsmetadvisor.github.io/briefingmaps/gem_surface_map.html"
+      onload="frameLoaded('p3')"></iframe>
+  </div>
+
+</div>
+
+<script>
+// ── Pane config ────────────────────────────────────────────────────────────
+// Each entry describes one pane.
+// fnName    : the step function exposed on that frame's window
+// sliderId  : the <input type=range> id inside that frame
+// stepsVar  : the global steps array variable name in that frame
+// msgType   : postMessage type tag emitted when this pane drives a change
+var PANES = [
+  { id: 'p1', frameId: 'frame-p1', fnName: 'synSliderChange', sliderId: 'syn-time-slider', stepsVar: '_SYN_TIME_STEPS', msgType: 'SYN_STEP_P1' },
+  { id: 'p2', frameId: 'frame-p2', fnName: 'synSliderChange', sliderId: 'syn-time-slider', stepsVar: '_SYN_TIME_STEPS', msgType: 'SYN_STEP_P2' },
+  { id: 'p3', frameId: 'frame-p3', fnName: 'gemSliderChange', sliderId: 'gem-time-slider', stepsVar: '_GEM_STEPS',       msgType: 'GEM_STEP_P3' }
+];
+
+// Build a fast lookup: msgType → pane config
+var MSG_MAP = {};
+PANES.forEach(function(p) { MSG_MAP[p.msgType] = p; });
+
+// ── Ready tracking ─────────────────────────────────────────────────────────
+var _ready = { p1: false, p2: false, p3: false };
+
+function frameLoaded(id) {
+  var el = document.getElementById('load-' + id);
+  if (el) el.classList.add('hidden');
+  _ready[id] = true;
+  if (_ready.p1 && _ready.p2 && _ready.p3) setTimeout(patchAll, 400);
+}
+
+// ── Patch every frame ──────────────────────────────────────────────────────
+function patchAll() {
+  PANES.forEach(function(p) { patchFrame(p); });
+}
+
+function patchFrame(p) {
+  try {
+    var win = document.getElementById(p.frameId).contentWindow;
+    if (!win) return;
+    if (typeof win[p.fnName] !== 'function') {
+      setTimeout(function() { patchFrame(p); }, 800);
+      return;
+    }
+    var original = win[p.fnName];
+    var msgType  = p.msgType;
+    win[p.fnName] = function(idx) {
+      original.call(win, idx);
+      if (!win.__awcc_syncing) {
+        window.postMessage({ type: msgType, idx: idx }, '*');
+      }
+    };
+    console.log('[AWCC] Patched', p.fnName, 'in', p.id);
+  } catch(e) {
+    console.warn('[AWCC] patch error', p.id, e);
+  }
+}
+
+// ── Listen: broadcast any step change to all OTHER panes ──────────────────
+window.addEventListener('message', function(e) {
+  if (!e.data || typeof e.data.idx === 'undefined') return;
+  var src = MSG_MAP[e.data.type];
+  if (!src) return;
+
+  var srcIdx = parseInt(e.data.idx);
+
+  PANES.forEach(function(tgt) {
+    if (tgt.id === src.id) return;   // skip the source pane
+    mirrorStep(src, tgt, srcIdx);
+  });
+});
+
+// ── Push a step to one target pane ────────────────────────────────────────
+function mirrorStep(src, tgt, srcIdx) {
+  try {
+    var tgtWin = document.getElementById(tgt.frameId).contentWindow;
+    if (!tgtWin || typeof tgtWin[tgt.fnName] !== 'function') return;
+
+    // Resolve matching index via key, else clamp
+    var targetIdx = srcIdx;
+    try {
+      var srcWin   = document.getElementById(src.frameId).contentWindow;
+      var srcSteps = srcWin[src.stepsVar];
+      var tgtSteps = tgtWin[tgt.stepsVar];
+      if (srcSteps && tgtSteps && srcSteps[srcIdx]) {
+        var srcKey = srcSteps[srcIdx].key;
+        var matched = false;
+        for (var i = 0; i < tgtSteps.length; i++) {
+          if (tgtSteps[i].key === srcKey) { targetIdx = i; matched = true; break; }
+        }
+        if (!matched) targetIdx = Math.min(srcIdx, tgtSteps.length - 1);
+      }
+    } catch(e) { /* use srcIdx */ }
+
+    tgtWin.__awcc_syncing = true;
+    var slider = tgtWin.document.getElementById(tgt.sliderId);
+    if (slider) slider.value = String(targetIdx);
+    tgtWin[tgt.fnName](targetIdx);
+    tgtWin.__awcc_syncing = false;
+  } catch(e) {
+    console.warn('[AWCC] mirrorStep error', tgt.id, e);
+  }
+}
+</script>
+</body>
+</html>
