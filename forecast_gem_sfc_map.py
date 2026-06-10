@@ -2041,6 +2041,8 @@ for (_date, _hr) in _sfc_times:
     if qpf_grid is not None:
         print(f'  ✓ QPF12H {qpf_grid.shape} '
               f'{qpf_grid.min():.1f}–{qpf_grid.max():.1f} mm')
+    else:
+        print(f'    QPF grid None — prior accumulation missing for this timestep')
 
     _mslp_segs = _count_contours(slp_grid, lon_vec, lat_vec, MSLP_INTERVAL) if slp_grid is not None else 0
     _qpf_segs  = _count_contours(qpf_grid,
