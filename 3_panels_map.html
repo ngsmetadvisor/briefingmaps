@@ -283,33 +283,12 @@ function patchAll() {
 function initP1Default() {
   try {
     var win = document.getElementById('frame-p1').contentWindow;
-    var doc = win.document;
-
-    // 1. Try direct function calls the page may expose
-    var fnCandidates = ['setLevel', 'synSetLevel', 'selectLevel', 'setHPaLevel'];
-    for (var f = 0; f < fnCandidates.length; f++) {
-      if (typeof win[fnCandidates[f]] === 'function') {
-        win[fnCandidates[f]](500);
-        console.log('[AWCC] p1 default 500hPa via', fnCandidates[f]);
-        return;
-      }
+    if (typeof win.synSetLevel === 'function') {
+      win.synSetLevel('500');
+      console.log('[AWCC] p1 default → 500 hPa');
+    } else {
+      setTimeout(initP1Default, 400);
     }
-
-    // 2. Try clicking a button/element whose text contains "500"
-    var allEls = doc.querySelectorAll('button, a, label, input[type=button], input[type=radio], [role=button], [role=tab]');
-    for (var i = 0; i < allEls.length; i++) {
-      var el = allEls[i];
-      var txt = (el.textContent || el.value || el.getAttribute('data-level') || '').trim();
-      if (/500/.test(txt)) {
-        el.click();
-        console.log('[AWCC] p1 default 500hPa via element click:', el.outerHTML.slice(0, 80));
-        return;
-      }
-    }
-
-    // 3. Not found yet — retry after a short delay (page may still be rendering)
-    console.warn('[AWCC] 500hPa element not found in p1, retrying…');
-    setTimeout(initP1Default, 600);
   } catch(e) {
     console.warn('[AWCC] initP1Default error:', e);
   }
