@@ -732,18 +732,11 @@ async def _probe_run(session, run_dt, is_rdps, target_vts, sfc_target_vts):
             else _SFC_VARS
         )
         for vt in sorted(sfc_target_vts):
-            if vt.hour == 6:
-                vt_mslp   = vt - timedelta(hours=6)   # 00Z
-                vt_pacc   = vt                         # 06Z target
-                fxx_mslp  = _fxx(run_dt, vt_mslp)
-                fxx_tgt   = _fxx(run_dt, vt_pacc)
-                fxx_prior = fxx_tgt - 12
-            else:  # 18Z
-                vt_mslp   = vt - timedelta(hours=6)   # 12Z
-                vt_pacc   = vt                         # 18Z target
-                fxx_mslp  = _fxx(run_dt, vt_mslp)
-                fxx_tgt   = _fxx(run_dt, vt_pacc)
-                fxx_prior = fxx_tgt - 12              # 06Z prior
+            vt_mslp   = vt - timedelta(hours=6)   # 00Z
+            vt_pacc   = vt                         # 06Z target
+            fxx_mslp  = _fxx(run_dt, vt_mslp)
+            fxx_tgt   = _fxx(run_dt, vt_pacc)
+            fxx_prior = fxx_tgt - 12
 
             if 'Pressure_MSL' in sfc_vars_to_probe and 0 <= fxx_mslp <= max_fxx:
                 url = url_sfc_fn(run_dt, fxx_mslp, 'Pressure_MSL')
@@ -922,10 +915,8 @@ for _d in range(GDPS_FORECAST_DAYS + 1):
 # Output row labelled 00Z day D
 _sfc_target_vts = []
 for _d in range(1, GDPS_FORECAST_DAYS + 2):
-    _vt_00 = _base_day_mdt + timedelta(days=_d, hours=6)    # 06Z → label 00Z (midnight)
-    _vt_12 = _base_day_mdt + timedelta(days=_d, hours=18)   # 18Z → label 12Z (noon)
-    _sfc_target_vts.append(_vt_00)
-    _sfc_target_vts.append(_vt_12)
+    _vt = _base_day_mdt + timedelta(days=_d, hours=6)   # 06Z = local midnight
+    _sfc_target_vts.append(_vt)
 
 # Flat coordinate lists for extraction
 _target_lats = [lat for lat in GEM_LATITUDES for _   in GEM_LONGITUDE]
@@ -1071,12 +1062,8 @@ for vt in _sfc_target_vts:
     max_fxx   = 84 if use_rdps else 240
     model_lbl = 'RDPS' if use_rdps else 'GDPS'
 
-    if vt.hour == 6:
-        vt_mslp   = vt - timedelta(hours=6)   # 00Z
-        vt_pacc   = vt                         # 06Z target
-    else:  # 18Z
-        vt_mslp   = vt - timedelta(hours=6)   # 12Z
-        vt_pacc   = vt                         # 18Z target
+    vt_mslp   = vt - timedelta(hours=6)   # 00Z
+    vt_pacc   = vt                         # 06Z
     fxx_mslp  = _fxx(run_dt, vt_mslp)
     fxx_tgt   = _fxx(run_dt, vt_pacc)
     fxx_prior = fxx_tgt - 12
@@ -1128,8 +1115,6 @@ async def _fetch_and_extract_all():
     async def _worker_isob(model, url, var_name, pres, vt):
         vt_str = vt.strftime('%Y-%m-%d') + f' {vt.hour:02d}Z'
         col    = _VAR_MAP[var_name]
-        import datetime as _dt
-        print(f'  → {_dt.datetime.utcnow().strftime("%H:%M:%S")} GET {url.split("/")[-1]}', flush=True)
         async with sem:
             try:
                 async with session.get(
@@ -1137,20 +1122,15 @@ async def _fetch_and_extract_all():
                     raw    = await r.read() if r.status == 200 else None
                     status = r.status
             except Exception as e:
-                print(f'  ✗ {_dt.datetime.utcnow().strftime("%H:%M:%S")} EXCEPTION {url.split("/")[-1]}: {e}', flush=True)
                 errors.append((url, str(e))); return
-        print(f'  ← {_dt.datetime.utcnow().strftime("%H:%M:%S")} HTTP {status} {url.split("/")[-1]}', flush=True)
         if raw is None:
             errors.append((url, f'HTTP {status}')); return
         if len(raw) == 0:
             errors.append((url, 'HTTP 200 but zero bytes')); return
-        print(f'  [cfgrib] {_dt.datetime.utcnow().strftime("%H:%M:%S")} parsing {var_name} {len(raw)} bytes', flush=True)
         try:
             extracted, _rlats, _rlons, _rdata = _extract_points_grib(raw, _target_lats, _target_lons, var_name)
         except Exception as e:
-            print(f'  ✗ {_dt.datetime.utcnow().strftime("%H:%M:%S")} cfgrib FAILED {var_name}: {e}', flush=True)
             errors.append((url, str(e))); return
-        print(f'  [cfgrib] {_dt.datetime.utcnow().strftime("%H:%M:%S")} done {var_name}', flush=True)
         for (lat, lon), val in extracted.items():
             key = (lat, lon, vt_str, float(pres))
             if key not in _point_data:
@@ -1159,15 +1139,12 @@ async def _fetch_and_extract_all():
         _raw_grids[(var_name, vt_str, float(pres))] = {
             'lats': _rlats, 'lons': _rlons, 'data': _rdata
         }
-        import datetime as _dt
-        print(f'  ✓ {_dt.datetime.utcnow().strftime("%H:%M:%S")} {model} {vt_str}  {var_name}@{pres}hPa  ({len(extracted)} pts)', flush=True)
+        print(f'  ✓ {model} {vt_str}  {var_name}@{pres}hPa  ({len(extracted)} pts)')
 
     async def _worker_sfc(model, url, var_name, vt, col_suffix):
         vt_str   = vt.strftime('%Y-%m-%d') + f' {vt.hour:02d}Z'
         base_col = _SFC_VAR_MAP[var_name]
         col      = base_col + col_suffix
-        import datetime as _dt
-        print(f'  → {_dt.datetime.utcnow().strftime("%H:%M:%S")} GET {url.split("/")[-1]}', flush=True)
         async with sem:
             try:
                 async with session.get(
@@ -1175,20 +1152,15 @@ async def _fetch_and_extract_all():
                     raw    = await r.read() if r.status == 200 else None
                     status = r.status
             except Exception as e:
-                print(f'  ✗ {_dt.datetime.utcnow().strftime("%H:%M:%S")} EXCEPTION {url.split("/")[-1]}: {e}', flush=True)
                 errors.append((url, str(e))); return
-        print(f'  ← {_dt.datetime.utcnow().strftime("%H:%M:%S")} HTTP {status} {url.split("/")[-1]}', flush=True)
         if raw is None:
             errors.append((url, f'HTTP {status}')); return
         if len(raw) == 0:
             errors.append((url, 'HTTP 200 but zero bytes')); return
-        print(f'  [cfgrib] {_dt.datetime.utcnow().strftime("%H:%M:%S")} parsing {var_name} {len(raw)} bytes', flush=True)
         try:
             extracted, _rlats, _rlons, _rdata = _extract_points_grib(raw, _target_lats, _target_lons, var_name)
         except Exception as e:
-            print(f'  ✗ {_dt.datetime.utcnow().strftime("%H:%M:%S")} cfgrib FAILED {var_name}: {e}', flush=True)
             errors.append((url, str(e))); return
-        print(f'  [cfgrib] {_dt.datetime.utcnow().strftime("%H:%M:%S")} done {var_name}', flush=True)
         for (lat, lon), val in extracted.items():
             key = (lat, lon, vt_str)
             if key not in _sfc_data:
@@ -1207,7 +1179,7 @@ async def _fetch_and_extract_all():
                     _cf.write(raw)
                 _raw_grids[(var_name, vt_str)]['cache_path'] = _cache_path
         tag = 'PRIOR' if col_suffix else 'TARGET'
-        print(f'  ✓ {_dt.datetime.utcnow().strftime("%H:%M:%S")} {model} {vt_str}  {var_name} [{tag}]  ({len(extracted)} pts)', flush=True)
+        print(f'  ✓ {model} {vt_str}  {var_name} [{tag}]  ({len(extracted)} pts)')
 
     connector = aiohttp.TCPConnector(limit=MAX_CONCURRENT, ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
@@ -1454,9 +1426,9 @@ _sfc_merged = {}
 for (lat, lon, vt_str), fields in _sfc_data.items():
     vt_key = datetime.strptime(vt_str, '%Y-%m-%d %HZ').replace(tzinfo=_tz.utc)
     if vt_key.hour == 6:
-        vt_label = (vt_key - timedelta(hours=6)).strftime('%Y-%m-%d') + f' 00Z'
+        vt_label = (vt_key - timedelta(hours=6)).strftime('%Y-%m-%d') + f' {(vt_key.hour - 6):02d}Z'
     elif vt_key.hour == 18:
-        vt_label = vt_key.strftime('%Y-%m-%d') + f' 12Z'
+        vt_label = (vt_key - timedelta(hours=6)).strftime('%Y-%m-%d') + f' {(vt_key.hour - 6):02d}Z'
     else:
         vt_label = vt_str
     key = (lat, lon, vt_label)
@@ -1882,8 +1854,7 @@ def _qpf_build_grid(df, sigma=0.5, lon_vec=None, lat_vec=None):
 # ── MSLP helpers — identical to Cell A ───────────────────────────────────────
 def _fetch_grib(url, tag='', retries=3, retry_delay=5):
     import cfgrib
-    import datetime as _dt
-    print(f'  [{_dt.datetime.utcnow().strftime("%H:%M:%S")}] Downloading {tag} ...', end=' ', flush=True)
+    print(f'  Downloading {tag} ...', end=' ', flush=True)
     for attempt in range(retries):
         try:
             r = requests.get(url, stream=True, timeout=(15, 90))
@@ -2038,15 +2009,9 @@ for (_date, _hr) in _sfc_times:
     _qpf_lons = np.array(sorted(_sub['lon'].dropna().unique()))
     qpf_grid  = _qpf_build_grid(_sub, sigma=QPF_SIGMA,
                                  lon_vec=_qpf_lons, lat_vec=_qpf_lats)
-    _qpf_bands = _extract_qpf_bands(_qpf, _qpf_latv, _qpf_lonv) if _qpf is not None else []
-    _frame_data[_key] = {
-        ...
-    }
-    ...
     if qpf_grid is not None:
-        print(f'  ✓ QPF12H ...')
-    else:
-        print(f'    QPF grid None — prior accumulation missing for this timestep')
+        print(f'  ✓ QPF12H {qpf_grid.shape} '
+              f'{qpf_grid.min():.1f}–{qpf_grid.max():.1f} mm')
 
     _mslp_segs = _count_contours(slp_grid, lon_vec, lat_vec, MSLP_INTERVAL) if slp_grid is not None else 0
     _qpf_segs  = _count_contours(qpf_grid,
@@ -4432,12 +4397,17 @@ var _exportAllRunning = false;
 function synExportAll() {{
   if (_exportAllRunning) {{ _setExportStatus("Already running..."); return; }}
   _exportAllQueue = [];
-  var total = _SYN_TIME_STEPS.length;
+  var exportSteps = _SYN_TIME_STEPS.filter(function(s) {{ return s.hour === 12; }});
+  var total = exportSteps.length;
   for (var i = 0; i < _SYN_TIME_STEPS.length; i++) {{
-    _exportAllQueue.push({{ stepIdx: i, level: "500" }});
+    if (_SYN_TIME_STEPS[i].hour === 12) {{
+      _exportAllQueue.push({{ stepIdx: i, level: "500" }});
+    }}
   }}
   for (var i = 0; i < _SYN_TIME_STEPS.length; i++) {{
-    _exportAllQueue.push({{ stepIdx: i, level: "850" }});
+    if (_SYN_TIME_STEPS[i].hour === 12) {{
+      _exportAllQueue.push({{ stepIdx: i, level: "850" }});
+    }}
   }}
   _exportAllRunning = true;
   _setExportStatus("Export All: 0/" + (total * 2));
@@ -6112,7 +6082,7 @@ for _key in _sfc_keys:
     if _qpf_bands:
         print(f'    QPF levels present: {sorted(set(b["level"] for b in _qpf_bands))}')
     else:
-        print(f'    QPF grid None — prior accumulation missing for this timestep')
+        print(f'    QPF max value: {_qpf.max():.2f} mm — may be below 0.5 mm threshold')
 
 print(f'✓ Baked {len(_frame_data)} frames')
 
