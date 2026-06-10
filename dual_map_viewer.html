@@ -1,0 +1,481 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWCC Dual Map Viewer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --border:   #30363d;
+    --accent:   #4a7fc1;
+    --accent2:  #e8a020;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --bar-h:    56px;
+    --header-h: 42px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Courier New", monospace;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  #header {
+    height: var(--header-h);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+    z-index: 100;
+    position: relative;
+  }
+  #header .logo {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--accent);
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+  #header .divider {
+    width: 1px;
+    height: 22px;
+    background: var(--border);
+  }
+  #header .map-labels {
+    display: flex;
+    gap: 24px;
+    flex: 1;
+  }
+  .map-label {
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .map-label .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .dot-left  { background: var(--accent); }
+  .dot-right { background: var(--accent2); }
+
+  /* ── Map panes ── */
+  #maps {
+    display: flex;
+    height: calc(100vh - var(--header-h) - var(--bar-h));
+    width: 100%;
+    position: relative;
+  }
+
+  .map-pane {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #1a1f26;
+  }
+
+  .map-pane + .map-pane {
+    border-left: 2px solid var(--border);
+  }
+
+  .map-pane iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block;
+  }
+
+  /* Pane title badge */
+  .pane-badge {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 500;
+    background: rgba(13,17,23,0.82);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    pointer-events: none;
+    white-space: nowrap;
+    backdrop-filter: blur(4px);
+  }
+  .pane-badge.left  { color: var(--accent);  border-color: var(--accent); }
+  .pane-badge.right { color: var(--accent2); border-color: var(--accent2); }
+
+  /* Loading overlay */
+  .pane-loading {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    z-index: 400;
+    transition: opacity 0.4s;
+  }
+  .pane-loading.hidden { opacity: 0; pointer-events: none; }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .pane-loading.right .spinner { border-top-color: var(--accent2); }
+  .pane-loading span { font-size: 11px; color: var(--muted); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Control bar ── */
+  #ctrl-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: var(--bar-h);
+    background: var(--surface);
+    border-top: 2px solid var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 0;
+    z-index: 1000;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.6);
+  }
+
+  .ctrl-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px;
+    height: 100%;
+    border-right: 1px solid var(--border);
+  }
+  .ctrl-section:last-child { border-right: none; flex: 1; }
+
+  .ctrl-label {
+    font-size: 8px;
+    color: var(--muted);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    white-space: nowrap;
+  }
+
+  #time-slider {
+    width: 100%;
+    min-width: 200px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    height: 4px;
+  }
+
+  #ts-label {
+    font-size: 12px;
+    font-weight: bold;
+    color: #c0d0ff;
+    white-space: nowrap;
+    min-width: 240px;
+  }
+
+  /* Step buttons */
+  .step-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: "Courier New", monospace;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 2px 10px;
+    line-height: 1;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .step-btn:hover { background: var(--accent); border-color: var(--accent); }
+
+  /* Step counter */
+  #step-counter {
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  /* Sync indicator */
+  #sync-indicator {
+    font-size: 10px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  .sync-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #2ea043;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <div class="logo">AWCC DUAL MAP</div>
+  <div class="divider"></div>
+  <div class="map-labels">
+    <div class="map-label">
+      <span class="dot dot-left"></span>
+      <span>Upper Air — 850 / 500 hPa Heights &amp; Isotherms</span>
+    </div>
+    <div class="map-label">
+      <span class="dot dot-right"></span>
+      <span>Surface — MSLP &amp; 12h Precipitation</span>
+    </div>
+  </div>
+  <div id="sync-indicator">
+    <div class="sync-dot"></div>
+    <span>SYNCED</span>
+  </div>
+</div>
+
+<!-- Map panes -->
+<div id="maps">
+  <div class="map-pane" id="pane-left">
+    <div class="pane-badge left">UA — 850 / 500 hPa</div>
+    <div class="pane-loading" id="load-left">
+      <div class="spinner"></div>
+      <span>Loading upper air map…</span>
+    </div>
+    <iframe id="frame-left"
+      src="https://ngsmetadvisor.github.io/briefingmaps/synoptic_map.html"
+      onload="frameLoaded('left')">
+    </iframe>
+  </div>
+
+  <div class="map-pane" id="pane-right">
+    <div class="pane-badge right">SFC — MSLP &amp; QPF 12h</div>
+    <div class="pane-loading right" id="load-right">
+      <div class="spinner"></div>
+      <span>Loading surface map…</span>
+    </div>
+    <iframe id="frame-right"
+      src="https://ngsmetadvisor.github.io/briefingmaps/gem_surface_map.html"
+      onload="frameLoaded('right')">
+    </iframe>
+  </div>
+</div>
+
+<!-- Control bar -->
+<div id="ctrl-bar">
+  <div class="ctrl-section">
+    <span class="ctrl-label">Step</span>
+    <button class="step-btn" onclick="stepBy(-1)">&#9664;</button>
+    <button class="step-btn" onclick="stepBy(1)">&#9654;</button>
+    <span id="step-counter">— / —</span>
+  </div>
+
+  <div class="ctrl-section" style="flex:1; gap:12px;">
+    <span class="ctrl-label" style="white-space:nowrap;">Time</span>
+    <input type="range" id="time-slider" min="0" value="0"
+           oninput="onSlider(this.value)">
+  </div>
+
+  <div class="ctrl-section">
+    <span id="ts-label">—</span>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+var _stepIdx   = 0;
+var _maxSteps  = 0;
+var _leftReady = false;
+var _rightReady = false;
+var _steps     = [];   // populated once left frame exposes its data
+
+// ── Frame load ─────────────────────────────────────────────────────────────
+function frameLoaded(side) {
+  var loadEl = document.getElementById('load-' + side);
+  if (loadEl) loadEl.classList.add('hidden');
+
+  if (side === 'left')  _leftReady  = true;
+  if (side === 'right') _rightReady = true;
+
+  if (_leftReady && _rightReady) {
+    waitForFrameData();
+  }
+}
+
+// ── Poll until both frames have their data ready ───────────────────────────
+function waitForFrameData() {
+  var fl = document.getElementById('frame-left');
+  var fr = document.getElementById('frame-right');
+  var attempts = 0;
+
+  function check() {
+    attempts++;
+    var leftOk  = false;
+    var rightOk = false;
+
+    try {
+      var lw = fl.contentWindow;
+      leftOk = lw && lw._SYN_TIME_STEPS && lw._SYN_TIME_STEPS.length > 0
+                  && typeof lw.synSliderChange === 'function';
+    } catch(e) {}
+
+    try {
+      var rw = fr.contentWindow;
+      rightOk = rw && rw._GEM_STEPS && rw._GEM_STEPS.length > 0
+                   && typeof rw.gemSliderChange === 'function';
+    } catch(e) {}
+
+    if (leftOk && rightOk) {
+      init(fl, fr);
+    } else if (attempts < 60) {
+      setTimeout(check, 500);
+    } else {
+      // timeout — init with whatever we have
+      init(fl, fr);
+    }
+  }
+
+  check();
+}
+
+// ── Init: read time steps from left frame ─────────────────────────────────
+function init(fl, fr) {
+  try {
+    var leftWin = fl.contentWindow;
+    if (leftWin && leftWin._SYN_TIME_STEPS && leftWin._SYN_TIME_STEPS.length) {
+      _steps = leftWin._SYN_TIME_STEPS;
+    }
+  } catch(e) {
+    console.warn('Could not read _SYN_TIME_STEPS:', e);
+  }
+
+  if (!_steps.length) {
+    try {
+      var rightWin = fr.contentWindow;
+      if (rightWin && rightWin._GEM_STEPS && rightWin._GEM_STEPS.length) {
+        _steps = rightWin._GEM_STEPS;
+      }
+    } catch(e) {
+      console.warn('Could not read _GEM_STEPS:', e);
+    }
+  }
+
+  _maxSteps = Math.max(0, _steps.length - 1);
+  var slider = document.getElementById('time-slider');
+  slider.max   = String(_maxSteps);
+  slider.value = '0';
+
+  updateCounter();
+  applyStep(0);
+}
+
+// ── Slider input ───────────────────────────────────────────────────────────
+function onSlider(v) {
+  _stepIdx = parseInt(v);
+  updateCounter();
+  applyStep(_stepIdx);
+}
+
+function stepBy(delta) {
+  var next = Math.max(0, Math.min(_maxSteps, _stepIdx + delta));
+  if (next === _stepIdx) return;
+  _stepIdx = next;
+  document.getElementById('time-slider').value = String(_stepIdx);
+  updateCounter();
+  applyStep(_stepIdx);
+}
+
+function updateCounter() {
+  document.getElementById('step-counter').textContent =
+    (_maxSteps > 0) ? (_stepIdx + 1) + ' / ' + (_maxSteps + 1) : '— / —';
+}
+
+// ── Push step to both iframes ──────────────────────────────────────────────
+function applyStep(idx) {
+  var step = _steps[idx];
+  var label = step ? step.label : '—';
+  document.getElementById('ts-label').textContent = label;
+
+  pushToLeft(idx, step);
+  pushToRight(idx, step);
+}
+
+function pushToLeft(idx, step) {
+  try {
+    var win = document.getElementById('frame-left').contentWindow;
+    if (!win) return;
+
+    // Drive the UA map's internal state directly
+    if (typeof win.synSliderChange === 'function') {
+      win._synStepIdx = idx;
+      // update its own slider if present
+      var s = win.document.getElementById('syn-time-slider');
+      if (s) s.value = String(idx);
+      win.synSliderChange(idx);
+    }
+  } catch(e) {
+    console.warn('pushToLeft error:', e);
+  }
+}
+
+function pushToRight(idx, step) {
+  try {
+    var win = document.getElementById('frame-right').contentWindow;
+    if (!win) return;
+
+    // The GEM surface map uses _GEM_STEPS keyed differently —
+    // find the matching index by key if step keys align,
+    // otherwise fall back to same numeric index.
+    var targetIdx = idx;
+    if (step && win._GEM_STEPS && win._GEM_STEPS.length) {
+      var match = -1;
+      for (var i = 0; i < win._GEM_STEPS.length; i++) {
+        if (win._GEM_STEPS[i].key === step.key) { match = i; break; }
+      }
+      if (match >= 0) targetIdx = match;
+      else targetIdx = Math.min(idx, win._GEM_STEPS.length - 1);
+    }
+
+    if (typeof win.gemSliderChange === 'function') {
+      win._gemStepIdx = targetIdx;
+      var s = win.document.getElementById('gem-time-slider');
+      if (s) s.value = String(targetIdx);
+      win.gemSliderChange(targetIdx);
+    }
+  } catch(e) {
+    console.warn('pushToRight error:', e);
+  }
+}
+
+// ── Keyboard nav ───────────────────────────────────────────────────────────
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); stepBy(1); }
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { e.preventDefault(); stepBy(-1); }
+});
+</script>
+</body>
+</html>
