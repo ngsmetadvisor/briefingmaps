@@ -271,7 +271,10 @@ function frameLoaded(id) {
 
 // ── Patch every frame ──────────────────────────────────────────────────────
 function patchAll() {
-  PANES.forEach(function(p) { patchFrame(p); });
+  PANES.forEach(function(p) {
+    patchFrame(p);
+    patchMapSync(p);
+  });
 }
 
 function patchFrame(p) {
@@ -296,16 +299,91 @@ function patchFrame(p) {
   }
 }
 
-// ── Listen: broadcast any step change to all OTHER panes ──────────────────
+// ── Find the Leaflet map instance inside a frame window ────────────────────
+// Checks common variable names, then scans all window keys for a Leaflet Map.
+function findLeafletMap(win) {
+  // Common names used in these pages
+  var candidates = ['map', '_map', 'leafletMap', 'myMap', 'MAP'];
+  for (var i = 0; i < candidates.length; i++) {
+    var obj = win[candidates[i]];
+    if (obj && obj.getCenter && obj.getZoom && obj.setView) return obj;
+  }
+  // Fallback: scan all globals for a Leaflet Map instance
+  try {
+    var keys = Object.keys(win);
+    for (var k = 0; k < keys.length; k++) {
+      try {
+        var obj = win[keys[k]];
+        if (obj && obj.getCenter && obj.getZoom && obj.setView &&
+            obj._leaflet_id !== undefined) return obj;
+      } catch(e) {}
+    }
+  } catch(e) {}
+  return null;
+}
+
+// ── Patch Leaflet moveend on one frame to broadcast view changes ───────────
+function patchMapSync(p) {
+  try {
+    var win = document.getElementById(p.frameId).contentWindow;
+    if (!win) return;
+
+    var lmap = findLeafletMap(win);
+    if (!lmap) {
+      // Map may not be initialised yet — retry
+      setTimeout(function() { patchMapSync(p); }, 800);
+      return;
+    }
+
+    lmap.on('moveend', function() {
+      if (win.__awcc_syncing) return;
+      var c = lmap.getCenter();
+      var z = lmap.getZoom();
+      window.postMessage({
+        type: 'MAP_VIEW',
+        srcId: p.id,
+        lat: c.lat, lng: c.lng, zoom: z
+      }, '*');
+    });
+
+    console.log('[AWCC] Map sync patched for', p.id);
+  } catch(e) {
+    console.warn('[AWCC] patchMapSync error', p.id, e);
+  }
+}
+
+// ── Listen: broadcast any step change OR map view to all OTHER panes ───────
 window.addEventListener('message', function(e) {
-  if (!e.data || typeof e.data.idx === 'undefined') return;
+  if (!e.data) return;
+
+  // ── Map view sync ──────────────────────────────────────────────────────
+  if (e.data.type === 'MAP_VIEW') {
+    var srcId = e.data.srcId;
+    PANES.forEach(function(tgt) {
+      if (tgt.id === srcId) return;
+      try {
+        var tgtWin = document.getElementById(tgt.frameId).contentWindow;
+        if (!tgtWin) return;
+        var lmap = findLeafletMap(tgtWin);
+        if (!lmap) return;
+        tgtWin.__awcc_syncing = true;
+        lmap.setView([e.data.lat, e.data.lng], e.data.zoom, { animate: false });
+        tgtWin.__awcc_syncing = false;
+      } catch(err) {
+        console.warn('[AWCC] map mirror error', tgt.id, err);
+      }
+    });
+    return;
+  }
+
+  // ── Time step sync ─────────────────────────────────────────────────────
+  if (typeof e.data.idx === 'undefined') return;
   var src = MSG_MAP[e.data.type];
   if (!src) return;
 
   var srcIdx = parseInt(e.data.idx);
-
   PANES.forEach(function(tgt) {
-    if (tgt.id === src.id) return;   // skip the source pane
+    if (tgt.id === src.id) return;
     mirrorStep(src, tgt, srcIdx);
   });
 });
