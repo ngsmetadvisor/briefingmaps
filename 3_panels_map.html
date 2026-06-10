@@ -355,6 +355,7 @@ function patchAll() {
     var _initPoll = setInterval(function() {
       tryInitMasterSlider();
       _initRetries++;
+      if (!_p1DefaultDone) initP1Default();
       if (_masterSteps || _initRetries >= 20) clearInterval(_initPoll);
     }, 500);
   }
@@ -364,10 +365,11 @@ function patchAll() {
 // We patch synSetLevel in p1 so the moment the map calls it with '850' during
 // its own init, we immediately follow with '500'. The flag prevents a loop.
 function initP1Default() {
+  if (_p1DefaultDone) return;
   try {
     var win = document.getElementById('frame-p1').contentWindow;
     if (typeof win.synSetLevel !== 'function') return;
-
+    _p1DefaultDone = true;
     var originalSetLevel = win.synSetLevel;
     var overrideDone = false;
 
