@@ -322,57 +322,26 @@ function frameLoaded(side) {
   if (side === 'right') _rightReady = true;
 
   if (_leftReady && _rightReady) {
-    waitForFrameData();
+    setTimeout(init, 400);
   }
-}
-
-// ── Poll until both frames have their data ready ───────────────────────────
-function waitForFrameData() {
-  var fl = document.getElementById('frame-left');
-  var fr = document.getElementById('frame-right');
-  var attempts = 0;
-
-  function check() {
-    attempts++;
-    var leftOk  = false;
-    var rightOk = false;
-
-    try {
-      var lw = fl.contentWindow;
-      leftOk = lw && lw._SYN_TIME_STEPS && lw._SYN_TIME_STEPS.length > 0
-                  && typeof lw.synSliderChange === 'function';
-    } catch(e) {}
-
-    try {
-      var rw = fr.contentWindow;
-      rightOk = rw && rw._GEM_STEPS && rw._GEM_STEPS.length > 0
-                   && typeof rw.gemSliderChange === 'function';
-    } catch(e) {}
-
-    if (leftOk && rightOk) {
-      init(fl, fr);
-    } else if (attempts < 60) {
-      setTimeout(check, 500);
-    } else {
-      // timeout — init with whatever we have
-      init(fl, fr);
-    }
-  }
-
-  check();
 }
 
 // ── Init: read time steps from left frame ─────────────────────────────────
-function init(fl, fr) {
+function init() {
+  var fl = document.getElementById('frame-left');
+  var fr = document.getElementById('frame-right');
+
   try {
+    // UA map exposes _SYN_TIME_STEPS
     var leftWin = fl.contentWindow;
     if (leftWin && leftWin._SYN_TIME_STEPS && leftWin._SYN_TIME_STEPS.length) {
       _steps = leftWin._SYN_TIME_STEPS;
     }
   } catch(e) {
-    console.warn('Could not read _SYN_TIME_STEPS:', e);
+    console.warn('Could not read _SYN_TIME_STEPS from left frame:', e);
   }
 
+  // Fallback: try right frame for GEM steps
   if (!_steps.length) {
     try {
       var rightWin = fr.contentWindow;
@@ -380,7 +349,7 @@ function init(fl, fr) {
         _steps = rightWin._GEM_STEPS;
       }
     } catch(e) {
-      console.warn('Could not read _GEM_STEPS:', e);
+      console.warn('Could not read _GEM_STEPS from right frame:', e);
     }
   }
 
