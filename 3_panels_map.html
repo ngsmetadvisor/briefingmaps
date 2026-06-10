@@ -282,7 +282,7 @@ function frameLoaded(id) {
 }
 
 // ── Patch every frame ──────────────────────────────────────────────────────
-var _p1DefaultDone = false;
+var _p1DefaultDone = false;  // unused sentinel kept for safety
 var _mapSyncDone   = { p1: false, p2: false, p3: false };
 
 function patchAll() {
@@ -294,30 +294,15 @@ function patchAll() {
 }
 
 // ── Set 500 hPa default on p1 ─────────────────────────────────────────────
-// We patch synSetLevel in p1 so the moment the map calls it with '850' during
-// its own init, we immediately follow with '500'. The flag prevents a loop.
 function initP1Default() {
   try {
     var win = document.getElementById('frame-p1').contentWindow;
     if (typeof win.synSetLevel !== 'function') return;
-
-    var originalSetLevel = win.synSetLevel;
-    var overrideDone = false;
-
-    win.synSetLevel = function(level) {
-      originalSetLevel.call(win, level);
-      // The map's own init calls synSetLevel('850') — intercept it once
-      if (!overrideDone && String(level) === '850') {
-        overrideDone = true;
-        // Restore original so user can freely switch levels afterward
-        win.synSetLevel = originalSetLevel;
-        originalSetLevel.call(win, '500');
-        // Also click the button so its active state updates visually
-        var btn = win.document.getElementById('btn-500');
-        if (btn) btn.click();
-        console.log('[AWCC] p1 overridden to 500 hPa after init');
-      }
-    };
+    win.synSetLevel('500');
+    // Also update the button active state
+    var btn = win.document.getElementById('btn-500');
+    if (btn) btn.click();
+    console.log('[AWCC] p1 → 500 hPa');
   } catch(e) {
     console.warn('[AWCC] initP1Default error:', e);
   }
@@ -340,6 +325,11 @@ function patchFrame(p) {
       }
     };
     console.log('[AWCC] Patched', p.fnName, 'in', p.id);
+
+    // p1: set 500 hPa default after current render cycle completes
+    if (p.id === 'p1') {
+      setTimeout(initP1Default, 100);
+    }
   } catch(e) {
     console.warn('[AWCC] patch error', p.id, e);
   }
@@ -433,12 +423,6 @@ window.addEventListener('message', function(e) {
   if (!_mapSyncDone[src.id]) {
     _mapSyncDone[src.id] = true;
     patchMapSync(src);
-  }
-
-  // First step from p1 → install the 850→500 init intercept
-  if (src.id === 'p1' && !_p1DefaultDone) {
-    _p1DefaultDone = true;
-    initP1Default();
   }
 
   // Update banner timestamp from source frame's steps label
