@@ -6349,6 +6349,8 @@ function gemRender(idx){{
   var step=_GEM_STEPS[idx]; if(!step) return;
   var lbl=document.getElementById("gem-ts-label");
   if(lbl) lbl.textContent=_utcKeyToLocalStr(step.key);
+  var bannerEl=document.getElementById("gem-banner-time");
+  if(bannerEl) bannerEl.textContent=_utcKeyToLocalStr(step.key);
 
   if(_gemQpfLayer) {{ MAP.removeLayer(_gemQpfLayer);  _gemQpfLayer=null; }}
   if(_gemMslpLayer){{ MAP.removeLayer(_gemMslpLayer); _gemMslpLayer=null; }}
