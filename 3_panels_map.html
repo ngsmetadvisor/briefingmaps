@@ -16,7 +16,7 @@
     --accent3:  #e8a020;
     --text:     #e6edf3;
     --muted:    #8b949e;
-    --header-h: 42px;
+    --header-h: 54px;
   }
 
   html, body {
@@ -150,6 +150,16 @@
     color: var(--border);
   }
 
+  #ts-display {
+    font-size: 18px;
+    font-weight: bold;
+    color: #c8d8ff;
+    letter-spacing: 1.5px;
+    white-space: nowrap;
+    min-width: 260px;
+    text-align: right;
+  }
+
   /* Sync indicator */
   #sync-indicator {
     font-size: 10px; color: var(--muted);
@@ -183,6 +193,8 @@
       <span>Surface — MSLP &amp; 12h Precipitation</span>
     </div>
   </div>
+  <div id="ts-display">—</div>
+  <div class="divider"></div>
   <div id="sync-indicator">
     <div class="sync-dot"></div>
     <span>SYNCED</span>
@@ -270,24 +282,23 @@ function frameLoaded(id) {
 }
 
 // ── Patch every frame ──────────────────────────────────────────────────────
+var _p1DefaultDone = false;
+
 function patchAll() {
   PANES.forEach(function(p) {
     patchFrame(p);
     patchMapSync(p);
   });
-  // p1 defaults to 500 hPa level
-  initP1Default();
+  // p1 default to 500 hPa is triggered after the first real step fires (see message listener)
 }
 
-// ── Click the 500 hPa button in p1 ────────────────────────────────────────
+// ── Set 500 hPa default on p1 (called only after first step fires) ─────────
 function initP1Default() {
   try {
     var win = document.getElementById('frame-p1').contentWindow;
     if (typeof win.synSetLevel === 'function') {
       win.synSetLevel('500');
       console.log('[AWCC] p1 default → 500 hPa');
-    } else {
-      setTimeout(initP1Default, 400);
     }
   } catch(e) {
     console.warn('[AWCC] initP1Default error:', e);
@@ -399,6 +410,22 @@ window.addEventListener('message', function(e) {
   if (!src) return;
 
   var srcIdx = parseInt(e.data.idx);
+
+  // First time p1 fires a step → map is fully ready, safe to set 500 hPa default
+  if (src.id === 'p1' && !_p1DefaultDone) {
+    _p1DefaultDone = true;
+    setTimeout(initP1Default, 0);
+  }
+
+  // Update banner timestamp from source frame's steps label
+  try {
+    var srcWin   = document.getElementById(src.frameId).contentWindow;
+    var srcSteps = srcWin[src.stepsVar];
+    if (srcSteps && srcSteps[srcIdx] && srcSteps[srcIdx].label) {
+      document.getElementById('ts-display').textContent = srcSteps[srcIdx].label;
+    }
+  } catch(e2) {}
+
   PANES.forEach(function(tgt) {
     if (tgt.id === src.id) return;
     mirrorStep(src, tgt, srcIdx);
