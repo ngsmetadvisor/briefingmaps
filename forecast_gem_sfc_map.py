@@ -2038,9 +2038,13 @@ for (_date, _hr) in _sfc_times:
     _qpf_lons = np.array(sorted(_sub['lon'].dropna().unique()))
     qpf_grid  = _qpf_build_grid(_sub, sigma=QPF_SIGMA,
                                  lon_vec=_qpf_lons, lat_vec=_qpf_lats)
+    _qpf_bands = _extract_qpf_bands(_qpf, _qpf_latv, _qpf_lonv) if _qpf is not None else []
+    _frame_data[_key] = {
+        ...
+    }
+    ...
     if qpf_grid is not None:
-        print(f'  ✓ QPF12H {qpf_grid.shape} '
-              f'{qpf_grid.min():.1f}–{qpf_grid.max():.1f} mm')
+        print(f'  ✓ QPF12H ...')
     else:
         print(f'    QPF grid None — prior accumulation missing for this timestep')
 
@@ -6108,7 +6112,7 @@ for _key in _sfc_keys:
     if _qpf_bands:
         print(f'    QPF levels present: {sorted(set(b["level"] for b in _qpf_bands))}')
     else:
-        print(f'    QPF max value: {_qpf.max():.2f} mm — may be below 0.5 mm threshold')
+        print(f'    QPF grid None — prior accumulation missing for this timestep')
 
 print(f'✓ Baked {len(_frame_data)} frames')
 
