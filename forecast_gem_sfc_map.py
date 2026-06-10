@@ -4397,17 +4397,12 @@ var _exportAllRunning = false;
 function synExportAll() {{
   if (_exportAllRunning) {{ _setExportStatus("Already running..."); return; }}
   _exportAllQueue = [];
-  var exportSteps = _SYN_TIME_STEPS.filter(function(s) {{ return s.hour === 12; }});
-  var total = exportSteps.length;
+  var total = _SYN_TIME_STEPS.length;
   for (var i = 0; i < _SYN_TIME_STEPS.length; i++) {{
-    if (_SYN_TIME_STEPS[i].hour === 12) {{
-      _exportAllQueue.push({{ stepIdx: i, level: "500" }});
-    }}
+    _exportAllQueue.push({{ stepIdx: i, level: "500" }});
   }}
   for (var i = 0; i < _SYN_TIME_STEPS.length; i++) {{
-    if (_SYN_TIME_STEPS[i].hour === 12) {{
-      _exportAllQueue.push({{ stepIdx: i, level: "850" }});
-    }}
+    _exportAllQueue.push({{ stepIdx: i, level: "850" }});
   }}
   _exportAllRunning = true;
   _setExportStatus("Export All: 0/" + (total * 2));
