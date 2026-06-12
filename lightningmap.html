@@ -469,7 +469,116 @@ function updateABCount(){
   document.getElementById('ab-total-num').textContent=ab;
 }
 
-setInterval(()=>{updateColors();rebuildZoneCounts();},2000);
+setInterval(()=>{updateColors();rebuildZoneCounts();checkLightningProximity();},2000);
+
+// ── Lightning Proximity Warning ───────────────────────────────
+const PROX_RADIUS_KM     = 10000;   // total watch radius in km
+const PROX_WARNING_PCT   = 0.25;    // fraction of radius that triggers WARNING (vs CAUTION)
+const PROX_WARNING_KM    = PROX_RADIUS_KM * PROX_WARNING_PCT;  // derived — do not edit
+const PROX_VIBRATE_MS    = [200, 100, 200, 100, 200]; // 3 strong pulses pattern
+const PROX_VIBRATE_DELAY = 5000;   // ms between vibration repeats
+
+let proximityRing=null, proximityWarning=null, proximityActive=false;
+let _proxVibrateTimer=null, _proxLastWasWarning=false;
+
+function triggerProximityVibrate(){
+  if(!navigator.vibrate) return;
+  navigator.vibrate(PROX_VIBRATE_MS);
+  if(_proxVibrateTimer) clearTimeout(_proxVibrateTimer);
+  _proxVibrateTimer=setTimeout(()=>{
+    if(_proxLastWasWarning) triggerProximityVibrate();
+  }, PROX_VIBRATE_DELAY);
+}
+
+function haversineKm(lat1,lon1,lat2,lon2){
+  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function checkLightningProximity(){
+  const src=gpsMarker?gpsMarker.getLatLng():_gpsLastLL;
+  if(!src) return;
+  const lat=src.lat, lon=src.lng??src.lon;
+  const now=t||Date.now()/1000;
+  let closest=Infinity, count=0;
+  strokes.forEach(m=>{
+    if((now-m._strokeTime)>windowSec) return;
+    const d=haversineKm(lat,lon,m._lat,m._lon);
+if(d<=PROX_RADIUS_KM){ count++; if(d<closest)closest=d; }
+  });
+
+  if(count>0){
+    // Range ring
+    if(!proximityRing){
+      proximityRing=L.circle([lat,lon],{
+        radius:PROX_RADIUS_KM*1000, pane:'gps',
+        color:'#ff4400', weight:2, opacity:0.7,
+        fillColor:'#ff4400', fillOpacity:0.04,
+        dashArray:'8 6', interactive:false
+      }).addTo(map);
+    } else {
+      proximityRing.setLatLng([lat,lon]);
+    }
+
+    // Warning banner
+const pct=closest/PROX_RADIUS_KM;
+    const isWarning=closest<=PROX_WARNING_KM;
+    if(isWarning && !_proxLastWasWarning) triggerProximityVibrate();
+    _proxLastWasWarning=isWarning;
+    const color=isWarning?'#ff4400':'#ffdd00';
+    const colorBg=isWarning?'rgba(255,68,0,0.18)':'rgba(255,221,0,0.12)';
+    const label=isWarning?'⚡ LIGHTNING WARNING':'⚡ LIGHTNING CAUTION';
+
+    if(!proximityWarning){
+      proximityWarning=document.createElement('div');
+      proximityWarning.id='proximity-warning';
+      proximityWarning.style.cssText=`
+        position:fixed;bottom:36px;left:50%;transform:translateX(-50%);
+        z-index:9000;pointer-events:none;
+        display:flex;flex-direction:column;align-items:center;gap:0;
+        min-width:260px;max-width:90vw;
+      `;
+      const style=document.createElement('style');
+      style.textContent=`
+        @keyframes proximityPulse{0%,100%{opacity:1}50%{opacity:0.5}}
+        @keyframes proximityFadeIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+      `;
+      document.head.appendChild(style);
+      proximityWarning.innerHTML=`
+        <div id="prox-banner" style="
+          border-radius:10px;padding:8px 20px;text-align:center;
+          font-family:'Courier New',monospace;backdrop-filter:blur(6px);
+          border:1.5px solid;width:100%;box-sizing:border-box;
+        ">
+          <div id="prox-label" style="font-size:13px;font-weight:700;letter-spacing:0.07em;"></div>
+          <div id="prox-detail" style="font-size:10px;margin-top:2px;opacity:0.85;"></div>
+        </div>
+      `;
+      proximityWarning.style.animation='proximityFadeIn 0.3s ease';
+      document.body.appendChild(proximityWarning);
+      proximityActive=true;
+    }
+
+    const banner=document.getElementById('prox-banner');
+    const animClass=isWarning?'proximityPulse 1.2s ease-in-out infinite':'none';
+    banner.style.background=colorBg;
+    banner.style.borderColor=color;
+    banner.style.animation=animClass;
+    document.getElementById('prox-label').style.color=color;
+    document.getElementById('prox-label').textContent=label;
+    document.getElementById('prox-detail').style.color=color;
+    document.getElementById('prox-detail').textContent=
+count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+closest.toFixed(1)+' km';
+  } else {
+    // Clear
+if(proximityRing){ map.removeLayer(proximityRing); proximityRing=null; }
+    if(proximityWarning){ proximityWarning.remove(); proximityWarning=null; }
+    if(_proxVibrateTimer){ clearTimeout(_proxVibrateTimer); _proxVibrateTimer=null; }
+    _proxLastWasWarning=false;
+    proximityActive=false;
+  }
+}
 
 // ── Point-in-polygon ──────────────────────────────────────────
 function pip(lat,lon,ll){
@@ -756,36 +865,6 @@ enableRadar();
 
 // ── GPS ───────────────────────────────────────────────────────
 let gpsMarker=null, gpsRing=null, gpsAccCircle=null, gpsHeadingLine=null, gpsCompassLine=null, gpsCompassTicks=[], gpsActive=false, gpsWatchId=null;
-let _compassHeading=null, _compassWatching=false;
-
-function _startCompassWatch(){
-  if(_compassWatching) return;
-  function _attachOrientation(){
-    window.addEventListener('deviceorientationabsolute', _onOrientation, true);
-    window.addEventListener('deviceorientation', _onOrientation, true);
-    _compassWatching = true;
-  }
-  // iOS 13+ requires explicit permission
-  if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
-    DeviceOrientationEvent.requestPermission().then(state=>{
-      if(state === 'granted') _attachOrientation();
-    }).catch(()=>{});
-  } else {
-    _attachOrientation();
-  }
-}
-
-function _onOrientation(e){
-  // 'deviceorientationabsolute' gives true heading directly
-  // 'deviceorientation' on iOS: use webkitCompassHeading
-  let heading = null;
-  if(e.absolute && e.alpha !== null){
-    heading = (360 - e.alpha) % 360;
-  } else if(e.webkitCompassHeading !== undefined && e.webkitCompassHeading !== null){
-    heading = e.webkitCompassHeading;
-  }
-  if(heading !== null && !isNaN(heading)) _compassHeading = heading;
-}
 let ecLightningLayers=[], ecLightningTimer=null, ecLightningEnabled=false;
 let _gpsPrev=null;
 const gpsIcon=L.divIcon({className:'',html:'<div class="gps-dot"></div>',iconSize:[14,14],iconAnchor:[7,7]});
@@ -805,10 +884,8 @@ function onGPSSuccess(pos){
   document.getElementById('gps-btn').classList.add('active');
   document.getElementById('gps-btn').textContent='⊕ GPS';
   const accStr=accuracy<1000?'±'+Math.round(accuracy)+'m':'±'+(accuracy/1000).toFixed(1)+'km';
-let bear=null;
-  if(_compassHeading!==null){
-    bear=_compassHeading;
-  } else if(heading!==null&&!isNaN(heading)&&heading>=0){
+  let bear=null;
+  if(heading!==null&&!isNaN(heading)&&heading>=0){
     bear=heading;
   } else if(_gpsPrev){
     const dLat=lat-_gpsPrev.lat, dLon=lon-_gpsPrev.lon;
@@ -839,15 +916,16 @@ const speedKmh=(speed!=null&&!isNaN(speed)&&speed>0)?speed*3.6:1;
     }else{
       gpsHeadingLine.setLatLngs([[lat,lon],tip]);
     }
-    const perpBear=(bear+90)%360;
+const perpBear=(bear+90)%360;
     if(!gpsHeadingLine._ticks) gpsHeadingLine._ticks=[];
     gpsHeadingLine._ticks.forEach(t=>map.removeLayer(t));
     gpsHeadingLine._ticks=[];
+    const tickWidthKm=speedKmh?speedKmh*(15/60):100*(15/60);
     [15,30,45,60].forEach(mins=>{
       const dist=speedKmh?speedKmh*(mins/60):100*(mins/60);
       const mid=_destPoint(lat,lon,bear,dist);
-      const a=_destPoint(mid[0],mid[1],perpBear,10);
-      const b=_destPoint(mid[0],mid[1],(perpBear+180)%360,10);
+      const a=_destPoint(mid[0],mid[1],perpBear,tickWidthKm/2);
+      const b=_destPoint(mid[0],mid[1],(perpBear+180)%360,tickWidthKm/2);
       const tick=L.polyline([a,b],{color:'#ff2222',weight:1.5,opacity:0.7,interactive:false,pane:'gps'}).addTo(map);
       gpsHeadingLine._ticks.push(tick);
       if(mins===60){const label=speedKmh?'60min ('+Math.round(totalDist)+'km)':'60min';gpsHeadingLine._ticks.push(L.marker(mid,{interactive:false,pane:'gps',icon:L.divIcon({className:'',html:'<span style="color:#ff4444;font-size:9px;font-family:monospace;white-space:nowrap;text-shadow:0 0 3px #000;">'+label+' GPS</span>',iconAnchor:[-4,12]})}).addTo(map));}
@@ -873,10 +951,24 @@ function toggleGPS(){
     document.getElementById('gps-btn').textContent='⊕ …';
     document.getElementById('gpsStatus').textContent='⌛ Locating…';
     document.getElementById('gpsStatus').style.color='#ffaa00';
-if(!navigator.geolocation){onGPSError({code:2});gpsActive=false;return;}
-    gpsWatchId=navigator.geolocation.watchPosition(onGPSSuccess,onGPSError,{enableHighAccuracy:true,maximumAge:10000,timeout:15000});
-    window.addEventListener('deviceorientationabsolute',onCompass,true);
-    window.addEventListener('deviceorientation',onCompass,true);
+    if(!navigator.geolocation){onGPSError({code:2});gpsActive=false;return;}
+gpsWatchId=navigator.geolocation.watchPosition(onGPSSuccess,onGPSError,{enableHighAccuracy:true,maximumAge:10000,timeout:15000});
+    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
+      DeviceOrientationEvent.requestPermission().then(state=>{
+        if(state==='granted'){
+          window.addEventListener('deviceorientationabsolute',onCompass,true);
+          window.addEventListener('deviceorientation',onCompass,true);
+        }else{
+          document.getElementById('gpsStatus').textContent+=' (compass denied)';
+        }
+      }).catch(()=>{
+        window.addEventListener('deviceorientationabsolute',onCompass,true);
+        window.addEventListener('deviceorientation',onCompass,true);
+      });
+    }else{
+      window.addEventListener('deviceorientationabsolute',onCompass,true);
+      window.addEventListener('deviceorientation',onCompass,true);
+    }
   }else{
     gpsActive=false;
     if(gpsWatchId!==null){navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;}
@@ -918,10 +1010,7 @@ function onCompass(e){
   });
 }
 
-document.getElementById('gps-btn').addEventListener('click',()=>{
-  _startCompassWatch();
-  toggleGPS();
-});
+document.getElementById('gps-btn').addEventListener('click',toggleGPS);
 
 // ── EC Past Lightning (GeoMet 3h) ─────────────────────────────
 async function loadECLightning(){
@@ -1057,7 +1146,62 @@ setInterval(()=>{
 },5000);
 
 connect();
-toggleGPS();
+setTimeout(toggleGPS, 500);
+
+(function initCompassPrompt() {
+  if (typeof DeviceOrientationEvent === 'undefined' || typeof DeviceOrientationEvent.requestPermission !== 'function') {
+    // Non-iOS: just add listeners directly, no prompt needed
+    window.addEventListener('deviceorientationabsolute', onCompass, true);
+    window.addEventListener('deviceorientation', onCompass, true);
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'compass-overlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:99999;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:rgba(8,8,18,0.82);backdrop-filter:blur(6px);
+    font-family:'Courier New',monospace;
+  `;
+  overlay.innerHTML = `
+    <div style="font-size:52px;margin-bottom:16px;animation:compassSpin 4s linear infinite;">🧭</div>
+    <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:8px;letter-spacing:0.04em;">Activate Compass</div>
+    <div style="font-size:12px;color:#888;margin-bottom:28px;text-align:center;max-width:240px;line-height:1.7;">
+      Allows the map to show your heading direction in real time.
+    </div>
+    <button id="compass-activate-btn" style="
+      background:rgba(0,255,150,0.12);border:1.5px solid #00ff96;
+      color:#00ff96;font-size:15px;font-family:'Courier New',monospace;
+      padding:14px 40px;border-radius:14px;cursor:pointer;
+      letter-spacing:0.06em;transition:background 0.15s;
+    ">⊕ Enable Compass</button>
+    <div id="compass-denied-msg" style="display:none;margin-top:16px;font-size:11px;color:#ff6b35;text-align:center;max-width:240px;line-height:1.7;">
+      Permission denied. Tap again or enable Motion &amp; Orientation in Safari Settings.
+    </div>
+  `;
+
+  const style = document.createElement('style');
+  style.textContent = `@keyframes compassSpin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }`;
+  document.head.appendChild(style);
+  document.body.appendChild(overlay);
+
+  document.getElementById('compass-activate-btn').addEventListener('click', () => {
+    DeviceOrientationEvent.requestPermission().then(state => {
+      if (state === 'granted') {
+        window.addEventListener('deviceorientationabsolute', onCompass, true);
+        window.addEventListener('deviceorientation', onCompass, true);
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity 0.4s';
+        setTimeout(() => overlay.remove(), 400);
+      } else {
+        document.getElementById('compass-denied-msg').style.display = 'block';
+      }
+    }).catch(() => {
+      document.getElementById('compass-denied-msg').style.display = 'block';
+    });
+  });
+})();
 
 // ── Context menu — right-click + long-press ───────────────────
 const ctxMenu = document.getElementById('mapContextMenu');
