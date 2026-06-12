@@ -756,6 +756,36 @@ enableRadar();
 
 // ── GPS ───────────────────────────────────────────────────────
 let gpsMarker=null, gpsRing=null, gpsAccCircle=null, gpsHeadingLine=null, gpsCompassLine=null, gpsCompassTicks=[], gpsActive=false, gpsWatchId=null;
+let _compassHeading=null, _compassWatching=false;
+
+function _startCompassWatch(){
+  if(_compassWatching) return;
+  function _attachOrientation(){
+    window.addEventListener('deviceorientationabsolute', _onOrientation, true);
+    window.addEventListener('deviceorientation', _onOrientation, true);
+    _compassWatching = true;
+  }
+  // iOS 13+ requires explicit permission
+  if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+    DeviceOrientationEvent.requestPermission().then(state=>{
+      if(state === 'granted') _attachOrientation();
+    }).catch(()=>{});
+  } else {
+    _attachOrientation();
+  }
+}
+
+function _onOrientation(e){
+  // 'deviceorientationabsolute' gives true heading directly
+  // 'deviceorientation' on iOS: use webkitCompassHeading
+  let heading = null;
+  if(e.absolute && e.alpha !== null){
+    heading = (360 - e.alpha) % 360;
+  } else if(e.webkitCompassHeading !== undefined && e.webkitCompassHeading !== null){
+    heading = e.webkitCompassHeading;
+  }
+  if(heading !== null && !isNaN(heading)) _compassHeading = heading;
+}
 let ecLightningLayers=[], ecLightningTimer=null, ecLightningEnabled=false;
 let _gpsPrev=null;
 const gpsIcon=L.divIcon({className:'',html:'<div class="gps-dot"></div>',iconSize:[14,14],iconAnchor:[7,7]});
@@ -775,8 +805,10 @@ function onGPSSuccess(pos){
   document.getElementById('gps-btn').classList.add('active');
   document.getElementById('gps-btn').textContent='⊕ GPS';
   const accStr=accuracy<1000?'±'+Math.round(accuracy)+'m':'±'+(accuracy/1000).toFixed(1)+'km';
-  let bear=null;
-  if(heading!==null&&!isNaN(heading)&&heading>=0){
+let bear=null;
+  if(_compassHeading!==null){
+    bear=_compassHeading;
+  } else if(heading!==null&&!isNaN(heading)&&heading>=0){
     bear=heading;
   } else if(_gpsPrev){
     const dLat=lat-_gpsPrev.lat, dLon=lon-_gpsPrev.lon;
@@ -841,7 +873,7 @@ function toggleGPS(){
     document.getElementById('gps-btn').textContent='⊕ …';
     document.getElementById('gpsStatus').textContent='⌛ Locating…';
     document.getElementById('gpsStatus').style.color='#ffaa00';
-    if(!navigator.geolocation){onGPSError({code:2});gpsActive=false;return;}
+if(!navigator.geolocation){onGPSError({code:2});gpsActive=false;return;}
     gpsWatchId=navigator.geolocation.watchPosition(onGPSSuccess,onGPSError,{enableHighAccuracy:true,maximumAge:10000,timeout:15000});
     window.addEventListener('deviceorientationabsolute',onCompass,true);
     window.addEventListener('deviceorientation',onCompass,true);
@@ -886,7 +918,10 @@ function onCompass(e){
   });
 }
 
-document.getElementById('gps-btn').addEventListener('click',toggleGPS);
+document.getElementById('gps-btn').addEventListener('click',()=>{
+  _startCompassWatch();
+  toggleGPS();
+});
 
 // ── EC Past Lightning (GeoMet 3h) ─────────────────────────────
 async function loadECLightning(){
