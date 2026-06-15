@@ -383,7 +383,10 @@ function patchAll() {
   // Attempt master slider init immediately — frames are loaded at this point
   // and steps arrays are likely already populated.
   tryInitMasterSlider();
-// Always run the poll — master steps AND map sync AND p1 default all need it.
+// Explicit jump sequence: last step → first step, to force 500/700 hPa init
+  setTimeout(function() { jumpInitSequence(); }, 1200);
+
+  // Always run the poll — master steps AND map sync AND p1 default all need it.
   var _initRetries = 0;
   var _initPoll = setInterval(function() {
       tryInitMasterSlider();
@@ -636,6 +639,37 @@ window.addEventListener('message', function(e) {
     mirrorStep(src, tgt, srcIdx);
   });
 });
+
+// ── Init jump sequence ─────────────────────────────────────────────────────
+// Drives all panes to the last step then back to step 0, so the 500/700 hPa
+// level overrides fire against a real rendered frame, not an empty one.
+function jumpInitSequence() {
+  var MAX_WAIT = 60;   // max 30s (60 × 500ms poll)
+  var attempts = 0;
+  var poll = setInterval(function() {
+    attempts++;
+    // Wait until master steps are known and p1/p4 overrides are installed
+    if (!_masterSteps || !_p1DefaultDone || !_p4DefaultDone) {
+      if (attempts >= MAX_WAIT) clearInterval(poll);
+      return;
+    }
+    clearInterval(poll);
+
+    var last = _masterSteps.length - 1;
+    var slider = document.getElementById('master-slider');
+
+    // Step 1: jump to last
+    slider.value = String(last);
+    onMasterSlider(last);
+
+    // Step 2: after a short delay, jump back to step 0
+    setTimeout(function() {
+      slider.value = '0';
+      onMasterSlider(0);
+    }, 600);
+
+  }, 500);
+}
 
 // ── Master slider ──────────────────────────────────────────────────────────
 var _masterSteps   = null;   // steps array from the reference pane (p1 or p3)
