@@ -497,7 +497,7 @@ SFC_HOURS = [0, 12]        # surface output rows — UTC
 #               window: 18Z day D-1 → 06Z day D, labelled as 00Z day D
 
 # ── Pressure levels ───────────────────────────────────────────────────────────
-GEM_PRESSURE_LEVELS = [500, 850]   # hPa — isobaric levels to fetch
+GEM_PRESSURE_LEVELS = [500, 700, 850]   # hPa — isobaric levels to fetch
 FETCH_SFC           = True         # fetch surface (MSLP + Precip-Accum → QPF12H)
 
 # ── Grid domain ───────────────────────────────────────────────────────────────
@@ -1575,7 +1575,7 @@ print('--- Upper Air station - Data extract ---')
 import pandas as pd
 import numpy as np
 
-STANDARD_LEVELS = [850, 500]
+STANDARD_LEVELS = [850, 700, 500]
 LEVEL_TOL       = 25
 
 FIELDS = ['PRES','HGHT','TEMP','DWPT','RELH','MIXR','DRCT','SPED','THTA','THTE','THTV']
@@ -2251,7 +2251,7 @@ _INTERVALS = {'HGHT': 6.0, 'TEMP': 2.0, 'TTDP': 2.0, 'SPED': 5.0}
 
 HL_LEVELS           = [850, 700, 500]
 HL_SMOOTH_N         = 3
-HL_MIN_PERSISTENCE  = {850: 1.0,   700: 3.0,   500: 1.0}
+HL_MIN_PERSISTENCE  = {850: 1.0,   700: 1.0,   500: 1.0}
 HL_MIN_DISTANCE_KM  = {850: 250.0, 700: 280.0, 500: 300.0}
 HL_EDGE_SKIP_DEG    = 2.5
 
@@ -2782,6 +2782,138 @@ def _process_level(_df_hr, _plvl, _bands_850, _bands_500, _hght_levels, _key):
                 _ttdp_segs = _extract_contours(glon2d, glat2d, grid_td, td_levels)
     _lvl_data['ttdp'] = _ttdp_segs
 
+  
+# ── Relative humidity (700 hPa only) ────────────────────────────────
+    _relh_segs  = []
+    _relh_fills = []
+    if _plvl == 700:
+        lons_r, lats_r, vals_r = _pts_for(_col('RELH'))
+        if lons_r is not None and len(lons_r) >= 8:
+            rgrid, lv_r, ltv_r = _make_grid(lons_r, lats_r, vals_r, N=_n)
+            rgrid = _smooth(rgrid, _SIGMA.get('RELH', _SIGMA['TEMP']))
+            glon2d, glat2d = np.meshgrid(lv_r, ltv_r)
+
+            # Contour lines: only 70% and 90% (drop anything below 70%)
+            r_levels = np.array([70, 80, 90])
+            _relh_segs = _extract_contours(glon2d, glat2d, rgrid, r_levels)
+
+            try:
+                from matplotlib.figure import Figure as _Figure
+                from shapely.geometry import Polygon as _SP
+
+                _band_defs = [(70, 90, '#add8e6'), (90, 1000, '#00008b')]
+
+                # Compute 60-70% "dry hole" polygons once, with their own figure/axes
+                _fig_h = _Figure(figsize=(1, 1))
+                _ax_h  = _fig_h.add_subplot(111)
+                _cf60  = _ax_h.contourf(glon2d, glat2d, rgrid, levels=[-1000, 70])
+                _segs60 = _cf60.allsegs[0] if _cf60.allsegs else []
+                del _fig_h, _ax_h, _cf60
+
+                for (_lo, _hi, _color) in _band_defs:
+                    _fig_b = _Figure(figsize=(1, 1))
+                    _ax_b  = _fig_b.add_subplot(111)
+                    _cf = _ax_b.contourf(glon2d, glat2d, rgrid, levels=[_lo, _hi])
+                    _segs_for_band = _cf.allsegs[0] if _cf.allsegs else []
+                    del _fig_b, _ax_b, _cf
+
+                    # For the 70-90 band, any 60-70 polygon whose centroid lies
+                    # inside this band's outer polygon is a "dry hole" to subtract.
+                    _holes_for_band = []
+                    if _lo == 70:
+                        _outer_polys = []
+                        for _poly in _segs_for_band:
+                            if len(_poly) < 3:
+                                continue
+                            try:
+                                _p = _SP(_poly)
+                                if not _p.is_valid:
+                                    _p = _p.buffer(0)
+                                _outer_polys.append(_p)
+                            except Exception:
+                                continue
+                        for _hpoly in _segs60:
+                            if len(_hpoly) < 3:
+                                continue
+                            try:
+                                _hp = _SP(_hpoly)
+                                if not _hp.is_valid:
+                                    _hp = _hp.buffer(0)
+                                _c = _hp.representative_point()
+                                for _op in _outer_polys:
+                                    if _hp.area >= _op.area * 0.95:
+                                        continue
+                                    if _op.contains(_c) or _op.covers(_c):
+                                        _holes_for_band.append(
+                                            [[float(p[0]), float(p[1])] for p in _hpoly]
+                                        )
+                                        break
+                            except Exception:
+                                continue
+
+                    if _holes_for_band:
+                        from shapely.ops import unary_union as _UU
+                        _hole_polys = []
+                        for _h in _holes_for_band:
+                            try:
+                                _hp = _SP(_h)
+                                if not _hp.is_valid:
+                                    _hp = _hp.buffer(0)
+                                _hole_polys.append(_hp)
+                            except Exception:
+                                continue
+                        _hole_union = _UU(_hole_polys) if len(_hole_polys) > 1 else (_hole_polys[0] if _hole_polys else None)
+
+                        for _poly in _segs_for_band:
+                            if len(_poly) < 3:
+                                continue
+                            try:
+                                _outer_p = _SP(_poly)
+                                if not _outer_p.is_valid:
+                                    _outer_p = _outer_p.buffer(0)
+                                _result = _outer_p.difference(_hole_union) if _hole_union is not None else _outer_p
+                                if not _result.is_valid:
+                                    _result = _result.buffer(0)
+                                print(f'        outer area={_outer_p.area:.4f} -> result area={_result.area:.4f}')
+                                if _result.is_empty:
+                                    continue
+                                _geoms = list(_result.geoms) if _result.geom_type == 'MultiPolygon' else [_result]
+                                for _g in _geoms:
+                                    if _g.is_empty or _g.geom_type != 'Polygon':
+                                        continue
+                                    _outer_coords = [[float(c[0]), float(c[1])] for c in _g.exterior.coords]
+                                    _holes_out = [
+                                        [[float(c[0]), float(c[1])] for c in _interior.coords]
+                                        for _interior in _g.interiors
+                                    ]
+                                    _relh_fills.append({
+                                        'coords': _outer_coords,
+                                        'holes':  _holes_out,
+                                        'color':  _color,
+                                        'lo':     float(_lo),
+                                        'hi':     float(_hi if _hi < 1000 else 999),
+                                    })
+                            except Exception:
+                                continue
+                    else:
+                        for _poly in _segs_for_band:
+                            if len(_poly) < 3:
+                                continue
+                            _relh_fills.append({
+                                'coords': [[float(p[0]), float(p[1])] for p in _poly],
+                                'holes':  [],
+                                'color':  _color,
+                                'lo':     float(_lo),
+                                'hi':     float(_hi if _hi < 1000 else 999),
+                            })
+                    print(f'      RELH {_lo}-{_hi}%: {len(_segs_for_band)} fill polygon(s), '
+                          f'{len(_holes_for_band)} hole(s), '
+                          f'rgrid range [{np.nanmin(rgrid):.0f}, {np.nanmax(rgrid):.0f}]%')
+            except Exception as _e:
+                print(f'      ⚠ RELH fill contourf failed: {_e}')
+
+    _lvl_data['relh']       = _relh_segs
+    _lvl_data['relh_fills'] = _relh_fills
     # ── Wind speed ────────────────────────────────────────────────────────
     _sped_segs = []
     lons_s, lats_s, vals_s = _pts_for(_col('SPED'))
@@ -3966,6 +4098,7 @@ _bar_html = '''
   <div class="bar-section">
     <span class="bar-label">Level</span>
     <button class="syn-lvl-btn active" id="btn-850" onclick="synSetLevel(\'850\')">850 hPa</button>
+    <button class="syn-lvl-btn"        id="btn-700" onclick="synSetLevel(\'700\')">700 hPa</button>
     <button class="syn-lvl-btn"        id="btn-500" onclick="synSetLevel(\'500\')">500 hPa</button>
   </div>
   <div class="bar-section">
@@ -4147,7 +4280,62 @@ function synRenderUA(fullKey, stepLabel) {{
       iconSize: [32,16], iconAnchor: [16,8], className: ""
     }}) }}).addTo(_synUALayer);
   }});
+  // ── Relative humidity fills + contours (700 hPa only) ─────────────────
+  if (_synLevel === "700") {{
+    if (!MAP.getPane("relhPane")) {{
+      MAP.createPane("relhPane");
+      MAP.getPane("relhPane").style.zIndex        = 475;
+      MAP.getPane("relhPane").style.pointerEvents = "none";
+    }}
 
+    // Fills (70-90% light blue, 90%+ dark blue)
+    (uaData.relh_fills || []).forEach(function(poly) {{
+      if (!poly.coords || poly.coords.length < 3) return;
+      var outerLL = poly.coords.map(function(c) {{ return [c[1], c[0]]; }});
+      var holes = (poly.holes || []).map(function(hole) {{
+        return hole.map(function(c) {{ return [c[1], c[0]]; }});
+      }});
+      var rings = [outerLL].concat(holes);
+      L.polygon(rings, {{
+        color: "none", weight: 0,
+        fillColor: poly.color, fillOpacity: 0.35,
+        fillRule: "evenodd",
+        interactive: false, pane: "relhPane"
+      }}).addTo(_synUALayer);
+    }});
+
+    // Contour lines (70% and 90% only)
+    (uaData.relh || []).forEach(function(ct) {{
+      var rh  = ct.level;
+      var ll  = ct.coords.map(function(c) {{ return [c[1], c[0]]; }});
+      var isBold = (Math.round(rh) === 90 || Math.round(rh) === 70);
+      var _rLine = L.polyline(ll, {{
+        color: "#008000", weight: isBold ? 4 : 2,
+        opacity: 1.0, dashArray: isBold ? "1 0" : "4 4"
+      }});
+      if (_synShowTooltips) _rLine.bindTooltip("700 hPa RH=" + Math.round(rh) + "%");
+      _rLine.addTo(_synUALayer);
+
+      // RH label near central Alberta
+      var _abLat = 55.0, _abLon = -115.0, _abBest = null, _abBestDist = 1e9;
+      ct.coords.forEach(function(c) {{
+        var d = (c[1]-_abLat)*(c[1]-_abLat) + (c[0]-_abLon)*(c[0]-_abLon);
+        if (d < _abBestDist) {{ _abBestDist = d; _abBest = c; }}
+      }});
+      var _abLblLat = _abBest ? _abBest[1] : ct.label_lat;
+      var _abLblLon = _abBest ? _abBest[0] : ct.label_lon;
+      L.marker([_abLblLat, _abLblLon], {{ icon: L.divIcon({{
+        html: '<div style="font-size:11px;font-weight:' + (isBold ? "900" : "bold") + ';'
+            + 'color:#008000;background:rgba(255,255,255,0.75);'
+            + 'font-family:Courier New,monospace;'
+            + 'padding:0 2px;line-height:1.3;text-align:center;border-radius:2px;">'
+            + Math.round(rh) + '</div>',
+        iconSize: [28,14], iconAnchor: [14,7], className: ""
+      }}) }}).addTo(_synUALayer);
+    }});
+  }}
+
+  
     // ── UA H/L centres ────────────────────────────────────────────────────
   var _uaHL = (_SYN_UA[fullKey] || {{}})["hl_" + _synLevel] || [];
   _uaHL.forEach(function(c) {{
@@ -5288,6 +5476,7 @@ _bar_html = '''
   <div class="bar-section">
     <span class="bar-label">Level</span>
     <button class="syn-lvl-btn active" id="btn-850" onclick="synSetLevel(\'850\')">850 hPa</button>
+    <button class="syn-lvl-btn"        id="btn-700" onclick="synSetLevel(\'700\')">700 hPa</button>
     <button class="syn-lvl-btn"        id="btn-500" onclick="synSetLevel(\'500\')">500 hPa</button>
   </div>
   <div class="bar-section">
