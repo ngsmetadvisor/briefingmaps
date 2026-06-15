@@ -66,10 +66,13 @@
   .dot-1 { background: var(--accent); }
   .dot-2 { background: var(--accent2); }
   .dot-3 { background: var(--accent3); }
+  .dot-4 { background: #c34a9e; }
 
   /* ── Map panes ── */
   #maps {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
     height: calc(100vh - var(--header-h));
     width: 100%;
   }
@@ -101,6 +104,7 @@
   .pane-badge.p1 { color: var(--accent);  border-color: var(--accent); }
   .pane-badge.p2 { color: var(--accent2); border-color: var(--accent2); }
   .pane-badge.p3 { color: var(--accent3); border-color: var(--accent3); }
+  .pane-badge.p4 { color: #c34a9e; border-color: #c34a9e; }
 
   /* Loading overlay */
   .pane-loading {
@@ -121,6 +125,7 @@
   }
   .pane-loading.p2 .spinner { border-top-color: var(--accent2); }
   .pane-loading.p3 .spinner { border-top-color: var(--accent3); }
+  .pane-loading.p4 .spinner { border-top-color: #c34a9e; }
   .pane-loading span { font-size: 11px; color: var(--muted); }
   @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -237,7 +242,7 @@
 <div id="header">
   <div class="logo">AWCC TRIPLE MAP</div>
   <div class="divider"></div>
-  <div class="map-labels">
+<div class="map-labels">
     <div class="map-label">
       <span class="dot dot-1"></span>
       <span>UA 1 — 850 / 500 hPa Heights &amp; Isotherms</span>
@@ -245,6 +250,10 @@
     <div class="map-label">
       <span class="dot dot-2"></span>
       <span>UA 2 — 850 / 500 hPa Heights &amp; Isotherms</span>
+    </div>
+    <div class="map-label">
+      <span class="dot dot-4"></span>
+      <span>UA 3 — 700 hPa Heights, Isotherms &amp; RH</span>
     </div>
     <div class="map-label">
       <span class="dot dot-3"></span>
@@ -301,6 +310,22 @@
   </div>
 
   <div class="map-pane">
+    <div class="pane-badge p4">UA 3 — 700 hPa</div>
+    <div class="pane-loading p4" id="load-p4">
+      <div class="spinner"></div>
+      <span>Loading upper air map 3…</span>
+    </div>
+    <div class="pane-blank" id="blank-p4">
+      <div class="no-data-icon">⊘</div>
+      <div class="no-data-label">No data for this time step</div>
+      <div class="no-data-ts" id="blank-ts-p4"></div>
+    </div>
+    <iframe id="frame-p4"
+      src="https://ngsmetadvisor.github.io/briefingmaps/synoptic_map.html"
+      onload="frameLoaded('p4')"></iframe>
+  </div>
+
+  <div class="map-pane">
     <div class="pane-badge p3">SFC — MSLP &amp; QPF 12h</div>
     <div class="pane-loading p3" id="load-p3">
       <div class="spinner"></div>
@@ -328,27 +353,27 @@
 var PANES = [
   { id: 'p1', frameId: 'frame-p1', fnName: 'synSliderChange', sliderId: 'syn-time-slider', stepsVar: '_SYN_TIME_STEPS', msgType: 'SYN_STEP_P1' },
   { id: 'p2', frameId: 'frame-p2', fnName: 'synSliderChange', sliderId: 'syn-time-slider', stepsVar: '_SYN_TIME_STEPS', msgType: 'SYN_STEP_P2' },
+  { id: 'p4', frameId: 'frame-p4', fnName: 'synSliderChange', sliderId: 'syn-time-slider', stepsVar: '_SYN_TIME_STEPS', msgType: 'SYN_STEP_P4' },
   { id: 'p3', frameId: 'frame-p3', fnName: 'gemSliderChange', sliderId: 'gem-time-slider', stepsVar: '_GEM_STEPS',       msgType: 'GEM_STEP_P3' }
 ];
-
 // Build a fast lookup: msgType → pane config
 var MSG_MAP = {};
 PANES.forEach(function(p) { MSG_MAP[p.msgType] = p; });
 
 // ── Ready tracking ─────────────────────────────────────────────────────────
-var _ready = { p1: false, p2: false, p3: false };
+var _ready = { p1: false, p2: false, p3: false, p4: false };
 
 function frameLoaded(id) {
   var el = document.getElementById('load-' + id);
   if (el) el.classList.add('hidden');
   _ready[id] = true;
-  if (_ready.p1 && _ready.p2 && _ready.p3) setTimeout(patchAll, 400);
+  if (_ready.p1 && _ready.p2 && _ready.p3 && _ready.p4) setTimeout(patchAll, 400);
 }
 
 // ── Patch every frame ──────────────────────────────────────────────────────
 var _p1DefaultDone = false;
-var _mapSyncDone   = { p1: false, p2: false, p3: false };
-
+var _mapSyncDone   = { p1: false, p2: false, p3: false, p4: false };
+ 
 function patchAll() {
   PANES.forEach(function(p) {
     patchFrame(p);
@@ -364,6 +389,7 @@ function patchAll() {
       tryInitMasterSlider();
       _initRetries++;
       if (!_p1DefaultDone) initP1Default();
+      if (!_p4DefaultDone) initP4Default();
       PANES.forEach(function(p) {
         if (!_mapSyncDone[p.id]) {
           var win = document.getElementById(p.frameId).contentWindow;
@@ -373,10 +399,42 @@ function patchAll() {
           }
         }
       });
-var allMapsDone = _mapSyncDone.p1 && _mapSyncDone.p2 && _mapSyncDone.p3;
-      if (allMapsDone && _masterSteps && _p1DefaultDone) clearInterval(_initPoll);
+var allMapsDone = _mapSyncDone.p1 && _mapSyncDone.p2 && _mapSyncDone.p3 && _mapSyncDone.p4;
+      if (allMapsDone && _masterSteps && _p1DefaultDone && _p4DefaultDone) clearInterval(_initPoll);
       if (_initRetries >= 40) clearInterval(_initPoll);
     }, 500);
+}
+
+// ── Set 700 hPa default on p4 ─────────────────────────────────────────────
+// We patch synSetLevel in p4 so the moment the map calls it with '850' during
+// its own init, we immediately follow with '700'. The flag prevents a loop.
+var _p4DefaultDone = false;
+function initP4Default() {
+  if (_p4DefaultDone) return;
+  try {
+    var win = document.getElementById('frame-p4').contentWindow;
+    if (typeof win.synSetLevel !== 'function') return;
+    _p4DefaultDone = true;
+    var originalSetLevel = win.synSetLevel;
+    var overrideDone = false;
+
+    win.synSetLevel = function(level) {
+      originalSetLevel.call(win, level);
+      // The map's own init calls synSetLevel('850') — intercept it once
+      if (!overrideDone && String(level) === '850') {
+        overrideDone = true;
+        // Restore original so user can freely switch levels afterward
+        win.synSetLevel = originalSetLevel;
+        originalSetLevel.call(win, '700');
+        // Also click the button so its active state updates visually
+        var btn = win.document.getElementById('btn-700');
+        if (btn) btn.click();
+        console.log('[AWCC] p4 overridden to 700 hPa after init');
+      }
+    };
+  } catch(e) {
+    console.warn('[AWCC] initP4Default error:', e);
+  }
 }
 
 // ── Set 500 hPa default on p1 ─────────────────────────────────────────────
@@ -530,16 +588,33 @@ window.addEventListener('message', function(e) {
     } catch(e) {}
   }
 
+  // Every step from p4 → ensure 700 hPa is active
+  if (src.id === 'p4') {
+    try {
+      var p4win = document.getElementById('frame-p4').contentWindow;
+      var btn700 = p4win.document.getElementById('btn-700');
+      if (btn700 && !btn700.classList.contains('active')) {
+        btn700.click();
+      }
+    } catch(e) {}
+  }
+
   // First step from any pane → safe to attach map sync (Leaflet is fully ready)
   if (!_mapSyncDone[src.id]) {
     _mapSyncDone[src.id] = true;
     patchMapSync(src);
   }
 
-  // First step from p1 → install the 850→500 init intercept
+// First step from p1 → install the 850→500 init intercept
   if (src.id === 'p1' && !_p1DefaultDone) {
     _p1DefaultDone = true;
     initP1Default();
+  }
+
+  // First step from p4 → install the 850→700 init intercept
+  if (src.id === 'p4' && !_p4DefaultDone) {
+    _p4DefaultDone = true;
+    initP4Default();
   }
 
   // Update banner timestamp from source frame's steps label
@@ -634,6 +709,14 @@ setPaneBlank(p.id, false, '');
         try {
           var btn500 = win.document.getElementById('btn-500');
           if (btn500 && !btn500.classList.contains('active')) btn500.click();
+        } catch(e2) {}
+      }
+
+      // Ensure 700 hPa stays active on p4 after every master-driven step
+      if (p.id === 'p4') {
+        try {
+          var btn700 = win.document.getElementById('btn-700');
+          if (btn700 && !btn700.classList.contains('active')) btn700.click();
         } catch(e2) {}
       }
     } catch(e) {
