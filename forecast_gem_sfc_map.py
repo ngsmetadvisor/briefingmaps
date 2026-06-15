@@ -1116,13 +1116,11 @@ async def _fetch_and_extract_all():
         col    = _VAR_MAP[var_name]
         async with sem:
             try:
-                # new
-                # new
                 async with session.get(
                         url, timeout=aiohttp.ClientTimeout(
-                            total=TIMEOUT_S*2, sock_connect=15, sock_read=TIMEOUT_S)) as r:
+                            total=TIMEOUT_S, sock_connect=15, sock_read=TIMEOUT_S)) as r:
                     if r.status == 200:
-                        raw = await asyncio.wait_for(r.read(), timeout=TIMEOUT_S)
+                        raw = await r.read()
                     else:
                         raw = None
                     status = r.status
@@ -1158,9 +1156,9 @@ async def _fetch_and_extract_all():
             try:
                 async with session.get(
                         url, timeout=aiohttp.ClientTimeout(
-                            total=TIMEOUT_S*2, sock_connect=15, sock_read=TIMEOUT_S)) as r:
+                            total=TIMEOUT_S, sock_connect=15, sock_read=TIMEOUT_S)) as r:
                     if r.status == 200:
-                        raw = await asyncio.wait_for(r.read(), timeout=TIMEOUT_S)
+                        raw = await r.read()
                     else:
                         raw = None
                     status = r.status
@@ -1200,9 +1198,12 @@ async def _fetch_and_extract_all():
     print(f'Fetch phase started — {len(_tasks)} isobaric + {len(_sfc_tasks)} surface tasks', flush=True)
     connector = aiohttp.TCPConnector(limit=MAX_CONCURRENT, ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
-        await asyncio.gather(
-            *[_worker_isob(*t) for t in _tasks],
-            *[_worker_sfc(*t)  for t in _sfc_tasks],
+        await asyncio.wait_for(
+            asyncio.gather(
+                *[_worker_isob(*t) for t in _tasks],
+                *[_worker_sfc(*t)  for t in _sfc_tasks],
+            ),
+            timeout=900,   # 15 min hard cap — retries handle any gaps
         )
 
     # ── Completeness report ───────────────────────────────────────────────────
@@ -1365,9 +1366,12 @@ if _tasks_missing or _sfc_tasks_missing:
         print(f'Retry phase started — {len(_tasks_missing)} isobaric + {len(_sfc_tasks_missing)} surface tasks', flush=True)
         connector = aiohttp.TCPConnector(limit=MAX_CONCURRENT, ssl=False)
         async with aiohttp.ClientSession(connector=connector) as session:
-            await asyncio.gather(
-                *[_worker_isob_r(*t) for t in _tasks_missing],
-                *[_worker_sfc_r(*t)  for t in _sfc_tasks_missing],
+            await asyncio.wait_for(
+                asyncio.gather(
+                    *[_worker_isob_r(*t) for t in _tasks_missing],
+                    *[_worker_sfc_r(*t)  for t in _sfc_tasks_missing],
+                ),
+                timeout=600,   # 10 min cap on retry phase
             )
         return errors
 
