@@ -4150,7 +4150,7 @@ function _setExportStatus(msg) {{
 // ── Level selector ────────────────────────────────────────────────────────
 function synSetLevel(lvl) {{
   _synLevel = lvl;
-  _btnOff("btn-850"); _btnOff("btn-500");
+  _btnOff("btn-850"); _btnOff("btn-700"); _btnOff("btn-500");
   _btnOn("btn-" + lvl);
   synRender();
 }}
