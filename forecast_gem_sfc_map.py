@@ -2658,9 +2658,9 @@ def _find_ua_hl_metpy(hght_grid, lon_vec, lat_vec, pressure_level):
 #  W/C DETECTION
 # ══════════════════════════════════════════════════════════════════════════
 # ── W/C (Warm/Cold centre) detection config ───────────────────────────────
-WC_LEVELS         = [850, 500]          # pressure levels to detect on
-WC_MIN_PERSISTENCE = {850: 1.0, 500: 1.0}   # °C
-WC_MIN_DISTANCE_KM = {850: 400.0, 500: 400.0}
+WC_LEVELS         = [850, 700, 500]          # pressure levels to detect on
+WC_MIN_PERSISTENCE = {850: 1.0, 700: 1.0, 500: 1.0}   # °C
+WC_MIN_DISTANCE_KM = {850: 400.0, 700: 400.0, 500: 400.0}
 WC_EDGE_SKIP_DEG  = HL_EDGE_SKIP_DEG        # reuse same edge margin
 WC_SMOOTH_N       = HL_SMOOTH_N             # reuse same MetPy smoothing
 
