@@ -6890,7 +6890,7 @@ _banner_html = f'''
     display:flex;align-items:center;
     padding:0 20px;font-size:18px;font-weight:bold;
   ">
-    GEM Surface — MSLP &amp; 12h Precipitation accumulation
+    MSLP &amp; 12h Precipitation accumulation
   </div>
   <div style="
     background:#ffffff;color:#333333;
