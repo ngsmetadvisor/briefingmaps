@@ -1714,28 +1714,347 @@ else:
           f'{ua_summary_df["hour"].nunique()} hours)')
 
 # @title
-# ── Block 01 SKIPPED — populate empty segment globals for downstream cells ──
-print('000--------  500 & 700 Ridge and Trough')
-import pandas as pd
+print('=' * 60)
+print('  BLOCK 01 — 850/500 hPa Ridge & Trough Detection')
+print('  Method: Row-wise find_peaks (M5) on pre-gridded GEM data')
+print('=' * 60)
 
-ua_summary_df['_vt']   = pd.to_datetime(ua_summary_df['valid_time'])
-ua_summary_df['_date'] = ua_summary_df['_vt'].dt.date
-ua_summary_df['_hour'] = ua_summary_df['_vt'].dt.hour
+# ── Tuning parameters ─────────────────────────────────────────────────────────
+M5_SIGMA      = 2.0    # Gaussian smooth before peak detection
+M5_PROMINENCE = 0.5    # minimum peak prominence (°C)
+M5_WIDTH      = 2      # minimum peak width (grid cells)
+M5_MAX_PEAKS  = 4      # max peaks kept per latitude row
+M5_MAX_DIST   = 4.0    # max gap (deg) to stay in same segment
+M5_MIN_PTS    = 4      # minimum points to form a valid segment
+SLP_INTERVAL  = 4      # hPa contour interval for MSLP overlay
+# ─────────────────────────────────────────────────────────────────────────────
 
-_synoptic_times = sorted(ua_summary_df[['_date','_hour']].drop_duplicates()
-                          .itertuples(index=False, name=None))
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
+from matplotlib.lines import Line2D
+from scipy.ndimage import gaussian_filter
+from scipy.spatial import cKDTree
+from scipy.signal import find_peaks
+import warnings
+warnings.filterwarnings('ignore')
 
-for (_date, _hr) in _synoptic_times:
-    _key      = f'{pd.Timestamp(_date).strftime("%Y%m%d")}_{int(_hr):02d}'
-    globals()[f'ridge_segs_{_key}']      = []
-    globals()[f'trough_segs_{_key}']     = []
-    globals()[f'ridge_segs_700_{_key}']  = []
-    globals()[f'trough_segs_700_{_key}'] = []
-    globals()[f'ridge_segs_500_{_key}']  = []
-    globals()[f'trough_segs_500_{_key}'] = []
+# ══════════════════════════════════════════════════════════════════════════════
+# STYLE
+# ══════════════════════════════════════════════════════════════════════════════
+DARK         = '#0d1117'
+PANEL        = '#161b22'
+WHITE        = '#e6edf3'
+RIDGE_COLOR  = '#CC44FF'
+TROUGH_COLOR = '#CC44FF'
+RIDGE_LW     = 3.2
+TROUGH_LW    = 3.2
 
 
-print('⚡ Block 01 skipped — empty segment globals ready')
+# ══════════════════════════════════════════════════════════════════════════════
+# GRID HELPERS  — pull directly from _raw_grids, no RBF
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _get_temp_grid(vt_str, pres_hpa):
+    """
+    Return (T2d, lons_1d, lats_1d) from _raw_grids for a given valid time
+    and pressure level.  Returns (None, None, None) if not available.
+    The raw grid may be 2D (curvilinear) or 1D (regular); we normalise to
+    a regular 2D array with 1D coordinate vectors.
+    """
+    key = ('AirTemp', vt_str, float(pres_hpa))
+    if key not in _raw_grids:
+        return None, None, None
+
+    g    = _raw_grids[key]
+    lats = g['lats']
+    lons = g['lons']
+    data = g['data'].copy().astype(float)
+
+    # Convert K → °C if needed (same logic as extraction cell)
+    if np.nanmax(data) > 100:
+        data -= 273.15
+
+    if lats.ndim == 2:
+        # Curvilinear (RDPS rotated grid) — extract unique sorted 1-D axes
+        lats_1d = np.unique(np.round(lats[:, 0], 4))
+        lons_1d = np.unique(np.round(lons[0, :], 4))
+        # data is already (nlat, nlon) after the crop in _extract_points_grib
+    else:
+        lats_1d = lats
+        lons_1d = lons
+
+    return data, lons_1d, lats_1d
+
+
+def _get_mslp_grid(vt_str):
+    """
+    Return (MSLP_2d, lons_1d, lats_1d) from _raw_grids.
+    MSLP is stored in Pa; convert to hPa here.
+    """
+    key = ('Pressure_MSL', vt_str)
+    if key not in _raw_grids:
+        return None, None, None
+
+    g    = _raw_grids[key]
+    lats = g['lats']
+    lons = g['lons']
+    data = g['data'].copy().astype(float)
+
+    # Pa → hPa
+    if np.nanmax(data) > 10000:
+        data /= 100.0
+
+    if lats.ndim == 2:
+        lats_1d = np.unique(np.round(lats[:, 0], 4))
+        lons_1d = np.unique(np.round(lons[0, :], 4))
+    else:
+        lats_1d = lats
+        lons_1d = lons
+
+    return data, lons_1d, lats_1d
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SEGMENT BUILDER
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _pts_to_segs(pts, max_dist=M5_MAX_DIST, min_pts=M5_MIN_PTS):
+    """Union-find segment builder from (lat, lon, strength) list."""
+    if len(pts) < min_pts:
+        return []
+    arr = np.array(pts)
+
+    dedup = {}
+    for r in arr:
+        k = (round(r[0]*2)/2, round(r[1]*2)/2)
+        if k not in dedup or r[2] > dedup[k][2]:
+            dedup[k] = r
+    arr = np.array(list(dedup.values()))
+    if len(arr) < min_pts:
+        return []
+
+    tree   = cKDTree(arr[:, :2])
+    pairs  = tree.query_pairs(max_dist)
+    parent = list(range(len(arr)))
+
+    def _find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]; x = parent[x]
+        return x
+
+    for a, b in pairs:
+        ra, rb = _find(a), _find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    clusters = {}
+    for i in range(len(arr)):
+        clusters.setdefault(_find(i), []).append(i)
+
+    segs = []
+    for idxs in clusters.values():
+        if len(idxs) < min_pts:
+            continue
+        sp  = sorted([(arr[i][0], arr[i][1]) for i in idxs], key=lambda p: p[0])
+        sub, cur = [], [sp[0]]
+        for k in range(1, len(sp)):
+            if (abs(sp[k][0]-sp[k-1][0]) > max_dist*1.5 or
+                    abs(sp[k][1]-sp[k-1][1]) > max_dist*1.5):
+                if len(cur) >= min_pts:
+                    sub.append(cur)
+                cur = []
+            cur.append(sp[k])
+        if len(cur) >= min_pts:
+            sub.append(cur)
+        segs.extend(sub)
+    return segs
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M5 DETECTOR
+# ══════════════════════════════════════════════════════════════════════════════
+
+def detect_m5(T, lv, ltv):
+    """
+    Row-wise find_peaks per latitude band.
+    Ridge  → local T maxima
+    Trough → local T minima
+    Returns (ridge_segs, trough_segs)
+    """
+    Ts = gaussian_filter(T, sigma=M5_SIGMA)
+    ridge_pts, trough_pts = [], []
+
+    for j, lat in enumerate(ltv):
+        row = Ts[j, :]
+
+        pk, pr = find_peaks(row, prominence=M5_PROMINENCE, width=M5_WIDTH)
+        if len(pk):
+            top = np.argsort(pr['prominences'])[-M5_MAX_PEAKS:]
+            for idx in pk[top]:
+                prom = pr['prominences'][np.where(pk == idx)[0][0]]
+                ridge_pts.append((lat, lv[idx], float(prom)))
+
+        tr, tpr = find_peaks(-row, prominence=M5_PROMINENCE, width=M5_WIDTH)
+        if len(tr):
+            top = np.argsort(tpr['prominences'])[-M5_MAX_PEAKS:]
+            for idx in tr[top]:
+                prom = tpr['prominences'][np.where(tr == idx)[0][0]]
+                trough_pts.append((lat, lv[idx], float(prom)))
+
+    return _pts_to_segs(ridge_pts), _pts_to_segs(trough_pts)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIGURE BUILDER
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _make_figure(mode, segs, T, lv, ltv,
+                 mslp_grid, mslp_lv, mslp_ltv,
+                 pres_hpa, valid_str):
+
+    is_ridge   = (mode == 'ridge')
+    line_color = RIDGE_COLOR if is_ridge else TROUGH_COLOR
+    line_lw    = RIDGE_LW   if is_ridge else TROUGH_LW
+    line_ls    = 'solid'    if is_ridge else (0, (6, 3))
+    mode_title = '🟣 WARM RIDGE' if is_ridge else '🟣 COLD TROUGH'
+    hdr_color  = '#DD88FF'
+
+    fig = plt.figure(figsize=(16, 10), facecolor=DARK)
+    fig.suptitle(
+        f'{int(pres_hpa)} hPa  {mode_title}  ·  M5 Row-wise find_peaks  ·  {valid_str}',
+        fontsize=16, fontweight='bold', color=hdr_color, y=0.982)
+
+    ax = fig.add_axes([0.06, 0.07, 0.87, 0.87], facecolor=PANEL)
+    GL, GLA = np.meshgrid(lv, ltv)
+
+    cf   = ax.contourf(GL, GLA, T, levels=30, cmap='RdYlBu_r', alpha=0.75)
+    cbar = fig.colorbar(cf, ax=ax, fraction=0.022, pad=0.01)
+    cbar.set_label(f'{int(pres_hpa)} hPa T (°C)', color=WHITE, fontsize=9)
+    cbar.ax.yaxis.set_tick_params(color=WHITE, labelsize=8)
+    plt.setp(cbar.ax.get_yticklabels(), color=WHITE)
+    cbar.outline.set_edgecolor('#555')
+
+    t_lvls = np.arange(np.floor(T.min()/2)*2,
+                       np.ceil( T.max()/2)*2 + 2, 2)
+    ax.contour(GL, GLA, T, levels=t_lvls,
+               colors='white', linewidths=0.35, alpha=0.22)
+
+    if mslp_grid is not None:
+        SL, SLA = np.meshgrid(mslp_lv, mslp_ltv)
+        s_min = np.floor(np.nanmin(mslp_grid)/SLP_INTERVAL)*SLP_INTERVAL
+        s_max = np.ceil( np.nanmax(mslp_grid)/SLP_INTERVAL)*SLP_INTERVAL
+        slvls = np.arange(s_min, s_max + SLP_INTERVAL, SLP_INTERVAL)
+        ax.contour(SL, SLA, mslp_grid, levels=slvls,
+                   colors='white', alpha=0.50,
+                   linewidths=[1.6 if int(l) % 20 == 0 else 0.6 for l in slvls])
+
+    total_pts = 0
+    for seg in segs:
+        xs = [p[1] for p in seg]
+        ys = [p[0] for p in seg]
+        total_pts += len(seg)
+        ax.plot(xs, ys,
+                color=line_color, linewidth=line_lw, linestyle=line_ls,
+                solid_capstyle='round', solid_joinstyle='round',
+                zorder=10,
+                path_effects=[
+                    pe.Stroke(linewidth=line_lw+3.0, foreground=DARK, alpha=0.8),
+                    pe.Normal()])
+        mi  = len(seg) // 2
+        lbl = 'RIDGE' if is_ridge else 'TRGH'
+        ax.text(seg[mi][1], seg[mi][0], lbl,
+                fontsize=6.5, color=line_color, fontweight='bold',
+                ha='center', va='bottom' if is_ridge else 'top',
+                zorder=11,
+                path_effects=[pe.withStroke(linewidth=2, foreground=DARK)])
+
+    seg_lbl = (f"{len(segs)} segment{'s' if len(segs)!=1 else ''}  "
+               f"·  {total_pts} points")
+    handles = [
+        Line2D([0],[0], color='white',    lw=0.8,
+               label=f'{int(pres_hpa)} hPa T isotherms'),
+        Line2D([0],[0], color='white',    lw=1.5, alpha=0.5, label='SLP isobars'),
+        Line2D([0],[0], color=line_color, lw=2.8, ls=line_ls,
+               label=f"{'Ridge' if is_ridge else 'Trough'} — {seg_lbl}"),
+    ]
+    ax.legend(handles=handles, loc='lower left',
+              fontsize=10, facecolor='#1c2333', edgecolor='#555',
+              labelcolor=WHITE, framealpha=0.94, handlelength=3.2)
+
+    ax.set_xlim(lv.min()-1, lv.max()+1)
+    ax.set_ylim(ltv.min()-1, ltv.max()+1)
+    ax.set_xlabel('Longitude (°E)', color=WHITE, fontsize=10)
+    ax.set_ylabel('Latitude (°N)',  color=WHITE, fontsize=10)
+    ax.tick_params(colors=WHITE, labelsize=9)
+    for sp in ax.spines.values():
+        sp.set_edgecolor('#444')
+
+    fig.text(0.5, 0.005,
+             f'M5 params — σ={M5_SIGMA}  prominence={M5_PROMINENCE}  '
+             f'width={M5_WIDTH}  max_peaks/row={M5_MAX_PEAKS}  '
+             f'max_link_dist={M5_MAX_DIST}°  min_seg_pts={M5_MIN_PTS}',
+             ha='center', fontsize=7.5, color='#666', style='italic')
+
+    return fig
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN LOOP  — iterate synoptic times × pressure levels
+# ══════════════════════════════════════════════════════════════════════════════
+
+_PLOT_LEVELS = sorted(GEM_PRESSURE_LEVELS, reverse=True)   # e.g. [850, 700, 500]
+
+for _vt in _target_vts:
+    _vt_str = _vt.strftime('%Y-%m-%d') + f' {_vt.hour:02d}Z'
+
+    # MSLP overlay — keyed at 00Z on the same date
+    _mslp_vt_str = _vt.strftime('%Y-%m-%d') + ' 00Z'
+    mslp_grid, mslp_lv, mslp_ltv = _get_mslp_grid(_mslp_vt_str)
+
+    print(f'\n══ {_vt_str} ══')
+
+    for _pres in _PLOT_LEVELS:
+        T, lv, ltv = _get_temp_grid(_vt_str, _pres)
+        if T is None:
+            print(f'  ⚠ {_pres} hPa — no grid data, skipping')
+            continue
+
+        lv  = np.asarray(lv,  dtype=float)
+        ltv = np.asarray(ltv, dtype=float)
+
+        print(f'  {_pres} hPa — grid {T.shape}  '
+              f'lat [{ltv.min():.1f}…{ltv.max():.1f}]  '
+              f'lon [{lv.min():.1f}…{lv.max():.1f}]')
+
+        print(f'  Detecting (M5)…', end=' ', flush=True)
+        ridge_segs, trough_segs = detect_m5(T, lv, ltv)
+        print(f'ridge: {len(ridge_segs)} seg  |  trough: {len(trough_segs)} seg')
+
+        _tag = f'{_vt.strftime("%Y%m%d")}_{_vt.hour:02d}Z_{_pres}hPa'
+
+        fig1 = _make_figure('ridge', ridge_segs, T, lv, ltv,
+                            mslp_grid, mslp_lv, mslp_ltv, _pres, _vt_str)
+        f1   = f'ridge_{_tag}.png'
+        fig1.savefig(f1, dpi=160, bbox_inches='tight', facecolor=DARK)
+        plt.show(); plt.close(fig1)
+        print(f'  ✅ {f1}')
+
+        fig2 = _make_figure('trough', trough_segs, T, lv, ltv,
+                            mslp_grid, mslp_lv, mslp_ltv, _pres, _vt_str)
+        f2   = f'trough_{_tag}.png'
+        fig2.savefig(f2, dpi=160, bbox_inches='tight', facecolor=DARK)
+        plt.show(); plt.close(fig2)
+        print(f'  ✅ {f2}')
+
+        # Store segments for downstream blocks
+        _hr_tag = f'{_vt.strftime("%Y%m%d")}_{_vt.hour:02d}'
+        globals()[f'ridge_segs_{_pres}_{_hr_tag}']  = ridge_segs
+        globals()[f'trough_segs_{_pres}_{_hr_tag}'] = trough_segs
+
+print('\n✅ Block 01 complete — segments stored in globals()')
 
 # @title
 # ══════════════════════════════════════════════════════════════════════════
@@ -5638,6 +5957,131 @@ var _valLabel = Math.round(c.val / 10);  // convert m → dam
 
   _synUALayer.addTo(MAP);
 
+// ── Ridge / Trough segments (500 hPa view only) ───────────────────
+  if (_synLevel === "500") {{
+
+    if (!MAP.getPane("rtPane")) {{
+      MAP.createPane("rtPane");
+      MAP.getPane("rtPane").style.zIndex        = "495";
+      MAP.getPane("rtPane").style.pointerEvents = "none";
+    }}
+
+    var _rtAll = _RT_DATA[fullKey] || {{}};
+
+    // Which layers to draw and how
+    // 500 trough  → blue triangles
+    // 700 trough  → brown triangles
+    // 850 ridge   → red dots
+    var _rtJobs = [
+      {{ segs: ((_rtAll["500"] || {{}})["trough"] || []), mode: "tri",  color: "#1166dd", tipLabel: "500 TRGH" }},
+      {{ segs: ((_rtAll["700"] || {{}})["trough"] || []), mode: "tri",  color: "#8B4513", tipLabel: "700 TRGH" }},
+      {{ segs: ((_rtAll["850"] || {{}})["ridge"]  || []), mode: "dots", color: "#dd1111", tipLabel: "850 RDGE" }},
+    ];
+
+    // Interpolate a segment to ~every spacingDeg degrees along-track
+    function _interpSeg(seg, spacingDeg) {{
+      var out = [];
+      if (!seg || seg.length < 2) return out;
+      out.push(seg[0]);
+      var accum = 0;
+      for (var si = 1; si < seg.length; si++) {{
+        var dlat = seg[si][0] - seg[si-1][0];
+        var dlon = seg[si][1] - seg[si-1][1];
+        var dist = Math.sqrt(dlat*dlat + dlon*dlon);
+        accum += dist;
+        if (accum >= spacingDeg) {{
+          out.push(seg[si]);
+          accum = 0;
+        }}
+      }}
+      if (out.length < 2) out.push(seg[seg.length - 1]);
+      return out;
+    }}
+
+    // Draw upward-pointing triangle SVG marker at a lat/lon
+    function _triMarker(lat, lon, color, pane) {{
+      // Triangle pointing up: ▲
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14">'
+              + '<polygon points="7,1 13,13 1,13" fill="' + color + '" stroke="#000" stroke-width="1.2"/>'
+              + '</svg>';
+      return L.marker([lat, lon], {{
+        icon: L.divIcon({{
+          html:       svg,
+          iconSize:   [14, 14],
+          iconAnchor: [7, 7],
+          className:  ""
+        }}),
+        pane:        pane,
+        interactive: false,
+        zIndexOffset: 0
+      }});
+    }}
+
+    // Draw filled circle SVG marker at a lat/lon
+    function _dotMarker(lat, lon, color, pane) {{
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10">'
+              + '<circle cx="5" cy="5" r="4" fill="' + color + '" stroke="#000" stroke-width="1.2"/>'
+              + '</svg>';
+      return L.marker([lat, lon], {{
+        icon: L.divIcon({{
+          html:       svg,
+          iconSize:   [10, 10],
+          iconAnchor: [5, 5],
+          className:  ""
+        }}),
+        pane:        pane,
+        interactive: false,
+        zIndexOffset: 0
+      }});
+    }}
+
+    _rtJobs.forEach(function(job) {{
+      job.segs.forEach(function(seg) {{
+        if (!seg || seg.length < 2) return;
+
+        if (job.mode === "tri") {{
+          // Thin connector line first, then triangles along it
+          var ll = seg.map(function(p) {{ return [p[0], p[1]]; }});
+          L.polyline(ll, {{
+            color:     job.color,
+            weight:    3.0,
+            opacity:   0.80,
+            dashArray: "4 4",
+            pane:      "rtPane",
+            interactive: false
+          }}).addTo(_synUALayer);
+
+          // Place triangles every ~2° along-track
+          var pts = _interpSeg(seg, 2.0);
+          pts.forEach(function(p) {{
+            _triMarker(p[0], p[1], job.color, "rtPane").addTo(_synUALayer);
+          }});
+
+        }} else if (job.mode === "dots") {{
+          // Thin connector line first, then dots
+          var ll = seg.map(function(p) {{ return [p[0], p[1]]; }});
+          L.polyline(ll, {{
+            color:     job.color,
+            weight:    3.0,
+            opacity:   0.80,
+            dashArray: "4 4",
+            pane:      "rtPane",
+            interactive: false
+          }}).addTo(_synUALayer);
+
+          // Place dots every ~2° along-track
+          var pts = _interpSeg(seg, 2.0);
+          pts.forEach(function(p) {{
+            _dotMarker(p[0], p[1], job.color, "rtPane").addTo(_synUALayer);
+          }});
+        }}
+      }});
+    }});
+
+  }} // end _synLevel === "500"
+
+  _synUALayer.addTo(MAP);
+  
   // ── Station wind barbs ────────────────────────────────────────────────
   var stns = _SYN_UA_STNS[fullKey] || [];
   if (!stns.length) console.warn("No UA stns for key:", fullKey);
