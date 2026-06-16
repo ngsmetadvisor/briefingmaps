@@ -4077,6 +4077,13 @@ var _synUALayer      = null;
 var _synStnLayer     = null;
 var _synShowStations = {'true' if SHOW_STATION_SYMBOLS else 'false'};
 var _synShowTooltips = {'true' if SHOW_TOOLTIPS else 'false'};
+var _synBaseZoom     = 5;   // zoom at which H/L and W/C symbols are drawn at base size
+
+function _synZoomFactor(MAP) {{
+  var z = MAP ? MAP.getZoom() : _synBaseZoom;
+  var f = Math.pow(1.3, z - _synBaseZoom);
+  return Math.max(0.4, Math.min(3.0, f));
+}}
 
 
 
@@ -4126,6 +4133,7 @@ function synRenderUA(fullKey, stepLabel) {{
 
   var uaData   = (_SYN_UA[fullKey] || {{levels:{{}}}}).levels[_synLevel] || {{}};
   _synUALayer  = L.layerGroup();
+  var _zf      = _synZoomFactor(MAP);
 
   // ── Temperature band fills ────────────────────────────────────────────
   var _tbFills = uaData.temp_band_fills || [];
@@ -4288,11 +4296,36 @@ function synRenderUA(fullKey, stepLabel) {{
   var _uaHL = (_SYN_UA[fullKey] || {{}})["hl_" + _synLevel] || [];
   _uaHL.forEach(function(c) {{
     var _shadow = "1px 1px 0 white,-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white";
-    var _html   = '<div style="font-size:61px;font-weight:bold;color:#000000;'
-      + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
-      + 'text-shadow:' + _shadow + ';pointer-events:none;">' + c.type + '</div>';
+    var _r = 8 * _zf;
+    var _boxW = 70 * _zf, _boxH = 95 * _zf, _innerW = 60 * _zf;
+    var _cx = _boxW / 2, _cy = (65 * _zf) - _r;
+    var _fontHL  = Math.round(52 * _zf);
+    var _fontVal = Math.round(15 * _zf);
+    var _strokeW = 2.5 * _zf;
+    var _svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + _boxW + '" height="' + _boxH + '" style="overflow:visible;pointer-events:none;">'
+      + '<circle cx="' + _cx + '" cy="' + _cy + '" r="' + _r + '" '
+      + 'fill="none" stroke="#000000" stroke-width="' + _strokeW + '"/>'
+      + '<line x1="' + (_cx - _r * 0.65) + '" y1="' + (_cy - _r * 0.65) + '" '
+      + 'x2="' + (_cx + _r * 0.65) + '" y2="' + (_cy + _r * 0.65) + '" '
+      + 'stroke="#000000" stroke-width="' + _strokeW + '"/>'
+      + '<line x1="' + (_cx + _r * 0.65) + '" y1="' + (_cy - _r * 0.65) + '" '
+      + 'x2="' + (_cx - _r * 0.65) + '" y2="' + (_cy + _r * 0.65) + '" '
+      + 'stroke="#000000" stroke-width="' + _strokeW + '"/>'
+      + '</svg>';
+var _valLabel = Math.round(c.val / 10);  // convert m → dam
+      var _html = '<div style="position:relative;width:' + _innerW + 'px;height:' + _boxH + 'px;pointer-events:none;">'
+        + '<div style="position:absolute;top:' + (-15 * _zf) + 'px;left:0;width:' + _innerW + 'px;text-align:center;'
+        + 'font-size:' + _fontHL + 'px;font-weight:bold;color:#000000;'
+        + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
+        + 'text-shadow:' + _shadow + ';">' + c.type + '</div>'
+        + _svg
+        + '<div style="position:absolute;top:' + (_cy + _r + 2) + 'px;left:0;width:' + _innerW + 'px;'
+        + 'text-align:center;font-size:' + _fontVal + 'px;font-weight:bold;color:#000000;'
+        + 'font-family:Courier New,monospace;line-height:1;">'
+        + _valLabel + '</div>'
+        + '</div>';
     var _hlMark = L.marker([c.lat, c.lon], {{
-      icon: L.divIcon({{ html: _html, iconSize: [70,65], iconAnchor: [35,32], className: "" }}),
+      icon: L.divIcon({{ html: _html, iconSize: [_boxW, _boxH], iconAnchor: [_cx, _cy], className: "" }}),
       zIndexOffset: 200
     }});
     if (_synShowTooltips) _hlMark.bindTooltip(_synLevel + " hPa " + c.type);
@@ -4313,11 +4346,13 @@ function synRenderUA(fullKey, stepLabel) {{
       + ",2px 0 0 "     + _bgColor
       + ",0 -2px 0 "    + _bgColor
       + ",0 2px 0 "     + _bgColor;
-    var _html = '<div style="font-size:61px;font-weight:bold;color:' + _fgColor + ';'
+    var _fontWC = Math.round(61 * _zf);
+    var _wcW    = 70 * _zf, _wcH = 65 * _zf;
+    var _html = '<div style="font-size:' + _fontWC + 'px;font-weight:bold;color:' + _fgColor + ';'
       + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
       + 'text-shadow:' + _shadow + ';pointer-events:none;">' + c.type + '</div>';
     var _wcMark = L.marker([c.lat, c.lon], {{
-      icon: L.divIcon({{ html: _html, iconSize: [70,65], iconAnchor: [35,32], className: "" }}),
+      icon: L.divIcon({{ html: _html, iconSize: [_wcW, _wcH], iconAnchor: [_wcW/2, _wcH/2], className: "" }}),
       zIndexOffset: 190
     }});
     if (_synShowTooltips) _wcMark.bindTooltip(
@@ -4818,6 +4853,10 @@ function _synInit() {{
   if (slider) {{
     slider.max   = String(Math.max(0, _SYN_TIME_STEPS.length - 1));
     slider.value = "0";
+  }}
+  var MAP = _getMap();
+  if (MAP) {{
+    MAP.on('zoomend', function() {{ synRender(); }});
   }}
   synSetLevel("850");
   synRender();
@@ -5402,6 +5441,13 @@ var _synUALayer      = null;
 var _synStnLayer     = null;
 var _synShowStations = {'true' if SHOW_STATION_SYMBOLS else 'false'};
 var _synShowTooltips = {'true' if SHOW_TOOLTIPS else 'false'};
+var _synBaseZoom     = 5;   // zoom at which H/L and W/C symbols are drawn at base size
+
+function _synZoomFactor(MAP) {{
+  var z = MAP ? MAP.getZoom() : _synBaseZoom;
+  var f = Math.pow(1.3, z - _synBaseZoom);
+  return Math.max(0.4, Math.min(3.0, f));
+}}
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function _getMap() {{
@@ -5448,6 +5494,7 @@ function synRenderUA(fullKey, stepLabel) {{
 
   var uaData   = (_SYN_UA[fullKey] || {{levels:{{}}}}).levels[_synLevel] || {{}};
   _synUALayer  = L.layerGroup();
+  var _zf      = _synZoomFactor(MAP);
 
   // ── Temperature band fills ────────────────────────────────────────────
   var _tbFills = uaData.temp_band_fills || [];
@@ -5555,11 +5602,36 @@ function synRenderUA(fullKey, stepLabel) {{
   var _uaHL = (_SYN_UA[fullKey] || {{}})["hl_" + _synLevel] || [];
   _uaHL.forEach(function(c) {{
     var _shadow = "1px 1px 0 white,-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white";
-    var _html   = '<div style="font-size:61px;font-weight:bold;color:#000000;'
-      + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
-      + 'text-shadow:' + _shadow + ';pointer-events:none;">' + c.type + '</div>';
+    var _r = 8 * _zf;
+    var _boxW = 70 * _zf, _boxH = 95 * _zf, _innerW = 60 * _zf;
+    var _cx = _boxW / 2, _cy = (65 * _zf) - _r;
+    var _fontHL  = Math.round(52 * _zf);
+    var _fontVal = Math.round(15 * _zf);
+    var _strokeW = 2.5 * _zf;
+    var _svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + _boxW + '" height="' + _boxH + '" style="overflow:visible;pointer-events:none;">'
+      + '<circle cx="' + _cx + '" cy="' + _cy + '" r="' + _r + '" '
+      + 'fill="none" stroke="#000000" stroke-width="' + _strokeW + '"/>'
+      + '<line x1="' + (_cx - _r * 0.65) + '" y1="' + (_cy - _r * 0.65) + '" '
+      + 'x2="' + (_cx + _r * 0.65) + '" y2="' + (_cy + _r * 0.65) + '" '
+      + 'stroke="#000000" stroke-width="' + _strokeW + '"/>'
+      + '<line x1="' + (_cx + _r * 0.65) + '" y1="' + (_cy - _r * 0.65) + '" '
+      + 'x2="' + (_cx - _r * 0.65) + '" y2="' + (_cy + _r * 0.65) + '" '
+      + 'stroke="#000000" stroke-width="' + _strokeW + '"/>'
+      + '</svg>';
+var _valLabel = Math.round(c.val / 10);  // convert m → dam
+      var _html = '<div style="position:relative;width:' + _innerW + 'px;height:' + _boxH + 'px;pointer-events:none;">'
+        + '<div style="position:absolute;top:' + (-15 * _zf) + 'px;left:0;width:' + _innerW + 'px;text-align:center;'
+        + 'font-size:' + _fontHL + 'px;font-weight:bold;color:#000000;'
+        + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
+        + 'text-shadow:' + _shadow + ';">' + c.type + '</div>'
+        + _svg
+        + '<div style="position:absolute;top:' + (_cy + _r + 2) + 'px;left:0;width:' + _innerW + 'px;'
+        + 'text-align:center;font-size:' + _fontVal + 'px;font-weight:bold;color:#000000;'
+        + 'font-family:Courier New,monospace;line-height:1;">'
+        + _valLabel + '</div>'
+        + '</div>';
     var _hlMark = L.marker([c.lat, c.lon], {{
-      icon: L.divIcon({{ html: _html, iconSize: [70,65], iconAnchor: [35,32], className: "" }}),
+      icon: L.divIcon({{ html: _html, iconSize: [_boxW, _boxH], iconAnchor: [_cx, _cy], className: "" }}),
       zIndexOffset: 200
     }});
     if (_synShowTooltips) _hlMark.bindTooltip(_synLevel + " hPa " + c.type);
@@ -6053,6 +6125,10 @@ function _synInit() {{
   if (slider) {{
     slider.max   = String(Math.max(0, _SYN_TIME_STEPS.length - 1));
     slider.value = "0";
+  }}
+  var MAP = _getMap();
+  if (MAP) {{
+    MAP.on('zoomend', function() {{ synRender(); }});
   }}
   synSetLevel("850");
   synRender();
