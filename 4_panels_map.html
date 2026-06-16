@@ -630,8 +630,24 @@ window.addEventListener('message', function(e) {
   } catch(e2) {}
 
 // Keep master thumb in sync with per-pane slider moves
-  if (_masterSrcPane && src.id === _masterSrcPane.id) {
-    syncMasterSliderFromIdx(srcIdx);
+  // Resolve to master-step index regardless of which pane fired
+  if (_masterSteps && _masterSrcPane) {
+    var resolvedMasterIdx = srcIdx; // default if same pane as master source
+    if (src.id !== _masterSrcPane.id) {
+      // Map this pane's step key back to the master steps index
+      try {
+        var srcWinM = document.getElementById(src.frameId).contentWindow;
+        var srcStepsM = srcWinM[src.stepsVar];
+        if (srcStepsM && srcStepsM[srcIdx]) {
+          var keyM = srcStepsM[srcIdx].key;
+          resolvedMasterIdx = -1;
+          for (var mi = 0; mi < _masterSteps.length; mi++) {
+            if (_masterSteps[mi].key === keyM) { resolvedMasterIdx = mi; break; }
+          }
+        }
+      } catch(e) {}
+    }
+    if (resolvedMasterIdx >= 0) syncMasterSliderFromIdx(resolvedMasterIdx);
   }
 
   PANES.forEach(function(tgt) {
