@@ -3625,7 +3625,7 @@ print(f"Time steps: {[s['label'] for s in _time_steps]}")
 
 # ── Build map ─────────────────────────────────────────────────────────────
 m = folium.Map(location=[center_lat, center_lon], zoom_start=5,
-               tiles=None, prefer_canvas=True)
+               tiles=None, prefer_canvas=True, zoom_control=False)
 folium.TileLayer(tiles='about:blank', attr=' ', name='Blank', max_zoom=19, show=True).add_to(m)
 m.get_root().html.add_child(Element(
     '<style>.leaflet-container{background:#e0f2ff!important;}</style>'
@@ -3739,41 +3739,7 @@ m.get_root().html.add_child(Element(
     '})();\n'
     '</script>'
 ))
-# ── Fullscreen button ─────────────────────────────────────────────────────
-fullscreen_html = (
-    '<style>\n'
-    '#syn-fs-btn{\n'
-    '  position:fixed;top:10px;left:10px;z-index:10001;\n'
-    '  background:rgba(255,255,255,0.96);border:1px solid #aaa;border-radius:6px;\n'
-    '  padding:5px 10px;font-family:Courier New,monospace;font-size:12px;\n'
-    '  box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer;color:#1a3a6a;\n'
-    '}\n'
-    '#syn-fs-btn:hover{background:#e8f0fe;}\n'
-    '</style>\n'
-    '<button id="syn-fs-btn" onclick="synToggleFS()">&#x26F6; Fullscreen</button>\n'
-    '<script>\n'
-    'var _synFS=false,_synMapEl=null,_synOrigStyle="";\n'
-    'function synToggleFS(){\n'
-    '  var btn=document.getElementById("syn-fs-btn");\n'
-    '  var keys=Object.keys(window).filter(function(k){return k.startsWith("map_");});\n'
-    '  if(!keys.length)return;\n'
-    '  var MAP=window[keys[0]];\n'
-    '  if(!_synMapEl){_synMapEl=document.getElementById(keys[0])||document.querySelector(".leaflet-container");}\n'
-    '  if(!_synMapEl)return;\n'
-    '  _synFS=!_synFS;\n'
-    '  if(_synFS){\n'
-    '    _synOrigStyle=_synMapEl.getAttribute("style")||"";\n'
-    '    _synMapEl.setAttribute("style","position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:9999!important;margin:0!important;");\n'
-    '    btn.innerHTML="&#x274C; Exit Fullscreen";\n'
-    '  } else {\n'
-    '    _synMapEl.setAttribute("style",_synOrigStyle);\n'
-    '    btn.innerHTML="&#x26F6; Fullscreen";\n'
-    '  }\n'
-    '  setTimeout(function(){MAP.invalidateSize();},100);\n'
-    '}\n'
-    '</script>\n'
-)
-m.get_root().html.add_child(Element(fullscreen_html))
+
 
 # ── Build per-timestamp surface station data ──────────────────────────────
 import json as _json2
@@ -3986,7 +3952,7 @@ if not SHOW_STATION_SYMBOLS:
 _ts_ua_stn_json_str = _json3.dumps(_ua_stn_data)
 print(f'\n✓ _ts_ua_stn_json_str keys: {sorted(_ua_stn_data.keys())}')
 
-folium.LayerControl(collapsed=False).add_to(m)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CONTROL BAR  — level (850/500) + time slider
@@ -4062,31 +4028,12 @@ _bar_html = '''
   font-size: 10px;
   min-width: 120px;
 }
-#syn-export-panel {
-  position: fixed;
-  top: 50px; left: 10px;
-  z-index: 10001;
-  background: rgba(26,26,46,0.95);
-  border: 1px solid #4a7fc1;
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-family: "Courier New", monospace;
-  font-size: 11px;
-  color: #e0e0e0;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.4);
-  min-width: 130px;
-}
+
 </style>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-<!-- Export panel — top left -->
-<div id="syn-export-panel">
-  <div class="bar-label" style="margin-bottom:4px;">Export</div>
-  <button class="syn-exp-btn" style="display:block;width:100%;margin-top:4px;border-color:#22aa44;color:#88ffaa;background:#003311;" onclick="synExportBothPDFs()">Export PDFs</button>
-  <button class="syn-exp-btn export-all" style="display:block;width:100%;" onclick="synExportAll()">Export All</button>
-  <div id="syn-export-status" style="margin-top:5px;min-height:14px;"></div>
-</div>
+
 
 <!-- Bottom control bar -->
 <div id="syn-bar">
@@ -4131,6 +4078,13 @@ var _synUALayer      = null;
 var _synStnLayer     = null;
 var _synShowStations = {'true' if SHOW_STATION_SYMBOLS else 'false'};
 var _synShowTooltips = {'true' if SHOW_TOOLTIPS else 'false'};
+var _synBaseZoom     = 5;   // zoom at which H/L and W/C symbols are drawn at base size
+
+function _synZoomFactor(MAP) {{
+  var z = MAP ? MAP.getZoom() : _synBaseZoom;
+  var f = Math.pow(1.3, z - _synBaseZoom);
+  return Math.max(0.4, Math.min(3.0, f));
+}}
 
 
 
@@ -4180,6 +4134,7 @@ function synRenderUA(fullKey, stepLabel) {{
 
   var uaData   = (_SYN_UA[fullKey] || {{levels:{{}}}}).levels[_synLevel] || {{}};
   _synUALayer  = L.layerGroup();
+  var _zf      = _synZoomFactor(MAP);
 
   // ── Temperature band fills ────────────────────────────────────────────
   var _tbFills = uaData.temp_band_fills || [];
@@ -4342,11 +4297,36 @@ function synRenderUA(fullKey, stepLabel) {{
   var _uaHL = (_SYN_UA[fullKey] || {{}})["hl_" + _synLevel] || [];
   _uaHL.forEach(function(c) {{
     var _shadow = "1px 1px 0 white,-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white";
-    var _html   = '<div style="font-size:61px;font-weight:bold;color:#000000;'
-      + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
-      + 'text-shadow:' + _shadow + ';pointer-events:none;">' + c.type + '</div>';
+    var _r = 8 * _zf;
+    var _boxW = 70 * _zf, _boxH = 95 * _zf, _innerW = 60 * _zf;
+    var _cx = _boxW / 2, _cy = (65 * _zf) - _r;
+    var _fontHL  = Math.round(52 * _zf);
+    var _fontVal = Math.round(15 * _zf);
+    var _strokeW = 2.5 * _zf;
+    var _svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + _boxW + '" height="' + _boxH + '" style="overflow:visible;pointer-events:none;">'
+      + '<circle cx="' + _cx + '" cy="' + _cy + '" r="' + _r + '" '
+      + 'fill="none" stroke="#000000" stroke-width="' + _strokeW + '"/>'
+      + '<line x1="' + (_cx - _r * 0.65) + '" y1="' + (_cy - _r * 0.65) + '" '
+      + 'x2="' + (_cx + _r * 0.65) + '" y2="' + (_cy + _r * 0.65) + '" '
+      + 'stroke="#000000" stroke-width="' + _strokeW + '"/>'
+      + '<line x1="' + (_cx + _r * 0.65) + '" y1="' + (_cy - _r * 0.65) + '" '
+      + 'x2="' + (_cx - _r * 0.65) + '" y2="' + (_cy + _r * 0.65) + '" '
+      + 'stroke="#000000" stroke-width="' + _strokeW + '"/>'
+      + '</svg>';
+var _valLabel = Math.round(c.val / 10);  // convert m → dam
+      var _html = '<div style="position:relative;width:' + _innerW + 'px;height:' + _boxH + 'px;pointer-events:none;">'
+        + '<div style="position:absolute;top:' + (-15 * _zf) + 'px;left:0;width:' + _innerW + 'px;text-align:center;'
+        + 'font-size:' + _fontHL + 'px;font-weight:bold;color:#000000;'
+        + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
+        + 'text-shadow:' + _shadow + ';">' + c.type + '</div>'
+        + _svg
+        + '<div style="position:absolute;top:' + (_cy + _r + 2) + 'px;left:0;width:' + _innerW + 'px;'
+        + 'text-align:center;font-size:' + _fontVal + 'px;font-weight:bold;color:#000000;'
+        + 'font-family:Courier New,monospace;line-height:1;">'
+        + _valLabel + '</div>'
+        + '</div>';
     var _hlMark = L.marker([c.lat, c.lon], {{
-      icon: L.divIcon({{ html: _html, iconSize: [70,65], iconAnchor: [35,32], className: "" }}),
+      icon: L.divIcon({{ html: _html, iconSize: [_boxW, _boxH], iconAnchor: [_cx, _cy], className: "" }}),
       zIndexOffset: 200
     }});
     if (_synShowTooltips) _hlMark.bindTooltip(_synLevel + " hPa " + c.type);
@@ -4367,11 +4347,13 @@ function synRenderUA(fullKey, stepLabel) {{
       + ",2px 0 0 "     + _bgColor
       + ",0 -2px 0 "    + _bgColor
       + ",0 2px 0 "     + _bgColor;
-    var _html = '<div style="font-size:61px;font-weight:bold;color:' + _fgColor + ';'
+    var _fontWC = Math.round(61 * _zf);
+    var _wcW    = 70 * _zf, _wcH = 65 * _zf;
+    var _html = '<div style="font-size:' + _fontWC + 'px;font-weight:bold;color:' + _fgColor + ';'
       + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
       + 'text-shadow:' + _shadow + ';pointer-events:none;">' + c.type + '</div>';
     var _wcMark = L.marker([c.lat, c.lon], {{
-      icon: L.divIcon({{ html: _html, iconSize: [70,65], iconAnchor: [35,32], className: "" }}),
+      icon: L.divIcon({{ html: _html, iconSize: [_wcW, _wcH], iconAnchor: [_wcW/2, _wcH/2], className: "" }}),
       zIndexOffset: 190
     }});
     if (_synShowTooltips) _wcMark.bindTooltip(
@@ -4873,6 +4855,10 @@ function _synInit() {{
     slider.max   = String(Math.max(0, _SYN_TIME_STEPS.length - 1));
     slider.value = "0";
   }}
+  var MAP = _getMap();
+  if (MAP) {{
+    MAP.on('zoomend', function() {{ synRender(); }});
+  }}
   synSetLevel("850");
   synRender();
 }}
@@ -5052,7 +5038,7 @@ print(f"Time steps: {[s['label'] for s in _time_steps]}")
 
 # ── Build map ─────────────────────────────────────────────────────────────
 m = folium.Map(location=[center_lat, center_lon], zoom_start=5,
-               tiles=None, prefer_canvas=True)
+               tiles=None, prefer_canvas=True, zoom_control=False)
 folium.TileLayer(tiles='about:blank', attr=' ', name='Blank', max_zoom=19, show=True).add_to(m)
 m.get_root().html.add_child(Element(
     '<style>.leaflet-container{background:#e0f2ff!important;}</style>'
@@ -5126,41 +5112,7 @@ m.get_root().html.add_child(Element(borders_js))
 if 'fire_zones_html' in globals():
     m.get_root().html.add_child(Element(fire_zones_html))
 
-# ── Fullscreen button ─────────────────────────────────────────────────────
-fullscreen_html = (
-    '<style>\n'
-    '#syn-fs-btn{\n'
-    '  position:fixed;top:10px;left:10px;z-index:10001;\n'
-    '  background:rgba(255,255,255,0.96);border:1px solid #aaa;border-radius:6px;\n'
-    '  padding:5px 10px;font-family:Courier New,monospace;font-size:12px;\n'
-    '  box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer;color:#1a3a6a;\n'
-    '}\n'
-    '#syn-fs-btn:hover{background:#e8f0fe;}\n'
-    '</style>\n'
-    '<button id="syn-fs-btn" onclick="synToggleFS()">&#x26F6; Fullscreen</button>\n'
-    '<script>\n'
-    'var _synFS=false,_synMapEl=null,_synOrigStyle="";\n'
-    'function synToggleFS(){\n'
-    '  var btn=document.getElementById("syn-fs-btn");\n'
-    '  var keys=Object.keys(window).filter(function(k){return k.startsWith("map_");});\n'
-    '  if(!keys.length)return;\n'
-    '  var MAP=window[keys[0]];\n'
-    '  if(!_synMapEl){_synMapEl=document.getElementById(keys[0])||document.querySelector(".leaflet-container");}\n'
-    '  if(!_synMapEl)return;\n'
-    '  _synFS=!_synFS;\n'
-    '  if(_synFS){\n'
-    '    _synOrigStyle=_synMapEl.getAttribute("style")||"";\n'
-    '    _synMapEl.setAttribute("style","position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:9999!important;margin:0!important;");\n'
-    '    btn.innerHTML="&#x274C; Exit Fullscreen";\n'
-    '  } else {\n'
-    '    _synMapEl.setAttribute("style",_synOrigStyle);\n'
-    '    btn.innerHTML="&#x26F6; Fullscreen";\n'
-    '  }\n'
-    '  setTimeout(function(){MAP.invalidateSize();},100);\n'
-    '}\n'
-    '</script>\n'
-)
-m.get_root().html.add_child(Element(fullscreen_html))
+
 
 # ── Build per-timestamp surface station data ──────────────────────────────
 import json as _json2
@@ -5364,7 +5316,7 @@ if not SHOW_STATION_SYMBOLS:
 _ts_ua_stn_json_str = _json3.dumps(_ua_stn_data)
 print(f'\n✓ _ts_ua_stn_json_str keys: {sorted(_ua_stn_data.keys())}')
 
-folium.LayerControl(collapsed=False).add_to(m)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CONTROL BAR  — level (850/500) + time slider
@@ -5440,31 +5392,12 @@ _bar_html = '''
   font-size: 10px;
   min-width: 120px;
 }
-#syn-export-panel {
-  position: fixed;
-  top: 50px; left: 10px;
-  z-index: 10001;
-  background: rgba(26,26,46,0.95);
-  border: 1px solid #4a7fc1;
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-family: "Courier New", monospace;
-  font-size: 11px;
-  color: #e0e0e0;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.4);
-  min-width: 130px;
-}
+
 </style>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-<!-- Export panel — top left -->
-<div id="syn-export-panel">
-  <div class="bar-label" style="margin-bottom:4px;">Export</div>
-  <button class="syn-exp-btn" style="display:block;width:100%;margin-top:4px;border-color:#cc2200;color:#ffaaaa;background:#440000;" onclick="synExportBothPDFs()">Export PDFs</button>
-  <button class="syn-exp-btn export-all" style="display:block;width:100%;border-color:#9944cc;color:#ddaaff;background:#2a0044;" onclick="synExportAll()">Export 850LLJ Prog</button>
-  <div id="syn-export-status" style="margin-top:5px;min-height:14px;"></div>
-</div>
+
 
 <!-- Bottom control bar -->
 <div id="syn-bar">
@@ -5509,6 +5442,13 @@ var _synUALayer      = null;
 var _synStnLayer     = null;
 var _synShowStations = {'true' if SHOW_STATION_SYMBOLS else 'false'};
 var _synShowTooltips = {'true' if SHOW_TOOLTIPS else 'false'};
+var _synBaseZoom     = 5;   // zoom at which H/L and W/C symbols are drawn at base size
+
+function _synZoomFactor(MAP) {{
+  var z = MAP ? MAP.getZoom() : _synBaseZoom;
+  var f = Math.pow(1.3, z - _synBaseZoom);
+  return Math.max(0.4, Math.min(3.0, f));
+}}
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function _getMap() {{
@@ -5555,6 +5495,7 @@ function synRenderUA(fullKey, stepLabel) {{
 
   var uaData   = (_SYN_UA[fullKey] || {{levels:{{}}}}).levels[_synLevel] || {{}};
   _synUALayer  = L.layerGroup();
+  var _zf      = _synZoomFactor(MAP);
 
   // ── Temperature band fills ────────────────────────────────────────────
   var _tbFills = uaData.temp_band_fills || [];
@@ -5662,11 +5603,36 @@ function synRenderUA(fullKey, stepLabel) {{
   var _uaHL = (_SYN_UA[fullKey] || {{}})["hl_" + _synLevel] || [];
   _uaHL.forEach(function(c) {{
     var _shadow = "1px 1px 0 white,-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white";
-    var _html   = '<div style="font-size:61px;font-weight:bold;color:#000000;'
-      + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
-      + 'text-shadow:' + _shadow + ';pointer-events:none;">' + c.type + '</div>';
+    var _r = 8 * _zf;
+    var _boxW = 70 * _zf, _boxH = 95 * _zf, _innerW = 60 * _zf;
+    var _cx = _boxW / 2, _cy = (65 * _zf) - _r;
+    var _fontHL  = Math.round(52 * _zf);
+    var _fontVal = Math.round(15 * _zf);
+    var _strokeW = 2.5 * _zf;
+    var _svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + _boxW + '" height="' + _boxH + '" style="overflow:visible;pointer-events:none;">'
+      + '<circle cx="' + _cx + '" cy="' + _cy + '" r="' + _r + '" '
+      + 'fill="none" stroke="#000000" stroke-width="' + _strokeW + '"/>'
+      + '<line x1="' + (_cx - _r * 0.65) + '" y1="' + (_cy - _r * 0.65) + '" '
+      + 'x2="' + (_cx + _r * 0.65) + '" y2="' + (_cy + _r * 0.65) + '" '
+      + 'stroke="#000000" stroke-width="' + _strokeW + '"/>'
+      + '<line x1="' + (_cx + _r * 0.65) + '" y1="' + (_cy - _r * 0.65) + '" '
+      + 'x2="' + (_cx - _r * 0.65) + '" y2="' + (_cy + _r * 0.65) + '" '
+      + 'stroke="#000000" stroke-width="' + _strokeW + '"/>'
+      + '</svg>';
+var _valLabel = Math.round(c.val / 10);  // convert m → dam
+      var _html = '<div style="position:relative;width:' + _innerW + 'px;height:' + _boxH + 'px;pointer-events:none;">'
+        + '<div style="position:absolute;top:' + (-15 * _zf) + 'px;left:0;width:' + _innerW + 'px;text-align:center;'
+        + 'font-size:' + _fontHL + 'px;font-weight:bold;color:#000000;'
+        + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
+        + 'text-shadow:' + _shadow + ';">' + c.type + '</div>'
+        + _svg
+        + '<div style="position:absolute;top:' + (_cy + _r + 2) + 'px;left:0;width:' + _innerW + 'px;'
+        + 'text-align:center;font-size:' + _fontVal + 'px;font-weight:bold;color:#000000;'
+        + 'font-family:Courier New,monospace;line-height:1;">'
+        + _valLabel + '</div>'
+        + '</div>';
     var _hlMark = L.marker([c.lat, c.lon], {{
-      icon: L.divIcon({{ html: _html, iconSize: [70,65], iconAnchor: [35,32], className: "" }}),
+      icon: L.divIcon({{ html: _html, iconSize: [_boxW, _boxH], iconAnchor: [_cx, _cy], className: "" }}),
       zIndexOffset: 200
     }});
     if (_synShowTooltips) _hlMark.bindTooltip(_synLevel + " hPa " + c.type);
@@ -6160,6 +6126,10 @@ function _synInit() {{
   if (slider) {{
     slider.max   = String(Math.max(0, _SYN_TIME_STEPS.length - 1));
     slider.value = "0";
+  }}
+  var MAP = _getMap();
+  if (MAP) {{
+    MAP.on('zoomend', function() {{ synRender(); }});
   }}
   synSetLevel("850");
   synRender();
