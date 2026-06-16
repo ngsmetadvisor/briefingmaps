@@ -3625,7 +3625,7 @@ print(f"Time steps: {[s['label'] for s in _time_steps]}")
 
 # ── Build map ─────────────────────────────────────────────────────────────
 m = folium.Map(location=[center_lat, center_lon], zoom_start=5,
-               tiles=None, prefer_canvas=True)
+               tiles=None, prefer_canvas=True, zoom_control=False)
 folium.TileLayer(tiles='about:blank', attr=' ', name='Blank', max_zoom=19, show=True).add_to(m)
 m.get_root().html.add_child(Element(
     '<style>.leaflet-container{background:#e0f2ff!important;}</style>'
@@ -3739,41 +3739,7 @@ m.get_root().html.add_child(Element(
     '})();\n'
     '</script>'
 ))
-# ── Fullscreen button ─────────────────────────────────────────────────────
-fullscreen_html = (
-    '<style>\n'
-    '#syn-fs-btn{\n'
-    '  position:fixed;top:10px;left:10px;z-index:10001;\n'
-    '  background:rgba(255,255,255,0.96);border:1px solid #aaa;border-radius:6px;\n'
-    '  padding:5px 10px;font-family:Courier New,monospace;font-size:12px;\n'
-    '  box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer;color:#1a3a6a;\n'
-    '}\n'
-    '#syn-fs-btn:hover{background:#e8f0fe;}\n'
-    '</style>\n'
-    '<button id="syn-fs-btn" onclick="synToggleFS()">&#x26F6; Fullscreen</button>\n'
-    '<script>\n'
-    'var _synFS=false,_synMapEl=null,_synOrigStyle="";\n'
-    'function synToggleFS(){\n'
-    '  var btn=document.getElementById("syn-fs-btn");\n'
-    '  var keys=Object.keys(window).filter(function(k){return k.startsWith("map_");});\n'
-    '  if(!keys.length)return;\n'
-    '  var MAP=window[keys[0]];\n'
-    '  if(!_synMapEl){_synMapEl=document.getElementById(keys[0])||document.querySelector(".leaflet-container");}\n'
-    '  if(!_synMapEl)return;\n'
-    '  _synFS=!_synFS;\n'
-    '  if(_synFS){\n'
-    '    _synOrigStyle=_synMapEl.getAttribute("style")||"";\n'
-    '    _synMapEl.setAttribute("style","position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:9999!important;margin:0!important;");\n'
-    '    btn.innerHTML="&#x274C; Exit Fullscreen";\n'
-    '  } else {\n'
-    '    _synMapEl.setAttribute("style",_synOrigStyle);\n'
-    '    btn.innerHTML="&#x26F6; Fullscreen";\n'
-    '  }\n'
-    '  setTimeout(function(){MAP.invalidateSize();},100);\n'
-    '}\n'
-    '</script>\n'
-)
-m.get_root().html.add_child(Element(fullscreen_html))
+
 
 # ── Build per-timestamp surface station data ──────────────────────────────
 import json as _json2
@@ -3986,7 +3952,7 @@ if not SHOW_STATION_SYMBOLS:
 _ts_ua_stn_json_str = _json3.dumps(_ua_stn_data)
 print(f'\n✓ _ts_ua_stn_json_str keys: {sorted(_ua_stn_data.keys())}')
 
-folium.LayerControl(collapsed=False).add_to(m)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CONTROL BAR  — level (850/500) + time slider
@@ -4062,31 +4028,11 @@ _bar_html = '''
   font-size: 10px;
   min-width: 120px;
 }
-#syn-export-panel {
-  position: fixed;
-  top: 50px; left: 10px;
-  z-index: 10001;
-  background: rgba(26,26,46,0.95);
-  border: 1px solid #4a7fc1;
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-family: "Courier New", monospace;
-  font-size: 11px;
-  color: #e0e0e0;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.4);
-  min-width: 130px;
-}
-</style>
+
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-<!-- Export panel — top left -->
-<div id="syn-export-panel">
-  <div class="bar-label" style="margin-bottom:4px;">Export</div>
-  <button class="syn-exp-btn" style="display:block;width:100%;margin-top:4px;border-color:#22aa44;color:#88ffaa;background:#003311;" onclick="synExportBothPDFs()">Export PDFs</button>
-  <button class="syn-exp-btn export-all" style="display:block;width:100%;" onclick="synExportAll()">Export All</button>
-  <div id="syn-export-status" style="margin-top:5px;min-height:14px;"></div>
-</div>
+
 
 <!-- Bottom control bar -->
 <div id="syn-bar">
@@ -5052,7 +4998,7 @@ print(f"Time steps: {[s['label'] for s in _time_steps]}")
 
 # ── Build map ─────────────────────────────────────────────────────────────
 m = folium.Map(location=[center_lat, center_lon], zoom_start=5,
-               tiles=None, prefer_canvas=True)
+               tiles=None, prefer_canvas=True, zoom_control=False)
 folium.TileLayer(tiles='about:blank', attr=' ', name='Blank', max_zoom=19, show=True).add_to(m)
 m.get_root().html.add_child(Element(
     '<style>.leaflet-container{background:#e0f2ff!important;}</style>'
@@ -5126,41 +5072,7 @@ m.get_root().html.add_child(Element(borders_js))
 if 'fire_zones_html' in globals():
     m.get_root().html.add_child(Element(fire_zones_html))
 
-# ── Fullscreen button ─────────────────────────────────────────────────────
-fullscreen_html = (
-    '<style>\n'
-    '#syn-fs-btn{\n'
-    '  position:fixed;top:10px;left:10px;z-index:10001;\n'
-    '  background:rgba(255,255,255,0.96);border:1px solid #aaa;border-radius:6px;\n'
-    '  padding:5px 10px;font-family:Courier New,monospace;font-size:12px;\n'
-    '  box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer;color:#1a3a6a;\n'
-    '}\n'
-    '#syn-fs-btn:hover{background:#e8f0fe;}\n'
-    '</style>\n'
-    '<button id="syn-fs-btn" onclick="synToggleFS()">&#x26F6; Fullscreen</button>\n'
-    '<script>\n'
-    'var _synFS=false,_synMapEl=null,_synOrigStyle="";\n'
-    'function synToggleFS(){\n'
-    '  var btn=document.getElementById("syn-fs-btn");\n'
-    '  var keys=Object.keys(window).filter(function(k){return k.startsWith("map_");});\n'
-    '  if(!keys.length)return;\n'
-    '  var MAP=window[keys[0]];\n'
-    '  if(!_synMapEl){_synMapEl=document.getElementById(keys[0])||document.querySelector(".leaflet-container");}\n'
-    '  if(!_synMapEl)return;\n'
-    '  _synFS=!_synFS;\n'
-    '  if(_synFS){\n'
-    '    _synOrigStyle=_synMapEl.getAttribute("style")||"";\n'
-    '    _synMapEl.setAttribute("style","position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:9999!important;margin:0!important;");\n'
-    '    btn.innerHTML="&#x274C; Exit Fullscreen";\n'
-    '  } else {\n'
-    '    _synMapEl.setAttribute("style",_synOrigStyle);\n'
-    '    btn.innerHTML="&#x26F6; Fullscreen";\n'
-    '  }\n'
-    '  setTimeout(function(){MAP.invalidateSize();},100);\n'
-    '}\n'
-    '</script>\n'
-)
-m.get_root().html.add_child(Element(fullscreen_html))
+
 
 # ── Build per-timestamp surface station data ──────────────────────────────
 import json as _json2
@@ -5364,7 +5276,7 @@ if not SHOW_STATION_SYMBOLS:
 _ts_ua_stn_json_str = _json3.dumps(_ua_stn_data)
 print(f'\n✓ _ts_ua_stn_json_str keys: {sorted(_ua_stn_data.keys())}')
 
-folium.LayerControl(collapsed=False).add_to(m)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CONTROL BAR  — level (850/500) + time slider
@@ -5440,31 +5352,12 @@ _bar_html = '''
   font-size: 10px;
   min-width: 120px;
 }
-#syn-export-panel {
-  position: fixed;
-  top: 50px; left: 10px;
-  z-index: 10001;
-  background: rgba(26,26,46,0.95);
-  border: 1px solid #4a7fc1;
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-family: "Courier New", monospace;
-  font-size: 11px;
-  color: #e0e0e0;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.4);
-  min-width: 130px;
-}
+
 </style>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-<!-- Export panel — top left -->
-<div id="syn-export-panel">
-  <div class="bar-label" style="margin-bottom:4px;">Export</div>
-  <button class="syn-exp-btn" style="display:block;width:100%;margin-top:4px;border-color:#cc2200;color:#ffaaaa;background:#440000;" onclick="synExportBothPDFs()">Export PDFs</button>
-  <button class="syn-exp-btn export-all" style="display:block;width:100%;border-color:#9944cc;color:#ddaaff;background:#2a0044;" onclick="synExportAll()">Export 850LLJ Prog</button>
-  <div id="syn-export-status" style="margin-top:5px;min-height:14px;"></div>
-</div>
+
 
 <!-- Bottom control bar -->
 <div id="syn-bar">
