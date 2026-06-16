@@ -485,8 +485,8 @@ from datetime import datetime, timezone as _tz, timedelta
 # RDPS covers days 0 → RDPS_FORECAST_DAYS
 # GDPS covers days RDPS_FORECAST_DAYS → GDPS_FORECAST_DAYS
 # e.g. RDPS=3, GDPS=7 → RDPS days 0-3, GDPS days 3-7
-RDPS_FORECAST_DAYS = 3
-GDPS_FORECAST_DAYS = 10
+RDPS_FORECAST_DAYS = 1
+GDPS_FORECAST_DAYS = 2
 
 # ── Synoptic hours to fetch ───────────────────────────────────────────────────
 UA_HOURS  = [0, 12]       # isobaric (upper-air) valid times — UTC
