@@ -472,15 +472,18 @@ function updateABCount(){
 setInterval(()=>{updateColors();rebuildZoneCounts();checkLightningProximity();},2000);
 
 // ── Lightning Proximity Warning ───────────────────────────────
-const PROX_RADIUS_KM     = 10000  // total watch radius distance in km
+const PROX_RADIUS_KM     = 1000  // total watch radius distance in km
 const PROX_WARNING_PCT   = 0.25;    // fraction of radius that triggers WARNING (vs CAUTION)
 const PROX_WARNING_KM    = PROX_RADIUS_KM * PROX_WARNING_PCT;  // derived — do not edit
 const PROX_VIBRATE_MS    = [200, 100, 200, 100, 200]; // 3 strong pulses pattern
 const PROX_VIBRATE_DELAY = 5000;   // ms between vibration repeats
+const PROX_FADE_DELAY_MS = 30000;  // ms after last strike before warning clears
+
 
 let proximityRing=null, proximityWarning=null, proximityActive=false;
 let _proxVibrateTimer=null, _proxLastWasWarning=false;
 let _proxLastStrikeTime=-Infinity, _proxFadeTimer=null;
+let _proxLastRenderedKey='';
 
 function triggerProximityVibrate(){
   if(!navigator.vibrate) return;
@@ -504,8 +507,8 @@ function checkLightningProximity(){
   const now=t||Date.now()/1000;
 let closest=Infinity, count=0;
   window._proxNearestLL=null;
-  let newestWarningTime=-Infinity, newestWarningLL=null;
-  let newestCautionTime=-Infinity, newestCautionLL=null;
+  let newestWarningLL=null, closestWarningDist=Infinity;
+  let newestCautionLL=null, closestCautionDist=Infinity;
   strokes.forEach(m=>{
     if((now-m._strokeTime)>windowSec) return;
     const d=haversineKm(lat,lon,m._lat,m._lon);
@@ -513,16 +516,16 @@ let closest=Infinity, count=0;
       count++;
       if(d<closest) closest=d;
       if(d<=PROX_WARNING_KM){
-        if(m._strokeTime>newestWarningTime){ newestWarningTime=m._strokeTime; newestWarningLL={lat:m._lat,lon:m._lon}; }
+        if(d<closestWarningDist){ closestWarningDist=d; newestWarningLL={lat:m._lat,lon:m._lon}; }
       } else {
-        if(m._strokeTime>newestCautionTime){ newestCautionTime=m._strokeTime; newestCautionLL={lat:m._lat,lon:m._lon}; }
+        if(d<closestCautionDist){ closestCautionDist=d; newestCautionLL={lat:m._lat,lon:m._lon}; }
       }
     }
   });
 window._proxNearestLL = newestWarningLL || newestCautionLL;
-  const latestStrikeTime = Math.max(newestWarningTime>-Infinity?newestWarningTime:-Infinity, newestCautionTime>-Infinity?newestCautionTime:-Infinity);
-  if(latestStrikeTime > _proxLastStrikeTime){
-    _proxLastStrikeTime = latestStrikeTime;
+  const hasNewStrike = (newestWarningLL || newestCautionLL) ? true : false;
+  if(hasNewStrike){
+    _proxLastStrikeTime = t||Date.now()/1000;
     if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; }
   }
 if(count>0){
@@ -530,6 +533,11 @@ if(count>0){
     const isWarning=closest<=PROX_WARNING_KM;
     if(isWarning && !_proxLastWasWarning) triggerProximityVibrate();
     _proxLastWasWarning=isWarning;
+
+    // Skip full re-render if nothing meaningful changed
+    const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
+    if(renderKey===_proxLastRenderedKey && proximityWarning) return;
+    _proxLastRenderedKey=renderKey;
 
     // Nearest strike pointer line
     const lineColor=isWarning?'#ff4400':'#ffdd00';
@@ -626,10 +634,11 @@ count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+clo
       _proxFadeTimer=setTimeout(()=>{
         if(proximityRing){ map.removeLayer(proximityRing); proximityRing=null; }
         if(proximityWarning){ proximityWarning.remove(); proximityWarning=null; }
-if(window._proxNearestLine){ map.removeLayer(window._proxNearestLine); window._proxNearestLine=null; }
+        if(window._proxNearestLine){ map.removeLayer(window._proxNearestLine); window._proxNearestLine=null; }
         if(window._proxDistLabel){ map.removeLayer(window._proxDistLabel); window._proxDistLabel=null; }
         proximityActive=false; _proxFadeTimer=null;
-      },5000);
+        _proxLastRenderedKey='';
+      },10000);
     }
   } else {
     // Clear
@@ -641,6 +650,7 @@ if(window._proxNearestLine){ map.removeLayer(window._proxNearestLine); window._p
     if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; }
     _proxLastStrikeTime=-Infinity;
     _proxLastWasWarning=false;
+    _proxLastRenderedKey='';
     proximityActive=false;
   }
 }
