@@ -507,8 +507,8 @@ function checkLightningProximity(){
   const now=t||Date.now()/1000;
 let closest=Infinity, count=0;
   window._proxNearestLL=null;
-  let newestWarningTime=-Infinity, newestWarningLL=null;
-  let newestCautionTime=-Infinity, newestCautionLL=null;
+  let newestWarningLL=null, closestWarningDist=Infinity;
+  let newestCautionLL=null, closestCautionDist=Infinity;
   strokes.forEach(m=>{
     if((now-m._strokeTime)>windowSec) return;
     const d=haversineKm(lat,lon,m._lat,m._lon);
@@ -516,16 +516,16 @@ let closest=Infinity, count=0;
       count++;
       if(d<closest) closest=d;
       if(d<=PROX_WARNING_KM){
-        if(m._strokeTime>newestWarningTime){ newestWarningTime=m._strokeTime; newestWarningLL={lat:m._lat,lon:m._lon}; }
+        if(d<closestWarningDist){ closestWarningDist=d; newestWarningLL={lat:m._lat,lon:m._lon}; }
       } else {
-        if(m._strokeTime>newestCautionTime){ newestCautionTime=m._strokeTime; newestCautionLL={lat:m._lat,lon:m._lon}; }
+        if(d<closestCautionDist){ closestCautionDist=d; newestCautionLL={lat:m._lat,lon:m._lon}; }
       }
     }
   });
 window._proxNearestLL = newestWarningLL || newestCautionLL;
-  const latestStrikeTime = Math.max(newestWarningTime>-Infinity?newestWarningTime:-Infinity, newestCautionTime>-Infinity?newestCautionTime:-Infinity);
-  if(latestStrikeTime > _proxLastStrikeTime){
-    _proxLastStrikeTime = latestStrikeTime;
+  const hasNewStrike = (newestWarningLL || newestCautionLL) ? true : false;
+  if(hasNewStrike){
+    _proxLastStrikeTime = t||Date.now()/1000;
     if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; }
   }
 if(count>0){
