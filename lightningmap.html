@@ -634,10 +634,11 @@ count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+clo
       _proxFadeTimer=setTimeout(()=>{
         if(proximityRing){ map.removeLayer(proximityRing); proximityRing=null; }
         if(proximityWarning){ proximityWarning.remove(); proximityWarning=null; }
-if(window._proxNearestLine){ map.removeLayer(window._proxNearestLine); window._proxNearestLine=null; }
+        if(window._proxNearestLine){ map.removeLayer(window._proxNearestLine); window._proxNearestLine=null; }
         if(window._proxDistLabel){ map.removeLayer(window._proxDistLabel); window._proxDistLabel=null; }
         proximityActive=false; _proxFadeTimer=null;
-      },30000);
+        _proxLastRenderedKey='';
+      },10000);
     }
   } else {
     // Clear
