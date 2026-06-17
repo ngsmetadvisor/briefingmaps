@@ -2,7 +2,10 @@ name: Generate GEM Surface Map
 
 on:
   schedule:
-    - cron: '17 */6 * * *'
+    - cron: "37 12 * * *"   # 12:37 UTC daily  → 12Z data
+    - cron: "37 18 * * *"   # 18:37 UTC daily  → 18Z data
+
+    
   workflow_dispatch:
 
 jobs:
