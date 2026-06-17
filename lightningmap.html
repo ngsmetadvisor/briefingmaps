@@ -477,10 +477,13 @@ const PROX_WARNING_PCT   = 0.25;    // fraction of radius that triggers WARNING 
 const PROX_WARNING_KM    = PROX_RADIUS_KM * PROX_WARNING_PCT;  // derived — do not edit
 const PROX_VIBRATE_MS    = [200, 100, 200, 100, 200]; // 3 strong pulses pattern
 const PROX_VIBRATE_DELAY = 5000;   // ms between vibration repeats
+const PROX_FADE_DELAY_MS = 30000;  // ms after last strike before warning clears
+
 
 let proximityRing=null, proximityWarning=null, proximityActive=false;
 let _proxVibrateTimer=null, _proxLastWasWarning=false;
 let _proxLastStrikeTime=-Infinity, _proxFadeTimer=null;
+let _proxLastRenderedKey='';
 
 function triggerProximityVibrate(){
   if(!navigator.vibrate) return;
@@ -530,6 +533,11 @@ if(count>0){
     const isWarning=closest<=PROX_WARNING_KM;
     if(isWarning && !_proxLastWasWarning) triggerProximityVibrate();
     _proxLastWasWarning=isWarning;
+
+    // Skip full re-render if nothing meaningful changed
+    const renderKey=isWarning+'|'+count+'|'+closest.toFixed(1)+'|'+(window._proxNearestLL?window._proxNearestLL.lat.toFixed(4)+','+window._proxNearestLL.lon.toFixed(4):'');
+    if(renderKey===_proxLastRenderedKey && proximityWarning) return;
+    _proxLastRenderedKey=renderKey;
 
     // Nearest strike pointer line
     const lineColor=isWarning?'#ff4400':'#ffdd00';
@@ -629,7 +637,7 @@ count+' strike'+(count>1?'s':'')+' within '+PROX_RADIUS_KM+' km · closest '+clo
 if(window._proxNearestLine){ map.removeLayer(window._proxNearestLine); window._proxNearestLine=null; }
         if(window._proxDistLabel){ map.removeLayer(window._proxDistLabel); window._proxDistLabel=null; }
         proximityActive=false; _proxFadeTimer=null;
-      },5000);
+      },30000);
     }
   } else {
     // Clear
@@ -641,6 +649,7 @@ if(window._proxNearestLine){ map.removeLayer(window._proxNearestLine); window._p
     if(_proxFadeTimer){ clearTimeout(_proxFadeTimer); _proxFadeTimer=null; }
     _proxLastStrikeTime=-Infinity;
     _proxLastWasWarning=false;
+    _proxLastRenderedKey='';
     proximityActive=false;
   }
 }
