@@ -5207,11 +5207,9 @@ function _synInit() {{
 if (document.readyState === "complete") {{ setTimeout(_synInit, 700); }}
 else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700); }}); }}
 </script>
-'''
-
+{{% endraw %}}'''
 m.get_root().html.add_child(Element(_bar_html))
 m.get_root().html.add_child(Element(_js))
-
 # ── Save ──────────────────────────────────────────────────────────────────
 os.makedirs('outputs', exist_ok=True)
 out_path = 'outputs/synoptic_map.html'
@@ -5777,7 +5775,7 @@ _bar_html = '''
 '''
 
 # ── JavaScript ─────────────────────────────────────────────────────────────
-_js = f'''
+_js = f'''{{% raw %}}
 <script>
 // ── Data ──────────────────────────────────────────────────────────────────
 var _SYN_TIME_STEPS  = {_time_steps_str};
@@ -6614,11 +6612,9 @@ function _synInit() {{
 if (document.readyState === "complete") {{ setTimeout(_synInit, 700); }}
 else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700); }}); }}
 </script>
-'''
-
+{{% endraw %}}'''
 m.get_root().html.add_child(Element(_bar_html))
 m.get_root().html.add_child(Element(_js))
-
 os.makedirs('outputs', exist_ok=True)
 m.save('outputs/llj_prog.html')
 print(f'\n✅ LLJ map saved → outputs/llj_prog.html')
@@ -6955,11 +6951,10 @@ m.get_root().html.add_child(Element(_bar_html))
 _time_steps_str = _json.dumps(_sfc_time_steps)
 _frame_data_str = _json.dumps(_frame_data)
 
-_js = f'''
+_js = f'''{{% raw %}}
 <script>
 var _GEM_STEPS  = {_time_steps_str};
 var _GEM_FRAMES = {_frame_data_str};
-
 function _utcKeyToLocalStr(key) {{
   var yr  = parseInt(key.substring(0,4), 10);
   var mo  = parseInt(key.substring(4,6), 10) - 1;
@@ -7359,7 +7354,6 @@ else{{window.addEventListener("load",function(){{setTimeout(_gemInit,800);}});}}
 </script>
 {{% endraw %}}'''
 m.get_root().html.add_child(Element(_js))
-
 _banner_html = f'''
 <div id="gem-banner" style="
   position:fixed;top:0;left:0;right:0;z-index:10002;
