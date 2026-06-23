@@ -6781,6 +6781,19 @@ _borders_js = '''
 <script>
 (function(){
   function loadBorders(){
+    // ── Model run label ───────────────────────────────────────────────────
+    var _runDiv = document.getElementById("gem-run-label");
+    if(!_runDiv){
+      _runDiv = document.createElement("div");
+      _runDiv.id = "gem-run-label";
+      _runDiv.style.cssText = "position:fixed;top:32px;left:6px;z-index:10003;"
+        + "background:rgba(255,255,255,0.82);border:1px solid #aaa;border-radius:4px;"
+        + "padding:2px 7px;font-family:Courier New,monospace;font-size:10px;"
+        + "color:#222;line-height:1.5;pointer-events:none;";
+      _runDiv.innerHTML = "<b>''' + ('RDPS' if '_rdps_run_dt' in dir() else '') + r''' run:</b> ''' + (_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else '?') + r'''<br>"
+        + "<b>GDPS run:</b> ''' + (_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else '?') + r'''";
+      document.body.appendChild(_runDiv);
+    }
     var keys=Object.keys(window).filter(function(k){return k.startsWith("map_");});
     if(!keys.length){setTimeout(loadBorders,200);return;}
     var MAP=window[keys[0]];
@@ -7217,19 +7230,6 @@ function _gemRunExportQueue(done){{
       var ctx=out.getContext("2d");
       ctx.drawImage(canvas,0,0,cropW,cropH,0,0,cropW,cropH);
 
-      // ── Run time top-left ─────────────────────────────────────────────────
-      var _rdpsRun = "{_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else 'unknown'}";
-      var _gdpsRun = "{_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else 'unknown'}";
-      ctx.font         = "26px Arial, sans-serif";
-      ctx.fillStyle    = "rgba(255,255,255,0.75)";
-      ctx.textAlign    = "left";
-      ctx.textBaseline = "top";
-      ctx.fillText("RDPS run: " + _rdpsRun, 10, 10);
-      ctx.fillText("GDPS run: " + _gdpsRun, 10, 38);
-      ctx.font         = "26px Arial, sans-serif";
-      ctx.fillStyle    = "#888888";
-      ctx.fillText("RDPS run: " + _rdpsRun, 10, 10);
-      ctx.fillText("GDPS run: " + _gdpsRun, 10, 38);
 
       var step=_GEM_STEPS[idx]||{{}};
       var key=step.key||"";
@@ -7306,18 +7306,19 @@ function _gemRunExportQueue(done){{
       // 1. map pixels from the html2canvas capture
       fc.drawImage(canvas,0,0,cropW,cropH,0,0,cropW,cropH);
 
-      // ── Run time top-left ─────────────────────────────────────────────────
-      var _rdpsRun = {repr(_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else 'unknown')};
-      var _gdpsRun = {repr(_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else 'unknown')};
-      fc.font         = "26px Arial, sans-serif";
-      fc.fillStyle    = "rgba(255,255,255,0.75)";
+// ── Run time top-left ─────────────────────────────────────────────────
+      var _rdpsRun = "RDPS run: ''' + (_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else '?') + r'''";
+      var _gdpsRun = "GDPS run: ''' + (_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else '?') + r'''";
+      fc.font         = "22px Courier New, monospace";
       fc.textAlign    = "left";
       fc.textBaseline = "top";
-      fc.fillText("RDPS run: " + _rdpsRun, 10, 10);
-      fc.fillText("GDPS run: " + _gdpsRun, 10, 38);
-      fc.fillStyle    = "#888888";
-      fc.fillText("RDPS run: " + _rdpsRun, 10, 10);
-      fc.fillText("GDPS run: " + _gdpsRun, 10, 38);
+      fc.fillStyle    = "rgba(255,255,255,0.85)";
+      fc.fillRect(4, 4, 380, 56);
+      fc.fillStyle    = "#222222";
+      fc.fillText(_rdpsRun, 10, 8);
+      fc.fillText(_gdpsRun, 10, 34);
+
+      
       // 2. scale bar — floated bottom-left of map, above banner
 
 
@@ -7362,34 +7363,34 @@ m.get_root().html.add_child(Element(_js))
 _banner_html = f'''
 <div id="gem-banner" style="
   position:fixed;top:0;left:0;right:0;z-index:10002;
-  display:flex;align-items:stretch;height:56px;
+  display:flex;align-items:stretch;height:28px;
   font-family:Arial,sans-serif;pointer-events:none;
   box-shadow:0 2px 8px rgba(0,0,0,0.4);
 ">
   <div style="
     background:#111111;color:#ffffff;
     display:flex;align-items:center;justify-content:center;
-    padding:0 20px;min-width:260px;
-    font-size:15px;font-weight:bold;line-height:1.3;text-align:center;
+padding:0 10px;min-width:200px;
+    font-size:11px;font-weight:bold;line-height:1.3;text-align:center;
   ">
     <span id="gem-banner-time">—</span>
   </div>
   <div style="
     background:#ffffff;color:#111111;flex:1;
     display:flex;align-items:center;
-    padding:0 20px;font-size:18px;font-weight:bold;
+    padding:0 10px;font-size:12px;font-weight:bold;
   ">
     MSLP &amp; 12h Precipitation accumulation
   </div>
   <div style="
     background:#ffffff;color:#333333;
     display:flex;align-items:center;
-    padding:0 20px;font-size:15px;font-weight:bold;
+    padding:0 10px;font-size:11px;font-weight:bold;
   ">
     AWCC Weather Office
   </div>
 </div>
-<div style="height:56px;"></div>
+<div style="height:28px;"></div>
 <script>
 (function(){{
   function _updateBannerTime(){{
