@@ -5239,6 +5239,7 @@ print('this is LLJ for future use')
 
 ###########################################################
 ###########################################################
+SHOW_STATION_SYMBOLS = True # True / False → hides met symbols on map AND in exports. Turn back on for LLJ
 
 
 
