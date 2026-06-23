@@ -4403,10 +4403,10 @@ _bar_html = '''
 '''
 
 # ── JavaScript ─────────────────────────────────────────────────────────────
-_js = f'''
+_js = f'''{{% raw %}}
 <script>
 // ── Data ──────────────────────────────────────────────────────────────────
-var _SYN_TIME_STEPS  = {_time_steps_str};
+var _GEM_STEPS  = {_time_steps_str};
 var _SYN_UA_STNS     = {_ts_ua_stn_json_str};
 var _SYN_UA          = {_ts_ua_json_str};
 var KEY_HGT_DAM      = {{"850":{int(KEY_HGT_850/10)},"700":{int(KEY_HGT_700/10)},"500":{int(KEY_HGT_500/10)},"250":{int(KEY_HGT_250/10)}}};
@@ -7357,7 +7357,7 @@ function _gemRunExportQueue(done){{
 if(document.readyState==="complete"){{setTimeout(_gemInit,800);}}
 else{{window.addEventListener("load",function(){{setTimeout(_gemInit,800);}});}}
 </script>
-'''
+{{% endraw %}}'''
 m.get_root().html.add_child(Element(_js))
 
 _banner_html = f'''
