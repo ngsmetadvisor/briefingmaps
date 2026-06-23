@@ -4403,10 +4403,10 @@ _bar_html = '''
 '''
 
 # ── JavaScript ─────────────────────────────────────────────────────────────
-_js = f'''{{% raw %}}
+_js = f'''
 <script>
 // ── Data ──────────────────────────────────────────────────────────────────
-var _GEM_STEPS  = {_time_steps_str};
+var _SYN_TIME_STEPS  = {_time_steps_str};
 var _SYN_UA_STNS     = {_ts_ua_stn_json_str};
 var _SYN_UA          = {_ts_ua_json_str};
 var KEY_HGT_DAM      = {{"850":{int(KEY_HGT_850/10)},"700":{int(KEY_HGT_700/10)},"500":{int(KEY_HGT_500/10)},"250":{int(KEY_HGT_250/10)}}};
@@ -5207,9 +5207,11 @@ function _synInit() {{
 if (document.readyState === "complete") {{ setTimeout(_synInit, 700); }}
 else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700); }}); }}
 </script>
-{{% endraw %}}'''
+'''
+
 m.get_root().html.add_child(Element(_bar_html))
 m.get_root().html.add_child(Element(_js))
+
 # ── Save ──────────────────────────────────────────────────────────────────
 os.makedirs('outputs', exist_ok=True)
 out_path = 'outputs/synoptic_map.html'
@@ -5775,7 +5777,7 @@ _bar_html = '''
 '''
 
 # ── JavaScript ─────────────────────────────────────────────────────────────
-_js = f'''{{% raw %}}
+_js = f'''
 <script>
 // ── Data ──────────────────────────────────────────────────────────────────
 var _SYN_TIME_STEPS  = {_time_steps_str};
@@ -6612,9 +6614,11 @@ function _synInit() {{
 if (document.readyState === "complete") {{ setTimeout(_synInit, 700); }}
 else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700); }}); }}
 </script>
-{{% endraw %}}'''
+'''
+
 m.get_root().html.add_child(Element(_bar_html))
 m.get_root().html.add_child(Element(_js))
+
 os.makedirs('outputs', exist_ok=True)
 m.save('outputs/llj_prog.html')
 print(f'\n✅ LLJ map saved → outputs/llj_prog.html')
@@ -6951,10 +6955,11 @@ m.get_root().html.add_child(Element(_bar_html))
 _time_steps_str = _json.dumps(_sfc_time_steps)
 _frame_data_str = _json.dumps(_frame_data)
 
-_js = f'''{{% raw %}}
+_js = f'''
 <script>
 var _GEM_STEPS  = {_time_steps_str};
 var _GEM_FRAMES = {_frame_data_str};
+
 function _utcKeyToLocalStr(key) {{
   var yr  = parseInt(key.substring(0,4), 10);
   var mo  = parseInt(key.substring(4,6), 10) - 1;
@@ -7225,6 +7230,19 @@ function _gemRunExportQueue(done){{
       var ctx=out.getContext("2d");
       ctx.drawImage(canvas,0,0,cropW,cropH,0,0,cropW,cropH);
 
+      // ── Run time top-left ─────────────────────────────────────────────────
+      var _rdpsRun = "{_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else 'unknown'}";
+      var _gdpsRun = "{_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else 'unknown'}";
+      ctx.font         = "26px Arial, sans-serif";
+      ctx.fillStyle    = "rgba(255,255,255,0.75)";
+      ctx.textAlign    = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText("RDPS run: " + _rdpsRun, 10, 10);
+      ctx.fillText("GDPS run: " + _gdpsRun, 10, 38);
+      ctx.font         = "26px Arial, sans-serif";
+      ctx.fillStyle    = "#888888";
+      ctx.fillText("RDPS run: " + _rdpsRun, 10, 10);
+      ctx.fillText("GDPS run: " + _gdpsRun, 10, 38);
 
       var step=_GEM_STEPS[idx]||{{}};
       var key=step.key||"";
@@ -7301,19 +7319,18 @@ function _gemRunExportQueue(done){{
       // 1. map pixels from the html2canvas capture
       fc.drawImage(canvas,0,0,cropW,cropH,0,0,cropW,cropH);
 
-// ── Run time top-left ─────────────────────────────────────────────────
-      var _rdpsRun = "RDPS run: ''' + (_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else '?') + r'''";
-      var _gdpsRun = "GDPS run: ''' + (_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else '?') + r'''";
-      fc.font         = "22px Courier New, monospace";
+      // ── Run time top-left ─────────────────────────────────────────────────
+      var _rdpsRun = {repr(_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else 'unknown')};
+      var _gdpsRun = {repr(_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else 'unknown')};
+      fc.font         = "26px Arial, sans-serif";
+      fc.fillStyle    = "rgba(255,255,255,0.75)";
       fc.textAlign    = "left";
       fc.textBaseline = "top";
-      fc.fillStyle    = "rgba(255,255,255,0.85)";
-      fc.fillRect(4, 4, 380, 56);
-      fc.fillStyle    = "#222222";
-      fc.fillText(_rdpsRun, 10, 8);
-      fc.fillText(_gdpsRun, 10, 34);
-
-      
+      fc.fillText("RDPS run: " + _rdpsRun, 10, 10);
+      fc.fillText("GDPS run: " + _gdpsRun, 10, 38);
+      fc.fillStyle    = "#888888";
+      fc.fillText("RDPS run: " + _rdpsRun, 10, 10);
+      fc.fillText("GDPS run: " + _gdpsRun, 10, 38);
       // 2. scale bar — floated bottom-left of map, above banner
 
 
@@ -7352,8 +7369,9 @@ function _gemRunExportQueue(done){{
 if(document.readyState==="complete"){{setTimeout(_gemInit,800);}}
 else{{window.addEventListener("load",function(){{setTimeout(_gemInit,800);}});}}
 </script>
-{{% endraw %}}'''
+'''
 m.get_root().html.add_child(Element(_js))
+
 _banner_html = f'''
 <div id="gem-banner" style="
   position:fixed;top:0;left:0;right:0;z-index:10002;
