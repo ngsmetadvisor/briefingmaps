@@ -112,54 +112,69 @@ except Exception as e:
     _fire_zones_geojson_str = '{"type":"FeatureCollection","features":[]}'
 
 # ── Build HTML ─────────────────────────────────────────────────────────────
-fire_zones_html = (
-    '<script>\n'
-    'var _FIRE_ZONES_GEOJSON = ' + _fire_zones_geojson_str + ';\n'
-    '(function() {\n'
-    '  function loadFireZones() {\n'
-    '    var keys = Object.keys(window).filter(function(k){return k.startsWith("map_");});\n'
-    '    if (!keys.length) { setTimeout(loadFireZones, 300); return; }\n'
-    '    var MAP = window[keys[0]];\n'
-    '    var fireLayer = L.geoJSON(_FIRE_ZONES_GEOJSON, {\n'
-    '      style: function() {\n'
-    '        return {\n'
-    '          color: "#cc0000",\n'
-    '          weight: 1.8,\n'
-    '          opacity: 0.85,\n'
-    '          fillColor: "#ff9933",\n'
-    '          fillOpacity: 0.00,\n'
-    '          dashArray: "4 3"\n'
-    '        };\n'
-    '      },\n'
-    '      onEachFeature: function(feature, layer) {\n'
-    '        var name = (feature.properties && feature.properties.name) || "Fire Zone";\n'
-    '        layer.bindTooltip(name, {sticky: true, opacity: 0.9});\n'
-    '        layer.bindPopup(\n'
-    '          \'<div style="font-family:Courier New,monospace;font-size:12px;">\'\n'
-    '          + \'<b style="color:#cc4400">\' + name + \'</b><br>\'\n'
-    '          + \'Alberta Fire Weather Forecast Zone\'\n'
-    '          + \'</div>\'\n'
-    '        );\n'
-    '      }\n'
-    '    });\n'
-    '    var _fireVisible = true;\n'
-    '    var btn = document.getElementById("btn-fire-zones");\n'
-    '    if (btn) {\n'
-    '      btn.onclick = function() {\n'
-    '        _fireVisible = !_fireVisible;\n'
-    '        if (_fireVisible) { fireLayer.addTo(MAP); btn.style.background = "#cc4400"; }\n'
-    '        else { MAP.removeLayer(fireLayer); btn.style.background = "#b0b8c8"; }\n'
-    '      };\n'
-    '      btn.style.background = "#cc4400";\n'
-    '    }\n'
-    '    fireLayer.addTo(MAP);\n'
-    '  }\n'
-    '  if (document.readyState === "complete") { setTimeout(loadFireZones, 800); }\n'
-    '  else { window.addEventListener("load", function(){ setTimeout(loadFireZones, 800); }); }\n'
-    '})();\n'
-    '</script>\n'
-    '<style>#btn-fire-zones { transition: background 0.2s; }</style>\n'
-)
+# Returns a self-contained snippet for ONE specific map.
+# suffix must be unique per map (e.g. 'synoptic', 'llj', 'surface') so that
+# the JS variable names, function names, and button IDs don't collide when
+# all three HTML files are open or generated in the same session.
+def make_fire_zones_html(suffix='main'):
+    _sid = suffix.replace('-', '_')
+    return (
+        '<script>\n'
+        f'var _FIRE_ZONES_GEOJSON_{_sid} = ' + _fire_zones_geojson_str + ';\n'
+        f'(function() {{\n'
+        f'  var _fzLoaded_{_sid} = false;\n'
+        f'  function loadFireZones_{_sid}() {{\n'
+        f'    if (_fzLoaded_{_sid}) return;\n'
+        f'    var keys = Object.keys(window).filter(function(k){{return k.startsWith("map_");}});\n'
+        f'    if (!keys.length) {{ setTimeout(loadFireZones_{_sid}, 150); return; }}\n'
+        f'    // Always use the LAST registered map_ key — that is the one\n'
+        f'    // this script block was injected into.\n'
+        f'    var MAP = window[keys[keys.length - 1]];\n'
+        f'    if (!MAP || !MAP.addLayer) {{ setTimeout(loadFireZones_{_sid}, 150); return; }}\n'
+        f'    _fzLoaded_{_sid} = true;\n'
+        f'    var fireLayer = L.geoJSON(_FIRE_ZONES_GEOJSON_{_sid}, {{\n'
+        '      style: function() {\n'
+        '        return {\n'
+        '          color: "#cc0000",\n'
+        '          weight: 1.8,\n'
+        '          opacity: 0.85,\n'
+        '          fillColor: "#ff9933",\n'
+        '          fillOpacity: 0.00,\n'
+        '          dashArray: "4 3"\n'
+        '        };\n'
+        '      },\n'
+        '      onEachFeature: function(feature, layer) {\n'
+        '        var name = (feature.properties && feature.properties.name) || "Fire Zone";\n'
+        '        layer.bindTooltip(name, {sticky: true, opacity: 0.9});\n'
+        '        layer.bindPopup(\n'
+        '          \'<div style="font-family:Courier New,monospace;font-size:12px;">\'\n'
+        '          + \'<b style="color:#cc4400">\' + name + \'</b><br>\'\n'
+        '          + \'Alberta Fire Weather Forecast Zone\'\n'
+        '          + \'</div>\'\n'
+        '        );\n'
+        '      }\n'
+        f'    }});\n'
+        f'    var _fireVisible_{_sid} = true;\n'
+        f'    var btn = document.getElementById("btn-fire-zones-{suffix}");\n'
+        f'    if (btn) {{\n'
+        f'      btn.onclick = function() {{\n'
+        f'        _fireVisible_{_sid} = !_fireVisible_{_sid};\n'
+        f'        if (_fireVisible_{_sid}) {{ fireLayer.addTo(MAP); btn.style.background = "#cc4400"; }}\n'
+        f'        else {{ MAP.removeLayer(fireLayer); btn.style.background = "#b0b8c8"; }}\n'
+        f'      }};\n'
+        f'      btn.style.background = "#cc4400";\n'
+        f'    }}\n'
+        f'    fireLayer.addTo(MAP);\n'
+        f'  }}\n'
+        f'  if (document.readyState === "complete") {{ setTimeout(loadFireZones_{_sid}, 400); }}\n'
+        f'  else {{ window.addEventListener("load", function(){{ setTimeout(loadFireZones_{_sid}, 400); }}); }}\n'
+        f'}})();\n'
+        '</script>\n'
+        f'<style>#btn-fire-zones-{suffix} {{ transition: background 0.2s; }}</style>\n'
+    )
+
+# Keep a default for any code that still references the old name directly
+fire_zones_html = make_fire_zones_html('synoptic')
 
 print('fire_zones_html ready')
 
@@ -4012,8 +4027,8 @@ borders_js = (
 m.get_root().html.add_child(Element(borders_js))
 
 # ── KML / fire zones ──────────────────────────────────────────────────────
-if 'fire_zones_html' in globals():
-    m.get_root().html.add_child(Element(fire_zones_html))
+if 'make_fire_zones_html' in globals():
+    m.get_root().html.add_child(Element(make_fire_zones_html('synoptic')))
 
 # ── Force KML zone lines above grey land fill ─────────────────────────────
 m.get_root().html.add_child(Element(
@@ -6826,8 +6841,8 @@ function synToggleFS(){
 '''
 m.get_root().html.add_child(Element(_fullscreen_html))
 
-if 'fire_zones_html' in globals():
-    m.get_root().html.add_child(Element(fire_zones_html))
+if 'make_fire_zones_html' in globals():
+    m.get_root().html.add_child(Element(make_fire_zones_html('surface')))
 
 _bar_html = '''
 <style>
