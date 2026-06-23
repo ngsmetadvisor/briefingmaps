@@ -166,8 +166,8 @@ def make_fire_zones_html(suffix='main'):
         f'    }}\n'
         f'    fireLayer.addTo(MAP);\n'
         f'  }}\n'
-        f'  if (document.readyState === "complete") {{ setTimeout(loadFireZones_{_sid}, 400); }}\n'
-        f'  else {{ window.addEventListener("load", function(){{ setTimeout(loadFireZones_{_sid}, 400); }}); }}\n'
+        f'  if (document.readyState === "complete") {{ setTimeout(loadFireZones_{_sid}, 2000); }}\n'
+        f'  else {{ window.addEventListener("load", function(){{ setTimeout(loadFireZones_{_sid}, 2000); }}); }}\n'
         f'}})();\n'
         '</script>\n'
         f'<style>#btn-fire-zones-{suffix} {{ transition: background 0.2s; }}</style>\n'
@@ -3991,11 +3991,21 @@ borders_js = (
     '      MAP.getPane("heightPane").style.zIndex="490";\n'
     '      MAP.getPane("heightPane").style.pointerEvents="none";\n'
     '    }\n'
-    '    fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson")\n'
-    '      .then(function(r){return r.json();})\n'
-    '      .then(function(gj){\n'
-    '        L.geoJSON(gj,{style:function(){return {color:"none",weight:0,fill:true,fillColor:"#dedede",fillOpacity:1.0};},pane:"landPane"}).addTo(MAP);\n'
-    '      }).catch(function(e){console.warn("land fill load failed",e);});\n'
+    '    (function(){\n'  
+    '      var _LAND_URLS=[\n'
+    '        "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson",\n'
+    '        "https://cdn.jsdelivr.net/npm/natural-earth-data@1.0.0/ne_50m_land.json"\n'
+    '      ];\n'
+    '      function _tryLand(idx){\n'
+    '        if(idx>=_LAND_URLS.length){console.warn("land fill: all sources failed");return;}\n'
+    '        fetch(_LAND_URLS[idx])\n'
+    '          .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})\n'
+    '          .then(function(gj){\n'
+    '            L.geoJSON(gj,{style:function(){return {color:"none",weight:0,fill:true,fillColor:"#d4d4d4",fillOpacity:1.0};},pane:"landPane"}).addTo(MAP);\n'
+    '          }).catch(function(e){console.warn("land fill source "+idx+" failed:",e);_tryLand(idx+1);});\n'
+    '      }\n'
+    '      _tryLand(0);\n'
+    '    })();\n'
     '    var items=[\n'
     '      ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_coastline.geojson",\n'
     '       {color:"#444",weight:2.5,opacity:1.0,fill:false}],\n'
@@ -4040,7 +4050,7 @@ m.get_root().html.add_child(Element(
     '    var MAP=window[keys[0]];\n'
     '    if(!MAP.getPane("kmlPane")){\n'
     '      MAP.createPane("kmlPane");\n'
-    '      MAP.getPane("kmlPane").style.zIndex=460;\n'
+    '      MAP.getPane("kmlPane").style.zIndex=650;\n'
     '      MAP.getPane("kmlPane").style.pointerEvents="none";\n'
     '    }\n'
     '    MAP.eachLayer(function(layer){\n'
@@ -5404,11 +5414,21 @@ borders_js = (
     '      MAP.getPane("heightPane").style.zIndex="490";\n'
     '      MAP.getPane("heightPane").style.pointerEvents="none";\n'
     '    }\n'
-    '    fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson")\n'
-    '      .then(function(r){return r.json();})\n'
-    '      .then(function(gj){\n'
-    '        L.geoJSON(gj,{style:function(){return {color:"none",weight:0,fill:true,fillColor:"#d4d4d4",fillOpacity:1.0};},pane:"landPane"}).addTo(MAP);\n'
-    '      }).catch(function(e){console.warn("land fill load failed",e);});\n'
+    '    (function(){\n'
+    '      var _LAND_URLS=[\n'
+    '        "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson",\n'
+    '        "https://cdn.jsdelivr.net/npm/natural-earth-data@1.0.0/ne_50m_land.json"\n'
+    '      ];\n'
+    '      function _tryLand(idx){\n'
+    '        if(idx>=_LAND_URLS.length){console.warn("land fill: all sources failed");return;}\n'
+    '        fetch(_LAND_URLS[idx])\n'
+    '          .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})\n'
+    '          .then(function(gj){\n'
+    '            L.geoJSON(gj,{style:function(){return {color:"none",weight:0,fill:true,fillColor:"#dedede",fillOpacity:1.0};},pane:"landPane"}).addTo(MAP);\n'
+    '          }).catch(function(e){console.warn("land fill source "+idx+" failed:",e);_tryLand(idx+1);});\n'
+    '      }\n'
+    '      _tryLand(0);\n'
+    '    })();\n'
     '    var items=[\n'
     '      ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_coastline.geojson",\n'
     '       {color:"#444",weight:2.5,opacity:1.0,fill:false}],\n'
@@ -5440,8 +5460,8 @@ borders_js = (
 m.get_root().html.add_child(Element(borders_js))
 
 # ── KML / fire zones ──────────────────────────────────────────────────────
-if 'fire_zones_html' in globals():
-    m.get_root().html.add_child(Element(fire_zones_html))
+if 'make_fire_zones_html' in globals():
+    m.get_root().html.add_child(Element(make_fire_zones_html('llj')))
 
 
 
@@ -6773,11 +6793,21 @@ _borders_js = '''
         MAP.getPane(pname).style.pointerEvents="none";
       }
     });
-    fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson")
-      .then(function(r){return r.json();})
-      .then(function(gj){
-        L.geoJSON(gj,{style:function(){return{color:"none",weight:0,fill:true,fillColor:"#dedede",fillOpacity:1.0};},pane:"landPane"}).addTo(MAP);
-      });
+    (function(){
+      var _LAND_URLS=[
+        "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson",
+        "https://cdn.jsdelivr.net/npm/natural-earth-data@1.0.0/ne_50m_land.json"
+      ];
+      function _tryLand(idx){
+        if(idx>=_LAND_URLS.length){console.warn("land fill: all sources failed");return;}
+        fetch(_LAND_URLS[idx])
+          .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
+          .then(function(gj){
+            L.geoJSON(gj,{style:function(){return{color:"none",weight:0,fill:true,fillColor:"#dedede",fillOpacity:1.0};},pane:"landPane"}).addTo(MAP);
+          }).catch(function(e){console.warn("land fill source "+idx+" failed:",e);_tryLand(idx+1);});
+      }
+      _tryLand(0);
+    })();
     [
       ["https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_coastline.geojson",
        {color:"#444",weight:2.0,opacity:1.0,fill:false}],
