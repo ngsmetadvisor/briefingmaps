@@ -3735,12 +3735,12 @@ else:
 import json as _json_ua
 
 for _k in _ts_ua:
-    for _lvl in ['700', '250']:
+    for _lvl in ['250']:
         lvl_data = _ts_ua[_k].get('levels', {}).get(_lvl, {})
         lvl_data['temp_band_fills'] = []
         lvl_data['ttdp'] = []
         lvl_data['sped'] = []
-    for _lvl in ['850', '500']:
+    for _lvl in ['850', '700', '500']:
         fills = _ts_ua[_k].get('levels', {}).get(_lvl, {}).get('temp_band_fills', [])
         for f in fills:
             # Normalise holes — keep key present so renderer never errors on missing key
