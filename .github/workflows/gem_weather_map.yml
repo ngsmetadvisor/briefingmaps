@@ -19,6 +19,13 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/ngsmetadvisor/UAanalysis/dispatches \
             -d '{"event_type":"run-analysis"}'
+      - name: Trigger LLJ_OBS
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.DISPATCH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/ngsmetadvisor/UAanalysis/dispatches \
+            -d '{"event_type":"run-llj-obs"}'
       - name: Trigger SfcMap
         run: |
           curl -X POST \
