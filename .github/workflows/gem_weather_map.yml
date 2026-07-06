@@ -27,6 +27,30 @@ jobs:
             https://api.github.com/repos/ngsmetadvisor/SfcMap/dispatches \
             -d '{"event_type":"run-sfcmap"}'
 
+run-llj-obs:
+    needs: trigger-downstream
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout UAanalysis repo
+        uses: actions/checkout@v4
+        with:
+          repository: ngsmetadvisor/UAanalysis
+          token: ${{ secrets.DISPATCH_PAT }}
+          path: UAanalysis
+      - name: Install system dependencies
+        run: sudo apt-get install -y libeccodes-dev
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python packages
+        working-directory: UAanalysis
+        run: pip install -r requirements.txt
+      - name: Run llj_obs.py
+        working-directory: UAanalysis
+        run: python llj_obs.py
+        timeout-minutes: 20
+
   build:
     needs: trigger-downstream
     runs-on: ubuntu-latest
