@@ -12,16 +12,55 @@ jobs:
   trigger-downstream:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger UAanalysis
+      - name: Trigger UAanalysis and wait for completion
         run: |
-          curl -X POST \
+          DISPATCH_TIME=$(date -u +%s)
+
+          curl -f -X POST \
             -H "Authorization: Bearer ${{ secrets.DISPATCH_PAT }}" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/ngsmetadvisor/UAanalysis/dispatches \
             -d '{"event_type":"run-analysis"}'
+
+          echo "Dispatched run-analysis, waiting for it to appear and complete..."
+
+          RUN_ID=""
+          for i in $(seq 1 20); do
+            sleep 10
+            RUN_ID=$(curl -s \
+              -H "Authorization: Bearer ${{ secrets.DISPATCH_PAT }}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/ngsmetadvisor/UAanalysis/actions/runs?event=repository_dispatch&per_page=10" \
+              | jq -r --argjson t "$DISPATCH_TIME" \
+                '[.workflow_runs[] | select((.created_at | fromdateiso8601) >= ($t - 30)) | select(.name != "LLJ Soundings (radiosonde wind/CAPE)")] | sort_by(.created_at) | .[0].id // empty')
+            if [ -n "$RUN_ID" ]; then
+              echo "Found run ID: $RUN_ID"
+              break
+            fi
+            echo "Run not found yet, retrying ($i/20)..."
+          done
+
+          if [ -z "$RUN_ID" ]; then
+            echo "::warning::Could not find the triggered run, proceeding anyway after fallback wait"
+            sleep 300
+          else
+            for i in $(seq 1 60); do
+              STATUS=$(curl -s \
+                -H "Authorization: Bearer ${{ secrets.DISPATCH_PAT }}" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/ngsmetadvisor/UAanalysis/actions/runs/$RUN_ID" \
+                | jq -r '.status')
+              echo "Run $RUN_ID status: $STATUS ($i/60)"
+              if [ "$STATUS" = "completed" ]; then
+                break
+              fi
+              sleep 15
+            done
+          fi
+
       - name: Trigger LLJ_OBS
         run: |
-          curl -X POST \
+          curl -f -X POST \
             -H "Authorization: Bearer ${{ secrets.DISPATCH_PAT }}" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/ngsmetadvisor/UAanalysis/dispatches \
