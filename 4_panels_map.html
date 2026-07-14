@@ -266,6 +266,57 @@
   .export-btn:hover { background: #5c8fce; }
   .export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+  /* ── Zoom slider ── */
+  #zoom-slider-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f0f2f5;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+  #zoom-label {
+    font-size: 10px;
+    color: #555e6b;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  #zoom-slider {
+    width: 70px;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #ced4da;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  #zoom-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 15px; height: 15px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  #zoom-slider::-moz-range-thumb {
+    width: 15px; height: 15px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  #zoom-value {
+    font-size: 10px;
+    color: #555e6b;
+    min-width: 24px;
+    text-align: right;
+  }
+
   #export-overlay {
     position: fixed; inset: 0;
     background: rgba(13,17,23,0.92);
@@ -314,6 +365,13 @@
   </div>
   <div id="ts-display">—</div>
 <div class="divider"></div>
+  <div id="zoom-slider-wrap">
+    <span id="zoom-label">Zoom</span>
+    <input type="range" id="zoom-slider" min="0" max="10" value="2.5" step="0.5"
+           oninput="onZoomSlider(this.value)">
+    <span id="zoom-value">2.5</span>
+  </div>
+  <div class="divider"></div>
   <button id="export-btn" class="export-btn" onclick="exportAllPanels()">⬇ Export All (ZIP)</button>
   <div class="divider"></div>
   <div id="sync-indicator">
@@ -912,25 +970,35 @@ function padStep(idx) {
 }
 
 var EDMONTON_LATLNG = [53.5461, -113.4938];
-var EXPORT_ZOOM_LEVEL = 2.5;
+var _uiZoomLevel = 2.5;
 
-async function zoomOutAndCenterEdmonton() {
+function applyZoomToAllPanes(zoomVal) {
   PANES.forEach(function(p) {
     try {
       var win = document.getElementById(p.frameId).contentWindow;
       var lmap = findLeafletMap(win);
       if (!lmap) return;
       win.__awcc_syncing = true;
-      lmap.setView(EDMONTON_LATLNG, EXPORT_ZOOM_LEVEL, { animate: false });
+      lmap.setView(EDMONTON_LATLNG, zoomVal, { animate: false });
       win.__awcc_syncing = false;
       var appliedZoom = lmap.getZoom();
-      if (appliedZoom !== EXPORT_ZOOM_LEVEL) {
-        console.warn('[AWCC] ' + p.id + ' snapped zoom ' + EXPORT_ZOOM_LEVEL + ' -> ' + appliedZoom + ' (zoomSnap not fractional on this map)');
+      if (appliedZoom !== zoomVal) {
+        console.warn('[AWCC] ' + p.id + ' snapped zoom ' + zoomVal + ' -> ' + appliedZoom + ' (zoomSnap not fractional on this map)');
       }
     } catch (e) {
-      console.warn('[AWCC] zoomOutAndCenterEdmonton error', p.id, e);
+      console.warn('[AWCC] applyZoomToAllPanes error', p.id, e);
     }
   });
+}
+
+function onZoomSlider(val) {
+  _uiZoomLevel = parseFloat(val);
+  document.getElementById('zoom-value').textContent = _uiZoomLevel.toFixed(1);
+  applyZoomToAllPanes(_uiZoomLevel);
+}
+
+async function zoomOutAndCenterEdmonton() {
+  applyZoomToAllPanes(_uiZoomLevel);
   // Let tiles catch up after the view change
   await sleep(1000);
 }
