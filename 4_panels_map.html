@@ -912,7 +912,7 @@ function padStep(idx) {
 }
 
 var EDMONTON_LATLNG = [53.5461, -113.4938];
-var EXPORT_ZOOM_LEVEL = 5.5;
+var EXPORT_ZOOM_LEVEL = 3.5;
 
 async function zoomOutAndCenterEdmonton() {
   PANES.forEach(function(p) {
@@ -962,6 +962,34 @@ async function captureCombinedPanel() {
       if (p.id === 'p3') {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(pos[0], pos[1], halfW, halfH);
+
+        var labelEl = document.getElementById('no-data-label-p3');
+        var labelText = labelEl ? labelEl.textContent : 'No data for this time step';
+        var tsEl = document.getElementById('blank-ts-p3');
+        var tsText = tsEl ? tsEl.textContent : '';
+
+        var cx = pos[0] + halfW / 2;
+        var cy = pos[1] + halfH / 2;
+
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Icon (⊘), matching .no-data-icon
+        ctx.fillStyle = 'rgba(85,94,107,0.3)';
+        ctx.font = '28px "Courier New", monospace';
+        ctx.fillText('⊘', cx, cy - 24);
+
+        // Label, matching .no-data-label
+        ctx.fillStyle = '#555e6b';
+        ctx.font = 'bold 11px "Courier New", monospace';
+        ctx.fillText(labelText.toUpperCase(), cx, cy + 6);
+
+        // Timestamp line, matching .no-data-ts
+        if (tsText) {
+          ctx.fillStyle = '#ced4da';
+          ctx.font = '10px "Courier New", monospace';
+          ctx.fillText(tsText, cx, cy + 24);
+        }
       }
       continue; // leave blank (other panes keep dark background)
     }
