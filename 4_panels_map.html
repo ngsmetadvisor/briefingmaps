@@ -899,6 +899,26 @@ function padStep(idx) {
   return s.length < 2 ? '0' + s : s;
 }
 
+var EDMONTON_LATLNG = [53.5461, -113.4938];
+
+async function zoomOutAndCenterEdmonton() {
+  PANES.forEach(function(p) {
+    try {
+      var win = document.getElementById(p.frameId).contentWindow;
+      var lmap = findLeafletMap(win);
+      if (!lmap) return;
+      var currentZoom = lmap.getZoom();
+      win.__awcc_syncing = true;
+      lmap.setView(EDMONTON_LATLNG, currentZoom - 1, { animate: false });
+      win.__awcc_syncing = false;
+    } catch (e) {
+      console.warn('[AWCC] zoomOutAndCenterEdmonton error', p.id, e);
+    }
+  });
+  // Let tiles catch up after the view change
+  await sleep(1000);
+}
+
 async function captureCombinedPanel() {
   // Build an offscreen canvas from the 4 individual iframe captures so
   // cross-origin/CORS taint on one frame doesn't kill the whole grid.
@@ -963,11 +983,14 @@ async function exportAllPanels() {
   if (btn) btn.disabled = true;
   if (overlay) overlay.classList.add('visible');
 
-  var zip = new JSZip();
+var zip = new JSZip();
   var originalIdx = parseInt(document.getElementById('master-slider').value) || 0;
   var total = _masterSteps.length;
 
   try {
+    if (progressText) progressText.textContent = 'Adjusting map view…';
+    await zoomOutAndCenterEdmonton();
+
     for (var idx = 0; idx < total; idx++) {
       var stepLabel = (_masterSteps[idx] && _masterSteps[idx].label) ? _masterSteps[idx].label : ('step' + idx);
       if (progressText) progressText.textContent =
