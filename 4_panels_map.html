@@ -1153,27 +1153,48 @@ async function zoomOutAndCenterEdmonton() {
 async function captureCombinedPanel() {
   // Build an offscreen canvas from the 4 individual iframe captures so
   // cross-origin/CORS taint on one frame doesn't kill the whole grid.
+  // Each pane is cropped to the target ratio INDIVIDUALLY, centered on its
+  // own middle (Edmonton) — cropping the assembled 2x2 grid as one piece
+  // would trim unequal amounts off each pane's own center point.
   var EXPORT_SCALE = 2;      // 2x pixel density → sharper exported PNGs
   var FRAME_COLOR  = '#000000';
   var FRAME_WIDTH  = 4;      // px, at export resolution
 
+  var EXPORT_RATIO_W = 1.3;
+  var EXPORT_RATIO_H = 1.0;
+  var targetRatio     = EXPORT_RATIO_W / EXPORT_RATIO_H;
+
   var mapsEl   = document.getElementById('maps');
-  var fullW    = Math.round(mapsEl.offsetWidth  * EXPORT_SCALE);
-  var fullH    = Math.round(mapsEl.offsetHeight * EXPORT_SCALE);
-  var halfW    = Math.round(fullW / 2);
-  var halfH    = Math.round(fullH / 2);
+  var halfW    = Math.round(mapsEl.offsetWidth  * EXPORT_SCALE / 2);
+  var halfH    = Math.round(mapsEl.offsetHeight * EXPORT_SCALE / 2);
   var logHalfW = Math.round(mapsEl.offsetWidth  / 2);
   var logHalfH = Math.round(mapsEl.offsetHeight / 2);
 
+  // Determine the crop window (same size for every pane, since all panes
+  // share the same halfW/halfH) centered on each pane's own middle.
+  var cropW, cropH, srcX, srcY;
+  var currentRatio = halfW / halfH;
+  if (currentRatio > targetRatio) {
+    cropH = halfH;
+    cropW = Math.round(halfH * targetRatio);
+    srcX  = Math.round((halfW - cropW) / 2);
+    srcY  = 0;
+  } else {
+    cropW = halfW;
+    cropH = Math.round(halfW / targetRatio);
+    srcX  = 0;
+    srcY  = Math.round((halfH - cropH) / 2);
+  }
+
   var outCanvas = document.createElement('canvas');
-  outCanvas.width = fullW;
-  outCanvas.height = fullH;
+  outCanvas.width  = cropW * 2;
+  outCanvas.height = cropH * 2;
   var ctx = outCanvas.getContext('2d');
   ctx.fillStyle = '#1a1f26';
-  ctx.fillRect(0, 0, fullW, fullH);
+  ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
 
   // Grid positions match the CSS grid: p1 TL, p2 TR, p4 BL, p3 BR
-  var positions = { p1: [0, 0], p2: [halfW, 0], p4: [0, halfH], p3: [halfW, halfH] };
+  var positions = { p1: [0, 0], p2: [cropW, 0], p4: [0, cropH], p3: [cropW, cropH] };
 
   function drawFrame(pos) {
     ctx.strokeStyle = FRAME_COLOR;
@@ -1181,8 +1202,8 @@ async function captureCombinedPanel() {
     ctx.strokeRect(
       pos[0] + FRAME_WIDTH / 2,
       pos[1] + FRAME_WIDTH / 2,
-      halfW - FRAME_WIDTH,
-      halfH - FRAME_WIDTH
+      cropW - FRAME_WIDTH,
+      cropH - FRAME_WIDTH
     );
   }
 
@@ -1193,15 +1214,15 @@ async function captureCombinedPanel() {
     if (blankEl && blankEl.classList.contains('visible')) {
       if (p.id === 'p3') {
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(pos[0], pos[1], halfW, halfH);
+        ctx.fillRect(pos[0], pos[1], cropW, cropH);
 
         var labelEl = document.getElementById('no-data-label-p3');
         var labelText = labelEl ? labelEl.textContent : 'No data for this time step';
         var tsEl = document.getElementById('blank-ts-p3');
         var tsText = tsEl ? tsEl.textContent : '';
 
-        var cx = pos[0] + halfW / 2;
-        var cy = pos[1] + halfH / 2;
+        var cx = pos[0] + cropW / 2;
+        var cy = pos[1] + cropH / 2;
 
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -1240,41 +1261,20 @@ async function captureCombinedPanel() {
         windowHeight: logHalfH,
         scale: EXPORT_SCALE
       });
-      ctx.drawImage(paneCanvas, pos[0], pos[1], halfW, halfH);
+      // Crop this pane's own capture centered on its own middle (Edmonton),
+      // then place the crop into its quadrant of the final grid.
+      ctx.drawImage(
+        paneCanvas,
+        srcX, srcY, cropW, cropH,
+        pos[0], pos[1], cropW, cropH
+      );
     } catch (capErr) {
       console.warn('[AWCC] capture failed', p.id, capErr);
     }
     drawFrame(pos);
   }
 
-  // ── Crop to fixed export aspect ratio (width:height) ────────────────────
-  var EXPORT_RATIO_W = 1.3;
-  var EXPORT_RATIO_H = 1.0;
-  var targetRatio    = EXPORT_RATIO_W / EXPORT_RATIO_H;
-  var currentRatio   = fullW / fullH;
-
-  var cropW, cropH, srcX, srcY;
-  if (currentRatio > targetRatio) {
-    // canvas is too wide — crop the sides, keep full height
-    cropH = fullH;
-    cropW = Math.round(fullH * targetRatio);
-    srcX  = Math.round((fullW - cropW) / 2);
-    srcY  = 0;
-  } else {
-    // canvas is too tall — crop top/bottom, keep full width
-    cropW = fullW;
-    cropH = Math.round(fullW / targetRatio);
-    srcX  = 0;
-    srcY  = Math.round((fullH - cropH) / 2);
-  }
-
-  var croppedCanvas = document.createElement('canvas');
-  croppedCanvas.width  = cropW;
-  croppedCanvas.height = cropH;
-  var cctx = croppedCanvas.getContext('2d');
-  cctx.drawImage(outCanvas, srcX, srcY, cropW, cropH, 0, 0, cropW, cropH);
-
-  return croppedCanvas;
+  return outCanvas;
 }
 
 async function exportAllPanels() {
