@@ -1227,6 +1227,7 @@ var zip = new JSZip();
 
   try {
     if (progressText) progressText.textContent = 'Adjusting map view…';
+    hideAllCrosshairs();
     await zoomOutAndCenterEdmonton();
 
     for (var idx = 0; idx < total; idx++) {
