@@ -4306,26 +4306,26 @@ _bar_html = '''
   position: fixed;
   bottom: 0; left: 0; right: 0;
   z-index: 10000;
-  background: #1a1a2e;
+  background: #e6e6ea;
   border-top: 2px solid #4a7fc1;
-  padding: 8px 16px;
+  padding: 4px 16px;
   display: flex;
   align-items: center;
   gap: 14px;
   font-family: "Courier New", monospace;
   font-size: 11px;
-  color: #e0e0e0;
-  box-shadow: 0 -3px 12px rgba(0,0,0,0.5);
-  min-height: 52px;
+  color: #2a2a3a;
+  box-shadow: 0 -3px 12px rgba(0,0,0,0.25);
+  min-height: 26px;
 }
 #syn-bar .bar-label {
-  font-size: 8px; color: #8888aa; font-weight: bold;
+  font-size: 8px; color: #5a5a6a; font-weight: bold;
   text-transform: uppercase; letter-spacing: 0.5px;
   white-space: nowrap;
 }
 #syn-bar .bar-section {
   display: flex; align-items: center; gap: 6px;
-  border-right: 1px solid #3a3a5a;
+  border-right: 1px solid #c8c8ce;
   padding-right: 14px;
   white-space: nowrap;
 }
@@ -4362,12 +4362,13 @@ _bar_html = '''
   cursor: pointer;
 }
 #syn-ts-label {
-  color: #c0d0ff;
+  color: #2a3a6a;
   font-size: 11px;
+  font-weight: bold;
   min-width: 200px;
 }
 #syn-export-status {
-  color: #ffcc66;
+  color: #b36b00;
   font-size: 10px;
   min-width: 120px;
 }
@@ -5737,12 +5738,13 @@ _bar_html = '''
   cursor: pointer;
 }
 #syn-ts-label {
-  color: #c0d0ff;
+  color: #2a3a6a;
   font-size: 11px;
+  font-weight: bold;
   min-width: 200px;
 }
 #syn-export-status {
-  color: #ffcc66;
+  color: #b36b00;
   font-size: 10px;
   min-width: 120px;
 }
@@ -6894,15 +6896,15 @@ _bar_html = '''
 <style>
 #gem-bar{
   position:fixed;bottom:0;left:0;right:0;z-index:10000;
-  background:#1a1a2e;border-top:2px solid #4a7fc1;
-  padding:8px 16px;display:flex;align-items:center;gap:14px;
-  font-family:"Courier New",monospace;font-size:11px;color:#e0e0e0;
-  box-shadow:0 -3px 12px rgba(0,0,0,0.5);min-height:52px;
+  background:#e6e6ea;border-top:2px solid #4a7fc1;
+  padding:4px 16px;display:flex;align-items:center;gap:14px;
+  font-family:"Courier New",monospace;font-size:11px;color:#2a2a3a;
+  box-shadow:0 -3px 12px rgba(0,0,0,0.25);min-height:26px;
 }
-#gem-bar .bar-label{font-size:8px;color:#8888aa;font-weight:bold;
+#gem-bar .bar-label{font-size:8px;color:#5a5a6a;font-weight:bold;
   text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;}
 #gem-bar .bar-section{display:flex;align-items:center;gap:6px;
-  border-right:1px solid #3a3a5a;padding-right:14px;white-space:nowrap;}
+  border-right:1px solid #c8c8ce;padding-right:14px;white-space:nowrap;}
 #gem-bar .bar-section:last-child{border-right:none;}
 .gem-layer-btn{font-size:12px;padding:4px 14px;cursor:pointer;
   border:1px solid #3a4a6a;border-radius:4px;background:#2a2a4a;
@@ -6910,7 +6912,7 @@ _bar_html = '''
 .gem-layer-btn:hover{background:#3a4a7a;}
 .gem-layer-btn.active{background:#4a7fc1;color:#fff;border-color:#6a9fe1;}
 #gem-time-slider{width:340px;accent-color:#4a7fc1;cursor:pointer;}
-#gem-ts-label{color:#c0d0ff;font-size:12px;min-width:220px;font-weight:bold;}
+#gem-ts-label{color:#2a3a6a;font-size:12px;min-width:220px;font-weight:bold;}
 </style>
 <div id="gem-bar">
    <div class="bar-section">
