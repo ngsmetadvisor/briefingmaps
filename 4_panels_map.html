@@ -899,6 +899,52 @@ function padStep(idx) {
   return s.length < 2 ? '0' + s : s;
 }
 
+async function captureCombinedPanel() {
+  // Build an offscreen canvas from the 4 individual iframe captures so
+  // cross-origin/CORS taint on one frame doesn't kill the whole grid.
+  var mapsEl = document.getElementById('maps');
+  var fullW = mapsEl.offsetWidth;
+  var fullH = mapsEl.offsetHeight;
+  var halfW = Math.round(fullW / 2);
+  var halfH = Math.round(fullH / 2);
+
+  var outCanvas = document.createElement('canvas');
+  outCanvas.width = fullW;
+  outCanvas.height = fullH;
+  var ctx = outCanvas.getContext('2d');
+  ctx.fillStyle = '#1a1f26';
+  ctx.fillRect(0, 0, fullW, fullH);
+
+  // Grid positions match the CSS grid: p1 TL, p2 TR, p4 BL, p3 BR
+  var positions = { p1: [0, 0], p2: [halfW, 0], p4: [0, halfH], p3: [halfW, halfH] };
+
+  for (var pi = 0; pi < PANES.length; pi++) {
+    var p = PANES[pi];
+    var pos = positions[p.id];
+    var blankEl = document.getElementById('blank-' + p.id);
+    if (blankEl && blankEl.classList.contains('visible')) continue; // leave blank
+
+    try {
+      var win = document.getElementById(p.frameId).contentWindow;
+      var paneCanvas = await html2canvas(win.document.body, {
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: '#1a1f26',
+        logging: false,
+        width: halfW,
+        height: halfH,
+        windowWidth: halfW,
+        windowHeight: halfH
+      });
+      ctx.drawImage(paneCanvas, pos[0], pos[1], halfW, halfH);
+    } catch (capErr) {
+      console.warn('[AWCC] capture failed', p.id, capErr);
+    }
+  }
+
+  return outCanvas;
+}
+
 async function exportAllPanels() {
   if (_exportRunning) return;
   if (!_masterSteps || !_masterSteps.length) {
@@ -933,29 +979,11 @@ async function exportAllPanels() {
       // Give tiles / overlays time to finish rendering before capture
       await sleep(1200);
 
+      var combinedCanvas = await captureCombinedPanel();
+      var dataUrl = combinedCanvas.toDataURL('image/png');
+      var base64 = dataUrl.split(',')[1];
       var safeLabel = stepLabel.replace(/[^a-zA-Z0-9_-]/g, '_');
-      var folder = zip.folder(padStep(idx) + '_' + safeLabel);
-
-      for (var pi = 0; pi < PANES.length; pi++) {
-        var p = PANES[pi];
-        var blankEl = document.getElementById('blank-' + p.id);
-        if (blankEl && blankEl.classList.contains('visible')) continue; // no data this step
-
-        try {
-          var win = document.getElementById(p.frameId).contentWindow;
-          var canvas = await html2canvas(win.document.body, {
-            useCORS: true,
-            allowTaint: false,
-            backgroundColor: '#1a1f26',
-            logging: false
-          });
-          var dataUrl = canvas.toDataURL('image/png');
-          var base64 = dataUrl.split(',')[1];
-          folder.file((_paneExportLabels[p.id] || p.id) + '.png', base64, { base64: true });
-        } catch (capErr) {
-          console.warn('[AWCC] capture failed', p.id, capErr);
-        }
-      }
+      zip.file(padStep(idx) + '_' + safeLabel + '.png', base64, { base64: true });
     }
 
     if (progressText) progressText.textContent = 'Zipping files…';
