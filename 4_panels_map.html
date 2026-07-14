@@ -786,7 +786,7 @@ window.addEventListener('message', function(e) {
     return;
   }
 
-  // ── Map view sync ──────────────────────────────────────────────────────
+ // ── Map view sync ──────────────────────────────────────────────────────
   if (e.data.type === 'MAP_VIEW') {
     var srcId = e.data.srcId;
     PANES.forEach(function(tgt) {
@@ -803,6 +803,9 @@ window.addEventListener('message', function(e) {
         console.warn('[AWCC] map mirror error', tgt.id, err);
       }
     });
+    // Whatever pane the user actually scrolled/zoomed on drives the top
+    // zoom slider readout too — keeps the bar truthful to the real map state.
+    updateZoomSliderUI(e.data.zoom);
     return;
   }
 
@@ -1120,6 +1123,21 @@ function onZoomSlider(val) {
   _uiZoomLevel = parseFloat(val);
   document.getElementById('zoom-value').textContent = _uiZoomLevel.toFixed(2);
   applyZoomToAllPanes(_uiZoomLevel);
+}
+
+// Reflect a real map zoom (e.g. from mouse-wheel/scroll zoom on any pane)
+// back onto the master zoom slider + readout, without re-triggering panes.
+function updateZoomSliderUI(zoom) {
+  if (typeof zoom !== 'number' || isNaN(zoom)) return;
+  _uiZoomLevel = zoom;
+  var slider = document.getElementById('zoom-slider');
+  var valEl  = document.getElementById('zoom-value');
+  if (!slider || !valEl) return;
+  var min = parseFloat(slider.min);
+  var max = parseFloat(slider.max);
+  var clamped = Math.max(min, Math.min(max, zoom));
+  slider.value = String(clamped);
+  valEl.textContent = zoom.toFixed(2);
 }
 
 async function zoomOutAndCenterEdmonton() {
