@@ -760,7 +760,7 @@ window.addEventListener('message', function(e) {
   if (!e.data) return;
 
 // ── Crosshair sync ─────────────────────────────────────────────────────
-  if (e.data.type === 'CROSSHAIR_MOVE') {
+ if (e.data.type === 'CROSSHAIR_MOVE') {
     var chSrcId = e.data.srcId;
     PANES.forEach(function(tgt) {
       if (tgt.id === chSrcId) return; // don't draw on the pane the mouse is over
@@ -769,7 +769,12 @@ window.addEventListener('message', function(e) {
         var lmap = findLeafletMap(tgtWin);
         if (!lmap) return;
         var pt = lmap.latLngToContainerPoint([e.data.lat, e.data.lng]);
-        showCrosshairAt(tgt.id, pt.x, pt.y);
+        // Leaflet's container may be offset within its own iframe document
+        // (e.g. the MSLP pane's top banner pushes the map down) — correct
+        // for that offset so the crosshair lands in the right spot on
+        // every pane, not just the ones with no extra chrome.
+        var containerRect = lmap.getContainer().getBoundingClientRect();
+        showCrosshairAt(tgt.id, pt.x + containerRect.left, pt.y + containerRect.top);
       } catch(err) {
         console.warn('[AWCC] crosshair position error', tgt.id, err);
       }
