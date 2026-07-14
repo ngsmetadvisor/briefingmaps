@@ -1247,7 +1247,34 @@ async function captureCombinedPanel() {
     drawFrame(pos);
   }
 
-  return outCanvas;
+  // ── Crop to fixed export aspect ratio (width:height) ────────────────────
+  var EXPORT_RATIO_W = 1.3;
+  var EXPORT_RATIO_H = 1.0;
+  var targetRatio    = EXPORT_RATIO_W / EXPORT_RATIO_H;
+  var currentRatio   = fullW / fullH;
+
+  var cropW, cropH, srcX, srcY;
+  if (currentRatio > targetRatio) {
+    // canvas is too wide — crop the sides, keep full height
+    cropH = fullH;
+    cropW = Math.round(fullH * targetRatio);
+    srcX  = Math.round((fullW - cropW) / 2);
+    srcY  = 0;
+  } else {
+    // canvas is too tall — crop top/bottom, keep full width
+    cropW = fullW;
+    cropH = Math.round(fullW / targetRatio);
+    srcX  = 0;
+    srcY  = Math.round((fullH - cropH) / 2);
+  }
+
+  var croppedCanvas = document.createElement('canvas');
+  croppedCanvas.width  = cropW;
+  croppedCanvas.height = cropH;
+  var cctx = croppedCanvas.getContext('2d');
+  cctx.drawImage(outCanvas, srcX, srcY, cropW, cropH, 0, 0, cropW, cropH);
+
+  return croppedCanvas;
 }
 
 async function exportAllPanels() {
