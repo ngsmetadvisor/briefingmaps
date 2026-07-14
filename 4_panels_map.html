@@ -241,6 +241,36 @@
     font-size: 10px; color: var(--muted);
     display: flex; align-items: center; gap: 5px; white-space: nowrap;
   }
+
+  /* ── Crosshair overlay ── */
+  .crosshair-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 600;
+    display: none;
+  }
+  .crosshair-overlay.active { display: block; }
+  .crosshair-line-v {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: rgba(224,49,49,0.75);
+  }
+  .crosshair-line-h {
+    position: absolute;
+    left: 0; right: 0;
+    height: 1px;
+    background: rgba(224,49,49,0.75);
+  }
+  .crosshair-dot {
+    position: absolute;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: rgba(224,49,49,0.9);
+    border: 1px solid #fff;
+    transform: translate(-50%, -50%);
+  }
   .sync-dot {
     width: 7px; height: 7px; border-radius: 50%;
     background: #2ea043;
@@ -397,6 +427,11 @@
     <iframe id="frame-p1"
       src="https://ngsmetadvisor.github.io/briefingmaps/synoptic_map.html"
       onload="frameLoaded('p1')"></iframe>
+    <div class="crosshair-overlay" id="crosshair-p1">
+      <div class="crosshair-line-v"></div>
+      <div class="crosshair-line-h"></div>
+      <div class="crosshair-dot"></div>
+    </div>
   </div>
 
   <div class="map-pane">
@@ -410,9 +445,14 @@
       <div class="no-data-label">No data for this time step</div>
       <div class="no-data-ts" id="blank-ts-p2"></div>
     </div>
-    <iframe id="frame-p2"
+<iframe id="frame-p2"
       src="https://ngsmetadvisor.github.io/briefingmaps/synoptic_map.html"
       onload="frameLoaded('p2')"></iframe>
+    <div class="crosshair-overlay" id="crosshair-p2">
+      <div class="crosshair-line-v"></div>
+      <div class="crosshair-line-h"></div>
+      <div class="crosshair-dot"></div>
+    </div>
   </div>
 
   <div class="map-pane">
@@ -426,9 +466,14 @@
       <div class="no-data-label">No data for this time step</div>
       <div class="no-data-ts" id="blank-ts-p4"></div>
     </div>
-    <iframe id="frame-p4"
+<iframe id="frame-p4"
       src="https://ngsmetadvisor.github.io/briefingmaps/synoptic_map.html"
       onload="frameLoaded('p4')"></iframe>
+    <div class="crosshair-overlay" id="crosshair-p4">
+      <div class="crosshair-line-v"></div>
+      <div class="crosshair-line-h"></div>
+      <div class="crosshair-dot"></div>
+    </div>
   </div>
 
   <div class="map-pane">
@@ -442,9 +487,14 @@
       <div class="no-data-label">No data for this time step</div>
       <div class="no-data-ts" id="blank-ts-p3"></div>
     </div>
-    <iframe id="frame-p3"
+<iframe id="frame-p3"
       src="https://ngsmetadvisor.github.io/briefingmaps/gem_surface_map.html"
       onload="frameLoaded('p3')"></iframe>
+    <div class="crosshair-overlay" id="crosshair-p3">
+      <div class="crosshair-line-v"></div>
+      <div class="crosshair-line-h"></div>
+      <div class="crosshair-dot"></div>
+    </div>
   </div>
 
 </div>
@@ -651,15 +701,85 @@ function patchMapSync(p) {
       }, '*');
     });
 
+    attachCrosshairListeners(p, lmap, win);
+
     console.log('[AWCC] Map sync patched for', p.id);
   } catch(e) {
     console.warn('[AWCC] patchMapSync error', p.id, e);
   }
 }
 
+// ── Crosshair: broadcast mouse position (as latlng) from within a frame ────
+function attachCrosshairListeners(p, lmap, win) {
+  try {
+    var target = win.document.body || win.document;
+    target.addEventListener('mousemove', function(ev) {
+      try {
+        var containerPoint = lmap.mouseEventToContainerPoint(ev);
+        var latlng = lmap.containerPointToLatLng(containerPoint);
+        window.postMessage({
+          type: 'CROSSHAIR_MOVE',
+          srcId: p.id,
+          lat: latlng.lat, lng: latlng.lng
+        }, '*');
+      } catch(e) {}
+    });
+    target.addEventListener('mouseleave', function() {
+      window.postMessage({ type: 'CROSSHAIR_CLEAR', srcId: p.id }, '*');
+    });
+    console.log('[AWCC] Crosshair listeners attached for', p.id);
+  } catch(e) {
+    console.warn('[AWCC] attachCrosshairListeners error', p.id, e);
+  }
+}
+
+// ── Crosshair: position/show/hide the overlay in a given pane ──────────────
+function showCrosshairAt(paneId, x, y) {
+  var overlay = document.getElementById('crosshair-' + paneId);
+  if (!overlay) return;
+  var v = overlay.querySelector('.crosshair-line-v');
+  var h = overlay.querySelector('.crosshair-line-h');
+  var d = overlay.querySelector('.crosshair-dot');
+  if (v) v.style.left = x + 'px';
+  if (h) h.style.top = y + 'px';
+  if (d) { d.style.left = x + 'px'; d.style.top = y + 'px'; }
+  overlay.classList.add('active');
+}
+
+function hideCrosshair(paneId) {
+  var overlay = document.getElementById('crosshair-' + paneId);
+  if (overlay) overlay.classList.remove('active');
+}
+
+function hideAllCrosshairs() {
+  PANES.forEach(function(p) { hideCrosshair(p.id); });
+}
+
 // ── Listen: broadcast any step change OR map view to all OTHER panes ───────
 window.addEventListener('message', function(e) {
   if (!e.data) return;
+
+// ── Crosshair sync ─────────────────────────────────────────────────────
+  if (e.data.type === 'CROSSHAIR_MOVE') {
+    var chSrcId = e.data.srcId;
+    PANES.forEach(function(tgt) {
+      if (tgt.id === chSrcId) return; // don't draw on the pane the mouse is over
+      try {
+        var tgtWin = document.getElementById(tgt.frameId).contentWindow;
+        var lmap = findLeafletMap(tgtWin);
+        if (!lmap) return;
+        var pt = lmap.latLngToContainerPoint([e.data.lat, e.data.lng]);
+        showCrosshairAt(tgt.id, pt.x, pt.y);
+      } catch(err) {
+        console.warn('[AWCC] crosshair position error', tgt.id, err);
+      }
+    });
+    return;
+  }
+  if (e.data.type === 'CROSSHAIR_CLEAR') {
+    hideAllCrosshairs();
+    return;
+  }
 
   // ── Map view sync ──────────────────────────────────────────────────────
   if (e.data.type === 'MAP_VIEW') {
