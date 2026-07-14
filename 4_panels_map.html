@@ -399,9 +399,9 @@
 <div class="divider"></div>
   <div id="zoom-slider-wrap">
     <span id="zoom-label">Zoom</span>
-<input type="range" id="zoom-slider" min="0" max="10" value="2.5" step="0.25"
+<input type="range" id="zoom-slider" min="0" max="10" value="4.5" step="0.25"
            oninput="onZoomSlider(this.value)">
-    <span id="zoom-value">2.5</span>
+    <span id="zoom-value">4.5</span>
   </div>
   <div class="divider"></div>
   <button id="export-btn" class="export-btn" onclick="exportAllPanels()">⬇ Export All (ZIP)</button>
@@ -1100,7 +1100,7 @@ function padStep(idx) {
 }
 
 var EDMONTON_LATLNG = [53.5461, -113.4938];
-var _uiZoomLevel = 2.5;
+var _uiZoomLevel = 4.5;
 
 function applyZoomToAllPanes(zoomVal) {
   PANES.forEach(function(p) {
