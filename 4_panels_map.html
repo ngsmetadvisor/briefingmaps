@@ -82,6 +82,8 @@
     position: relative;
     overflow: hidden;
     background: #1a1f26;
+    border: 3px solid #000000;
+    box-sizing: border-box;
   }
   .map-pane + .map-pane { border-left: 2px solid var(--border); }
   .map-pane iframe { width: 100%; height: 100%; border: none; display: block; }
@@ -1140,8 +1142,10 @@ function updateZoomSliderUI(zoom) {
   valEl.textContent = zoom.toFixed(2);
 }
 
+var EXPORT_ZOOM_LEVEL = 3.25;   // fixed zoom used for all exports, independent of the on-screen slider
+
 async function zoomOutAndCenterEdmonton() {
-  applyZoomToAllPanes(_uiZoomLevel);
+  applyZoomToAllPanes(EXPORT_ZOOM_LEVEL);
   // Let tiles catch up after the view change
   await sleep(1000);
 }
@@ -1149,11 +1153,17 @@ async function zoomOutAndCenterEdmonton() {
 async function captureCombinedPanel() {
   // Build an offscreen canvas from the 4 individual iframe captures so
   // cross-origin/CORS taint on one frame doesn't kill the whole grid.
-  var mapsEl = document.getElementById('maps');
-  var fullW = mapsEl.offsetWidth;
-  var fullH = mapsEl.offsetHeight;
-  var halfW = Math.round(fullW / 2);
-  var halfH = Math.round(fullH / 2);
+  var EXPORT_SCALE = 2;      // 2x pixel density → sharper exported PNGs
+  var FRAME_COLOR  = '#000000';
+  var FRAME_WIDTH  = 4;      // px, at export resolution
+
+  var mapsEl   = document.getElementById('maps');
+  var fullW    = Math.round(mapsEl.offsetWidth  * EXPORT_SCALE);
+  var fullH    = Math.round(mapsEl.offsetHeight * EXPORT_SCALE);
+  var halfW    = Math.round(fullW / 2);
+  var halfH    = Math.round(fullH / 2);
+  var logHalfW = Math.round(mapsEl.offsetWidth  / 2);
+  var logHalfH = Math.round(mapsEl.offsetHeight / 2);
 
   var outCanvas = document.createElement('canvas');
   outCanvas.width = fullW;
@@ -1164,6 +1174,17 @@ async function captureCombinedPanel() {
 
   // Grid positions match the CSS grid: p1 TL, p2 TR, p4 BL, p3 BR
   var positions = { p1: [0, 0], p2: [halfW, 0], p4: [0, halfH], p3: [halfW, halfH] };
+
+  function drawFrame(pos) {
+    ctx.strokeStyle = FRAME_COLOR;
+    ctx.lineWidth   = FRAME_WIDTH;
+    ctx.strokeRect(
+      pos[0] + FRAME_WIDTH / 2,
+      pos[1] + FRAME_WIDTH / 2,
+      halfW - FRAME_WIDTH,
+      halfH - FRAME_WIDTH
+    );
+  }
 
   for (var pi = 0; pi < PANES.length; pi++) {
     var p = PANES[pi];
@@ -1187,21 +1208,22 @@ async function captureCombinedPanel() {
 
         // Icon (⊘), matching .no-data-icon
         ctx.fillStyle = 'rgba(85,94,107,0.3)';
-        ctx.font = '28px "Courier New", monospace';
-        ctx.fillText('⊘', cx, cy - 24);
+        ctx.font = (28 * EXPORT_SCALE) + 'px "Courier New", monospace';
+        ctx.fillText('⊘', cx, cy - 24 * EXPORT_SCALE);
 
         // Label, matching .no-data-label
         ctx.fillStyle = '#555e6b';
-        ctx.font = 'bold 11px "Courier New", monospace';
-        ctx.fillText(labelText.toUpperCase(), cx, cy + 6);
+        ctx.font = 'bold ' + (11 * EXPORT_SCALE) + 'px "Courier New", monospace';
+        ctx.fillText(labelText.toUpperCase(), cx, cy + 6 * EXPORT_SCALE);
 
         // Timestamp line, matching .no-data-ts
         if (tsText) {
           ctx.fillStyle = '#ced4da';
-          ctx.font = '10px "Courier New", monospace';
-          ctx.fillText(tsText, cx, cy + 24);
+          ctx.font = (10 * EXPORT_SCALE) + 'px "Courier New", monospace';
+          ctx.fillText(tsText, cx, cy + 24 * EXPORT_SCALE);
         }
       }
+      drawFrame(pos);
       continue; // leave blank (other panes keep dark background)
     }
 
@@ -1212,15 +1234,17 @@ async function captureCombinedPanel() {
         allowTaint: false,
         backgroundColor: '#1a1f26',
         logging: false,
-        width: halfW,
-        height: halfH,
-        windowWidth: halfW,
-        windowHeight: halfH
+        width: logHalfW,
+        height: logHalfH,
+        windowWidth: logHalfW,
+        windowHeight: logHalfH,
+        scale: EXPORT_SCALE
       });
       ctx.drawImage(paneCanvas, pos[0], pos[1], halfW, halfH);
     } catch (capErr) {
       console.warn('[AWCC] capture failed', p.id, capErr);
     }
+    drawFrame(pos);
   }
 
   return outCanvas;
@@ -1287,6 +1311,7 @@ var zip = new JSZip();
   } finally {
     document.getElementById('master-slider').value = String(originalIdx);
     onMasterSlider(originalIdx);
+    applyZoomToAllPanes(_uiZoomLevel);   // restore the user's on-screen zoom after export
     if (overlay) overlay.classList.remove('visible');
     if (btn) btn.disabled = false;
     _exportRunning = false;
