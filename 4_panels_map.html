@@ -151,9 +151,21 @@
     letter-spacing: 0.5px;
     text-transform: uppercase;
   }
-  .pane-blank .no-data-ts {
+.pane-blank .no-data-ts {
     font-size: 10px;
     color: var(--border);
+  }
+  #blank-p3 {
+    background: #ffffff;
+  }
+  #blank-p3 .no-data-label {
+    color: #555e6b;
+  }
+  #blank-p3 .no-data-icon {
+    opacity: 0.25;
+  }
+  #blank-p3 .no-data-ts {
+    color: #ced4da;
   }
 
 #ts-display {
@@ -900,6 +912,7 @@ function padStep(idx) {
 }
 
 var EDMONTON_LATLNG = [53.5461, -113.4938];
+var EXPORT_ZOOM_LEVEL = 5.5;
 
 async function zoomOutAndCenterEdmonton() {
   PANES.forEach(function(p) {
@@ -907,10 +920,13 @@ async function zoomOutAndCenterEdmonton() {
       var win = document.getElementById(p.frameId).contentWindow;
       var lmap = findLeafletMap(win);
       if (!lmap) return;
-      var currentZoom = lmap.getZoom();
       win.__awcc_syncing = true;
-      lmap.setView(EDMONTON_LATLNG, currentZoom - 1, { animate: false });
+      lmap.setView(EDMONTON_LATLNG, EXPORT_ZOOM_LEVEL, { animate: false });
       win.__awcc_syncing = false;
+      var appliedZoom = lmap.getZoom();
+      if (appliedZoom !== EXPORT_ZOOM_LEVEL) {
+        console.warn('[AWCC] ' + p.id + ' snapped zoom ' + EXPORT_ZOOM_LEVEL + ' -> ' + appliedZoom + ' (zoomSnap not fractional on this map)');
+      }
     } catch (e) {
       console.warn('[AWCC] zoomOutAndCenterEdmonton error', p.id, e);
     }
@@ -942,7 +958,13 @@ async function captureCombinedPanel() {
     var p = PANES[pi];
     var pos = positions[p.id];
     var blankEl = document.getElementById('blank-' + p.id);
-    if (blankEl && blankEl.classList.contains('visible')) continue; // leave blank
+    if (blankEl && blankEl.classList.contains('visible')) {
+      if (p.id === 'p3') {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(pos[0], pos[1], halfW, halfH);
+      }
+      continue; // leave blank (other panes keep dark background)
+    }
 
     try {
       var win = document.getElementById(p.frameId).contentWindow;
