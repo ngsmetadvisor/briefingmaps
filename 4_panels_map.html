@@ -234,8 +234,41 @@
     background: #2ea043;
     animation: pulse 2s ease-in-out infinite;
   }
-  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+  /* ── Export ── */
+  .export-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  .export-btn:hover { background: #5c8fce; }
+  .export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  #export-overlay {
+    position: fixed; inset: 0;
+    background: rgba(13,17,23,0.92);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px; z-index: 2000;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  #export-overlay.visible { opacity: 1; pointer-events: auto; }
+  #export-overlay .spinner { width: 36px; height: 36px; border-width: 4px; }
+  #export-overlay span { font-size: 13px; color: var(--text); letter-spacing: 0.5px; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -268,6 +301,8 @@
     <span id="master-step-count">— / —</span>
   </div>
   <div id="ts-display">—</div>
+<div class="divider"></div>
+  <button id="export-btn" class="export-btn" onclick="exportAllPanels()">⬇ Export All (ZIP)</button>
   <div class="divider"></div>
   <div id="sync-indicator">
     <div class="sync-dot"></div>
@@ -342,6 +377,11 @@
       onload="frameLoaded('p3')"></iframe>
   </div>
 
+</div>
+
+<div id="export-overlay">
+  <div class="spinner"></div>
+  <span id="export-progress-text">Preparing export…</span>
 </div>
 
 <script>
@@ -839,10 +879,104 @@ function mirrorStep(src, tgt, srcIdx) {
     tgtWin.__awcc_syncing = true;
     var slider = tgtWin.document.getElementById(tgt.sliderId);
     if (slider) slider.value = String(targetIdx);
-    tgtWin[tgt.fnName](targetIdx);
+tgtWin[tgt.fnName](targetIdx);
     tgtWin.__awcc_syncing = false;
   } catch(e) {
     console.warn('[AWCC] mirrorStep error', tgt.id, e);
+  }
+}
+
+// ── Export all panels at all timesteps as PNGs in a ZIP ────────────────────
+var _exportRunning = false;
+var _paneExportLabels = { p1: 'UA1_500hPa', p2: 'UA2_850hPa', p4: 'UA3_700hPa', p3: 'SFC_MSLP_QPF' };
+
+function sleep(ms) {
+  return new Promise(function(resolve) { setTimeout(resolve, ms); });
+}
+
+function padStep(idx) {
+  var s = String(idx + 1);
+  return s.length < 2 ? '0' + s : s;
+}
+
+async function exportAllPanels() {
+  if (_exportRunning) return;
+  if (!_masterSteps || !_masterSteps.length) {
+    alert('Steps not loaded yet — wait for the maps to finish initializing, then try again.');
+    return;
+  }
+  if (typeof html2canvas === 'undefined' || typeof JSZip === 'undefined') {
+    alert('Export libraries failed to load. Check your network connection and reload the page.');
+    return;
+  }
+
+  _exportRunning = true;
+  var btn = document.getElementById('export-btn');
+  var overlay = document.getElementById('export-overlay');
+  var progressText = document.getElementById('export-progress-text');
+  if (btn) btn.disabled = true;
+  if (overlay) overlay.classList.add('visible');
+
+  var zip = new JSZip();
+  var originalIdx = parseInt(document.getElementById('master-slider').value) || 0;
+  var total = _masterSteps.length;
+
+  try {
+    for (var idx = 0; idx < total; idx++) {
+      var stepLabel = (_masterSteps[idx] && _masterSteps[idx].label) ? _masterSteps[idx].label : ('step' + idx);
+      if (progressText) progressText.textContent =
+        'Step ' + (idx + 1) + ' / ' + total + ' — ' + stepLabel;
+
+      document.getElementById('master-slider').value = String(idx);
+      onMasterSlider(idx);
+
+      // Give tiles / overlays time to finish rendering before capture
+      await sleep(1200);
+
+      var safeLabel = stepLabel.replace(/[^a-zA-Z0-9_-]/g, '_');
+      var folder = zip.folder(padStep(idx) + '_' + safeLabel);
+
+      for (var pi = 0; pi < PANES.length; pi++) {
+        var p = PANES[pi];
+        var blankEl = document.getElementById('blank-' + p.id);
+        if (blankEl && blankEl.classList.contains('visible')) continue; // no data this step
+
+        try {
+          var win = document.getElementById(p.frameId).contentWindow;
+          var canvas = await html2canvas(win.document.body, {
+            useCORS: true,
+            allowTaint: false,
+            backgroundColor: '#1a1f26',
+            logging: false
+          });
+          var dataUrl = canvas.toDataURL('image/png');
+          var base64 = dataUrl.split(',')[1];
+          folder.file((_paneExportLabels[p.id] || p.id) + '.png', base64, { base64: true });
+        } catch (capErr) {
+          console.warn('[AWCC] capture failed', p.id, capErr);
+        }
+      }
+    }
+
+    if (progressText) progressText.textContent = 'Zipping files…';
+    var blob = await zip.generateAsync({ type: 'blob' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'AWCC_4panel_export_' + Date.now() + '.zip';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+  } catch (err) {
+    console.error('[AWCC] export error', err);
+    alert('Export failed: ' + err.message);
+  } finally {
+    document.getElementById('master-slider').value = String(originalIdx);
+    onMasterSlider(originalIdx);
+    if (overlay) overlay.classList.remove('visible');
+    if (btn) btn.disabled = false;
+    _exportRunning = false;
   }
 }
 </script>
