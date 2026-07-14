@@ -1150,6 +1150,35 @@ async function zoomOutAndCenterEdmonton() {
   await sleep(1000);
 }
 
+function drawExportTimestamp(canvas, label) {
+  if (!label) return;
+  var ctx = canvas.getContext('2d');
+  var scale = canvas.width / 2200;   // scale text relative to a ~2200px-wide reference
+  var fontSize = Math.max(14, Math.round(20 * scale));
+  var padX = Math.round(10 * scale);
+  var padY = Math.round(8 * scale);
+
+  ctx.save();
+  ctx.font = 'bold ' + fontSize + 'px "Courier New", monospace';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+
+  var textW = ctx.measureText(label).width;
+  var boxW  = textW + padX * 2;
+  var boxH  = fontSize + padY * 2;
+  var margin = Math.round(10 * scale);
+
+  ctx.fillStyle = 'rgba(13,17,23,0.82)';
+  ctx.fillRect(margin, margin, boxW, boxH);
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(margin + 0.5, margin + 0.5, boxW - 1, boxH - 1);
+
+  ctx.fillStyle = '#c8d8ff';
+  ctx.fillText(label, margin + padX, margin + padY);
+  ctx.restore();
+}
+
 async function captureCombinedPanel() {
   // Build an offscreen canvas from the 4 individual iframe captures so
   // cross-origin/CORS taint on one frame doesn't kill the whole grid.
@@ -1316,6 +1345,7 @@ var zip = new JSZip();
       await sleep(1200);
 
       var combinedCanvas = await captureCombinedPanel();
+      drawExportTimestamp(combinedCanvas, stepLabel);
       var dataUrl = combinedCanvas.toDataURL('image/png');
       var base64 = dataUrl.split(',')[1];
       var safeLabel = stepLabel.replace(/[^a-zA-Z0-9_-]/g, '_');
