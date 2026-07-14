@@ -3971,6 +3971,8 @@ borders_js = (
     '    var keys=Object.keys(window).filter(function(k){return k.startsWith("map_");});\n'
     '    if(!keys.length){setTimeout(loadBorders,200);return;}\n'
     '    var MAP=window[keys[0]];\n'
+    '    MAP.options.zoomSnap=0;\n'
+    '    MAP.options.zoomDelta=0.1;\n'
     '    if(!MAP.getPane("albertaPane")){\n'
     '      MAP.createPane("albertaPane");\n'
     '      MAP.getPane("albertaPane").style.zIndex="210";\n'
