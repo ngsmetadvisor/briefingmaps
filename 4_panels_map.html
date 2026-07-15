@@ -776,29 +776,76 @@ function _syncP1Wms() {
   }
 }
 
-// Cycles TIME through every distinct snapped value once on load to warm the
-// tile cache, then restores whatever step is actually showing.
+// Builds the list of tile coordinates currently on screen for p1's WMS layer.
+function _collectP1WmsTileCoords() {
+  if (!_p1WmsLayer || !_p1WmsLayer._tiles) return [];
+  return Object.keys(_p1WmsLayer._tiles).map(function(key) {
+    var parts = key.split(':');
+    return { x: parseInt(parts[0], 10), y: parseInt(parts[1], 10), z: parseInt(parts[2], 10) };
+  });
+}
+
+// Preloads every frame's tiles into the browser HTTP cache in parallel,
+// entirely in the background — never mutates the visible layer's displayed
+// TIME, so there is no flicker and the slider does not need to be touched
+// for tiles to already be warm. Uses Leaflet's own getTileUrl() as the URL
+// builder so the prefetched URLs exactly match what the visible layer would
+// request later.
 function _prefetchP1WmsAllSteps() {
   try {
     var win   = document.getElementById('frame-p1').contentWindow;
     var steps = win['_SYN_TIME_STEPS'];
     if (!steps || !steps.length || !_p1WmsLayer) return;
-    var seen = {};
-    var queue = [];
+
+    var coords = _collectP1WmsTileCoords();
+    if (!coords.length) {
+      // Tiles for the current view haven't rendered yet — retry shortly.
+      setTimeout(_prefetchP1WmsAllSteps, 300);
+      return;
+    }
+
+    var seen = {}, timeList = [];
     steps.forEach(function(s) {
       var ms = _p1KeyToMs(s.key);
       if (ms === null) return;
       var snapped = _nearestValidWmsTime(ms);
-      if (!seen[snapped]) { seen[snapped] = true; queue.push(snapped); }
+      if (!seen[snapped]) { seen[snapped] = true; timeList.push(snapped); }
     });
-    var i = 0;
-    function next() {
-      if (i >= queue.length) { _syncP1Wms(); return; }
-      _p1WmsLayer.setParams({ TIME: _msToISO(queue[i]) });
-      i++;
-      setTimeout(next, 400);
+
+    var jobs = [];
+    timeList.forEach(function(ms) {
+      var iso = _msToISO(ms);
+      coords.forEach(function(c) { jobs.push({ coords: c, iso: iso }); });
+    });
+
+    console.log('[AWCC][WMS-debug] preloading', jobs.length, 'tile requests across', timeList.length, 'frames (background, non-visible)');
+
+    var originalTime = _p1WmsLayer.wmsParams.TIME;
+    var idx = 0, active = 0, done = 0, CONCURRENCY = 6;
+
+    function launchOne() {
+      if (idx >= jobs.length) return;
+      var job = jobs[idx++];
+      active++;
+      // Mutate wmsParams only to build the URL string — does not trigger a
+      // redraw or touch what's currently on screen.
+      _p1WmsLayer.wmsParams.TIME = job.iso;
+      var url = _p1WmsLayer.getTileUrl(job.coords);
+      var img = new Image();
+      img.onload = img.onerror = function() {
+        active--; done++;
+        if (idx < jobs.length) {
+          launchOne();
+        } else if (active === 0) {
+          _p1WmsLayer.wmsParams.TIME = originalTime;
+          console.log('[AWCC][WMS-debug] background preload complete —', done, '/', jobs.length, 'tiles cached');
+          _syncP1Wms();   // re-assert whatever step is actually showing
+        }
+      };
+      img.src = url;
     }
-    next();
+
+    for (var k = 0; k < CONCURRENCY && k < jobs.length; k++) launchOne();
   } catch(e) {
     console.warn('[AWCC] _prefetchP1WmsAllSteps error:', e);
   }
