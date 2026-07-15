@@ -652,10 +652,10 @@ var _p1LatestRequestedTime = null;
 
 // Peak-detection tuning
 var P1_VOR_TIER_WEIGHT    = [0, 0, 0, 4, 7, 10];  // tiers 0-5; only 3-5 (orange/red) contribute
-var P1_VOR_CLUSTER_RADIUS = 3;    // px, at the 400x300 classification raster
-var P1_VOR_MIN_CLUSTER_PX = 6;    // min coloured px within radius to accept a candidate
+var P1_VOR_CLUSTER_RADIUS = 2;    // px, at the 400x300 classification raster
+var P1_VOR_MIN_CLUSTER_PX = 3;    // min coloured px within radius to accept a candidate
 var P1_VOR_MIN_SEP_KM     = 300;  // min real-world separation between distinct crosses
-var P1_VOR_MAX_CROSSES    = 6;    // safety cap
+var P1_VOR_MAX_CROSSES    = 20;    // safety cap
 
 // hue/sat classifier — tiers 0-5. Green, yellow, and blank all return 0
 // ("filter out green"); only orange (3) and red (4-5) are ever kept, per
