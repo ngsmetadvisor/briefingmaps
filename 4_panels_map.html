@@ -641,14 +641,23 @@ function initP1Default() {
 var P1_WMS_LAYER_NAME = 'GDPS_15km_AbsoluteVorticity_500mb';
 var P1_WMS_BASE       = 'https://geo.weather.gc.ca/geomet';
 
-// ── Vorticity max-cross detection ──────────────────────────────────────────
-// Domain used for the classification fetch: [west, south, east, north]
-var P1_VOR_BBOX = [-175.425, 32.025, -51.225, 76.425];
-var P1_VOR_IW = 400, P1_VOR_IH = 300;   // small raster just for classification
-var _p1VorMaxMarker = null;
-var _p1LeafletMap    = null;   // stored so the max-cross function can draw on it
+// ── Vorticity: filtered overlay (orange/red only) + multi-cross detection ──
+var P1_VOR_BBOX = [-175.425, 32.025, -51.225, 76.425];   // west, south, east, north
+var P1_VOR_IW = 400, P1_VOR_IH = 300;   // classification raster size
+var _p1LeafletMap      = null;   // set in initP1WmsLayer
+var _p1VorMaxMarkers   = [];     // one cross per detected cluster
+var _p1FilteredOverlay = null;   // the visible, filtered (orange/red-only) layer
+var _p1FilteredCache   = {};     // isoTime -> filtered dataURL
+var _p1LatestRequestedTime = null;
 
-// hue/sat classifier — tiers 0-5. Greens, yellows, and blanks all return 0
+// Peak-detection tuning
+var P1_VOR_TIER_WEIGHT    = [0, 0, 0, 4, 7, 10];  // tiers 0-5; only 3-5 (orange/red) contribute
+var P1_VOR_CLUSTER_RADIUS = 3;    // px, at the 400x300 classification raster
+var P1_VOR_MIN_CLUSTER_PX = 6;    // min coloured px within radius to accept a candidate
+var P1_VOR_MIN_SEP_KM     = 300;  // min real-world separation between distinct crosses
+var P1_VOR_MAX_CROSSES    = 6;    // safety cap
+
+// hue/sat classifier — tiers 0-5. Green, yellow, and blank all return 0
 // ("filter out green"); only orange (3) and red (4-5) are ever kept, per
 // "red or orange only, not yellow or below".
 function _p1Hsv(r, g, b) {
@@ -675,15 +684,6 @@ function _p1ClassifyPx(r, g, b, a) {
   return 0;                                          // yellow, yellow-green, green — filtered out
 }
 
-function _p1VorWmsUrl(timeIso) {
-  var bb = P1_VOR_BBOX;
-  return P1_WMS_BASE + '?service=WMS&version=1.3.0&request=GetMap&layers=' + P1_WMS_LAYER_NAME
-    + '&styles=ABSOLUTEVORTICITY&crs=EPSG:4326'
-    + '&bbox=' + bb[1] + ',' + bb[0] + ',' + bb[3] + ',' + bb[2]
-    + '&width=' + P1_VOR_IW + '&height=' + P1_VOR_IH
-    + '&format=image/png&transparent=true&time=' + timeIso;
-}
-
 function _p1LoadImgPixels(src) {
   return fetch(src).then(function(resp) {
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -699,16 +699,188 @@ function _p1LoadImgPixels(src) {
   });
 }
 
-function _p1ClearVorMax() {
-  if (_p1VorMaxMarker && _p1LeafletMap) {
-    _p1LeafletMap.removeLayer(_p1VorMaxMarker);
-  }
-  _p1VorMaxMarker = null;
+// ── Classification-raster fetch (small, EPSG:4326 — used only for peak-finding) ──
+function _p1VorWmsUrl(timeIso) {
+  var bb = P1_VOR_BBOX;
+  return P1_WMS_BASE + '?service=WMS&version=1.3.0&request=GetMap&layers=' + P1_WMS_LAYER_NAME
+    + '&styles=ABSOLUTEVORTICITY&crs=EPSG:4326'
+    + '&bbox=' + bb[1] + ',' + bb[0] + ',' + bb[3] + ',' + bb[2]
+    + '&width=' + P1_VOR_IW + '&height=' + P1_VOR_IH
+    + '&format=image/png&transparent=true&time=' + timeIso;
 }
 
-// Fetches the classification raster for the given time, finds the strongest
-// orange/red cluster, and draws a bold red cross there. If the strongest
-// signal anywhere is yellow or weaker, no cross is drawn at all.
+// ── Filtered display fetch (Mercator, matches Leaflet's projection) ──
+function _p1Lon2Merc(lon) { return lon * 20037508.34 / 180; }
+function _p1Lat2Merc(lat) { return Math.log(Math.tan((90+lat)*Math.PI/360)) * 20037508.34 / Math.PI; }
+function _p1FilteredWmsUrlMerc(timeIso, w, h) {
+  var bb = P1_VOR_BBOX;
+  var xMin = _p1Lon2Merc(bb[0]), xMax = _p1Lon2Merc(bb[2]);
+  var yMin = _p1Lat2Merc(bb[1]), yMax = _p1Lat2Merc(bb[3]);
+  return P1_WMS_BASE + '?service=WMS&version=1.3.0&request=GetMap&layers=' + P1_WMS_LAYER_NAME
+    + '&styles=ABSOLUTEVORTICITY&crs=EPSG:3857'
+    + '&bbox=' + xMin + ',' + yMin + ',' + xMax + ',' + yMax
+    + '&width=' + w + '&height=' + h
+    + '&format=image/png&transparent=true&time=' + timeIso;
+}
+
+// Fetches + filters (tier < 3 made transparent — drops green AND yellow,
+// keeps only orange/red) and caches the result. Does NOT touch the visible
+// layer — safe to call in the background for prefetching.
+function _p1FetchAndCacheFilteredFrame(timeIso) {
+  if (_p1FilteredCache[timeIso]) return Promise.resolve(_p1FilteredCache[timeIso]);
+  var DW = 1024, DH = 1024;
+  return _p1LoadImgPixels(_p1FilteredWmsUrlMerc(timeIso, DW, DH)).then(function(img) {
+    var c = document.createElement('canvas');
+    c.width = DW; c.height = DH;
+    var ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, DW, DH);
+    var id = ctx.getImageData(0, 0, DW, DH);
+    for (var i = 0; i < DW * DH; i++) {
+      var tier = _p1ClassifyPx(id.data[i*4], id.data[i*4+1], id.data[i*4+2], id.data[i*4+3]);
+      if (tier < 3) id.data[i*4+3] = 0;
+    }
+    ctx.putImageData(id, 0, 0);
+    var dataUrl = c.toDataURL('image/png');
+    _p1FilteredCache[timeIso] = dataUrl;
+    return dataUrl;
+  });
+}
+
+function _p1ShowFilteredOverlay(dataUrl) {
+  var p1win = document.getElementById('frame-p1').contentWindow;
+  var _L = p1win.L;
+  if (!_L || !_p1LeafletMap) return;
+  var bb = P1_VOR_BBOX;
+  if (_p1FilteredOverlay) {
+    _p1FilteredOverlay.setUrl(dataUrl);
+  } else {
+    _p1FilteredOverlay = _L.imageOverlay(dataUrl, [[bb[1], bb[0]], [bb[3], bb[2]]], {
+      opacity: 0.85,
+      pane: 'p1WmsPane',
+      interactive: false
+    });
+    _p1FilteredOverlay.addTo(_p1LeafletMap);
+  }
+}
+
+// Public entry: fetch/cache + show, guarding against stale async responses
+// if the user scrubs the slider again before this one resolves.
+function _p1BuildFilteredOverlay(timeIso) {
+  _p1LatestRequestedTime = timeIso;
+  _p1FetchAndCacheFilteredFrame(timeIso).then(function(dataUrl) {
+    if (_p1LatestRequestedTime !== timeIso) return;   // superseded — drop it
+    _p1ShowFilteredOverlay(dataUrl);
+  }).catch(function(e) {
+    console.warn('[AWCC] filtered vorticity overlay failed:', e);
+  });
+}
+
+// Background pre-cache of every step's filtered frame — never touches the
+// visible layer, just warms _p1FilteredCache so scrubbing feels instant.
+function _p1PrefetchAllFilteredFrames() {
+  try {
+    var win   = document.getElementById('frame-p1').contentWindow;
+    var steps = win['_SYN_TIME_STEPS'];
+    if (!steps || !steps.length) return;
+    var isoList = [], seen = {};
+    steps.forEach(function(s) {
+      var ms = _p1KeyToMs(s.key);
+      if (ms === null) return;
+      var iso = _msToISO(_nearestValidWmsTime(ms));
+      if (!seen[iso]) { seen[iso] = true; isoList.push(iso); }
+    });
+    var idx = 0;
+    function next() {
+      if (idx >= isoList.length) {
+        console.log('[AWCC] filtered vorticity prefetch complete —', isoList.length, 'frames cached');
+        return;
+      }
+      var iso = isoList[idx++];
+      _p1FetchAndCacheFilteredFrame(iso).catch(function(){}).then(next);
+    }
+    next();
+  } catch(e) {
+    console.warn('[AWCC] _p1PrefetchAllFilteredFrames error:', e);
+  }
+}
+
+// ── Multi-cross peak detection (cluster-score NMS, orange/red only) ────────
+function _p1BuildScoreField(mask, W, H) {
+  var score = new Float32Array(W * H);
+  var r = P1_VOR_CLUSTER_RADIUS;
+  for (var y = 0; y < H; y++) {
+    for (var x = 0; x < W; x++) {
+      if (mask[y*W+x] === 0) continue;
+      var s = 0, cnt = 0;
+      for (var dy = -r; dy <= r; dy++) {
+        for (var dx = -r; dx <= r; dx++) {
+          if (dx*dx+dy*dy > r*r) continue;
+          var ny = y+dy, nx = x+dx;
+          if (ny<0||ny>=H||nx<0||nx>=W) continue;
+          var t = mask[ny*W+nx];
+          s += P1_VOR_TIER_WEIGHT[t];
+          if (t > 0) cnt++;
+        }
+      }
+      if (cnt < P1_VOR_MIN_CLUSTER_PX) { score[y*W+x] = 0; continue; }
+      score[y*W+x] = s;
+    }
+  }
+  return score;
+}
+
+function _p1FindVorPeaks(mask, W, H, minSepPx) {
+  var score = _p1BuildScoreField(mask, W, H);
+  var cands = [];
+  for (var i = 0; i < W*H; i++) if (score[i] > 0) cands.push(i);
+  cands.sort(function(a,b){ return score[b]-score[a]; });
+  var used = new Uint8Array(W*H);
+  var peaks = [];
+  function suppress(cx, cy) {
+    var r = minSepPx;
+    for (var dy=-r; dy<=r; dy++) {
+      for (var dx=-r; dx<=r; dx++) {
+        if (dx*dx+dy*dy > r*r) continue;
+        var ny=cy+dy, nx=cx+dx;
+        if (ny<0||ny>=H||nx<0||nx>=W) continue;
+        used[ny*W+nx] = 1;
+      }
+    }
+  }
+  for (var ci = 0; ci < cands.length; ci++) {
+    if (peaks.length >= P1_VOR_MAX_CROSSES) break;
+    var idx = cands[ci];
+    if (used[idx]) continue;
+    var x = idx % W, y = (idx / W) | 0;
+    var s = score[idx];
+    if (s <= 0) break;
+    var localR = P1_VOR_CLUSTER_RADIUS * 2;
+    var isMax = true;
+    for (var dy = -localR; dy <= localR && isMax; dy++) {
+      for (var dx = -localR; dx <= localR && isMax; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        var ny = y+dy, nx = x+dx;
+        if (ny<0||ny>=H||nx<0||nx>=W) continue;
+        if (score[ny*W+nx] > s) isMax = false;
+      }
+    }
+    if (!isMax) continue;
+    peaks.push({ x: x, y: y, score: s, tier: mask[y*W+x] });
+    suppress(x, y);
+  }
+  return peaks;
+}
+
+function _p1ClearVorMax() {
+  if (_p1LeafletMap && _p1VorMaxMarkers.length) {
+    _p1VorMaxMarkers.forEach(function(mk) { _p1LeafletMap.removeLayer(mk); });
+  }
+  _p1VorMaxMarkers = [];
+}
+
+// Fetches the classification raster for the given time, finds every distinct
+// orange/red cluster (min separation P1_VOR_MIN_SEP_KM apart), and draws a
+// bold red cross at each. Yellow-or-weaker clusters never get a cross.
 function _p1UpdateVorticityMax(timeIso) {
   if (!_p1LeafletMap) return;
   _p1LoadImgPixels(_p1VorWmsUrl(timeIso)).then(function(img) {
@@ -718,33 +890,17 @@ function _p1UpdateVorticityMax(timeIso) {
     ctx.drawImage(img, 0, 0, P1_VOR_IW, P1_VOR_IH);
     var id = ctx.getImageData(0, 0, P1_VOR_IW, P1_VOR_IH).data;
 
-    var bestTier = 0, bestScore = -1, bestX = -1, bestY = -1;
-    var R = 4; // small cluster radius, rejects lone-pixel noise
-    for (var y = 0; y < P1_VOR_IH; y++) {
-      for (var x = 0; x < P1_VOR_IW; x++) {
-        var idx = (y * P1_VOR_IW + x) * 4;
-        var tier = _p1ClassifyPx(id[idx], id[idx+1], id[idx+2], id[idx+3]);
-        if (tier < 3) continue;   // only orange (3) or red (4-5) ever considered
-        var cnt = 0;
-        for (var dy = -R; dy <= R; dy++) {
-          for (var dx = -R; dx <= R; dx++) {
-            var ny = y + dy, nx = x + dx;
-            if (ny < 0 || ny >= P1_VOR_IH || nx < 0 || nx >= P1_VOR_IW) continue;
-            var nidx = (ny * P1_VOR_IW + nx) * 4;
-            if (_p1ClassifyPx(id[nidx], id[nidx+1], id[nidx+2], id[nidx+3]) >= 3) cnt++;
-          }
-        }
-        var score = tier * 100 + cnt;
-        if (score > bestScore) { bestScore = score; bestTier = tier; bestX = x; bestY = y; }
-      }
+    var mask = new Uint8Array(P1_VOR_IW * P1_VOR_IH);
+    for (var i = 0; i < P1_VOR_IW * P1_VOR_IH; i++) {
+      mask[i] = _p1ClassifyPx(id[i*4], id[i*4+1], id[i*4+2], id[i*4+3]);
     }
 
-    _p1ClearVorMax();
-    if (bestScore < 0 || bestTier < 3) return;  // nothing orange/red found — no cross
-
     var bb = P1_VOR_BBOX;
-    var lat = bb[3] - (bestY / P1_VOR_IH) * (bb[3] - bb[1]);
-    var lon = bb[0] + (bestX / P1_VOR_IW) * (bb[2] - bb[0]);
+    var minSepPx = Math.max(3, Math.round(P1_VOR_MIN_SEP_KM / ((bb[3]-bb[1]) / P1_VOR_IH * 111)));
+    var peaks = _p1FindVorPeaks(mask, P1_VOR_IW, P1_VOR_IH, minSepPx);
+
+    _p1ClearVorMax();
+    if (!peaks.length) return;
 
     var p1win = document.getElementById('frame-p1').contentWindow;
     var _L = p1win.L;
@@ -757,13 +913,18 @@ function _p1UpdateVorticityMax(timeIso) {
       + '<line x1="3" y1="17" x2="31" y2="17" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>'
       + '</svg>';
 
-    _p1VorMaxMarker = _L.marker([lat, lon], {
-      icon: _L.divIcon({ html: crossHtml, iconSize: [34, 34], iconAnchor: [17, 17], className: '' }),
-      pane: 'p1WmsPane',
-      interactive: false,
-      zIndexOffset: 500
+    peaks.forEach(function(p) {
+      var lat = bb[3] - (p.y / P1_VOR_IH) * (bb[3] - bb[1]);
+      var lon = bb[0] + (p.x / P1_VOR_IW) * (bb[2] - bb[0]);
+      var mk = _L.marker([lat, lon], {
+        icon: _L.divIcon({ html: crossHtml, iconSize: [34, 34], iconAnchor: [17, 17], className: '' }),
+        pane: 'p1WmsPane',
+        interactive: false,
+        zIndexOffset: 500
+      });
+      mk.addTo(_p1LeafletMap);
+      _p1VorMaxMarkers.push(mk);
     });
-    _p1VorMaxMarker.addTo(_p1LeafletMap);
   }).catch(function(e) {
     console.warn('[AWCC] vorticity max detection failed:', e);
   });
@@ -857,26 +1018,11 @@ if (!lmap.getPane('p1WmsPane')) {
       lmap.getPane('p1WmsPane').style.pointerEvents = 'none';
     }
 
-_p1WmsLayer = _L.tileLayer.wms(P1_WMS_BASE, {
-      layers:      P1_WMS_LAYER_NAME,
-      styles:      'ABSOLUTEVORTICITY',
-      format:      'image/png',
-      transparent: true,
-      version:     '1.3.0',
-      opacity:     0.75,
-      pane:        'p1WmsPane'
-    });
-
-    _p1WmsLayer.on('tileerror', function(err) {
-      console.error('[AWCC][WMS-debug] TILE ERROR:', err && err.tile ? err.tile.src : err);
-    });
-
-    _p1WmsLayer.addTo(lmap);
-    console.log('[AWCC][WMS-debug] layer added. Fetching capabilities before first sync...');
+console.log('[AWCC][WMS-debug] filtered overlay mode — no raw tile layer added.');
 
     _fetchP1WmsCapabilities().then(function() {
       _syncP1Wms();
-      _prefetchP1WmsAllSteps();
+      _p1PrefetchAllFilteredFrames();
     });
   } catch(e) {
     console.error('[AWCC][WMS-debug] initP1WmsLayer THREW:', e);
@@ -886,7 +1032,7 @@ _p1WmsLayer = _L.tileLayer.wms(P1_WMS_BASE, {
 // Reads p1's own currently-displayed step and pushes the nearest valid TIME
 // to the WMS layer.
 function _syncP1Wms() {
-  if (!_p1WmsLayer) return;
+  if (!_p1LeafletMap) return;
   try {
     var win    = document.getElementById('frame-p1').contentWindow;
     var steps  = win['_SYN_TIME_STEPS'];
@@ -897,10 +1043,11 @@ function _syncP1Wms() {
     if (!step) return;
     var targetMs = _p1KeyToMs(step.key);
     if (targetMs === null) return;
-var snapped = _nearestValidWmsTime(targetMs);
-    console.log('[AWCC][WMS-debug] step', step.key, '→ requesting', _msToISO(snapped));
-    _p1WmsLayer.setParams({ TIME: _msToISO(snapped) });
-    _p1UpdateVorticityMax(_msToISO(snapped));
+    var snapped   = _nearestValidWmsTime(targetMs);
+    var isoSnapped = _msToISO(snapped);
+    console.log('[AWCC][WMS-debug] step', step.key, '→ requesting', isoSnapped);
+    _p1BuildFilteredOverlay(isoSnapped);
+    _p1UpdateVorticityMax(isoSnapped);
   } catch(e) {
     console.error('[AWCC][WMS-debug] _syncP1Wms THREW:', e);
   }
