@@ -649,7 +649,13 @@ function _p1KeyToISO(key) {
 function initP1WmsLayer(lmap) {
   try {
     console.log('[AWCC][WMS-debug] initP1WmsLayer starting, lmap:', lmap);
-    _p1WmsLayer = L.tileLayer.wms('https://geo.weather.gc.ca/geomet', {
+    var p1win = document.getElementById('frame-p1').contentWindow;
+    var _L = p1win.L;
+    if (!_L) {
+      console.error('[AWCC][WMS-debug] p1 iframe has no window.L — Leaflet not found in that frame');
+      return;
+    }
+    _p1WmsLayer = _L.tileLayer.wms('https://geo.weather.gc.ca/geomet', {
       layers:      'GDPS_15km_AbsoluteVorticity_500mb',
       format:      'image/png',
       transparent: true,
