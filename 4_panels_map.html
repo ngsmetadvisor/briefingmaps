@@ -142,32 +142,7 @@
     opacity: 0; pointer-events: none;
     transition: opacity 0.25s;
   }
-.pane-blank.visible { opacity: 1; pointer-events: none; }
-
-  /* ── p1 custom timestamp: cover original + bigger relocated label ── */
-  .p1-ts-cover {
-    position: absolute;
-    top: 4px; left: 4px;
-    width: 220px; height: 40px;
-    background: #0d1117;
-    z-index: 300;
-    pointer-events: none;
-  }
-  .p1-ts-box {
-    position: absolute;
-    bottom: 34px; left: 4px;
-    z-index: 550;
-    background: #0d1117;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 6px 14px;
-    font-size: 22px;
-    font-weight: bold;
-    color: #c8d8ff;
-    letter-spacing: 1px;
-    white-space: nowrap;
-    pointer-events: none;
-  }
+  .pane-blank.visible { opacity: 1; pointer-events: none; }
   .pane-blank .no-data-icon {
     font-size: 28px;
     opacity: 0.3;
@@ -446,8 +421,6 @@
       <div class="spinner"></div>
       <span>Loading upper air map 1…</span>
     </div>
-<div class="p1-ts-cover"></div>
-    <div class="p1-ts-box" id="p1-ts-box">—</div>
     <div class="pane-blank" id="blank-p1">
       <div class="no-data-icon">⊘</div>
       <div class="no-data-label">No data for this time step</div>
@@ -1116,10 +1089,8 @@ window.addEventListener('message', function(e) {
   try {
     var srcWin   = document.getElementById(src.frameId).contentWindow;
     var srcSteps = srcWin[src.stepsVar];
-if (srcSteps && srcSteps[srcIdx] && srcSteps[srcIdx].label) {
+    if (srcSteps && srcSteps[srcIdx] && srcSteps[srcIdx].label) {
       document.getElementById('ts-display').textContent = srcSteps[srcIdx].label;
-      var _p1tsEl2 = document.getElementById('p1-ts-box');
-      if (_p1tsEl2) _p1tsEl2.textContent = srcSteps[srcIdx].label;
     }
   } catch(e2) {}
 
@@ -1217,8 +1188,6 @@ function onMasterSlider(val) {
 
   var label = (_masterSteps[idx] && _masterSteps[idx].label) ? _masterSteps[idx].label : '';
   document.getElementById('ts-display').textContent = label || '—';
-  var _p1tsEl = document.getElementById('p1-ts-box');
-  if (_p1tsEl) _p1tsEl.textContent = label || '—';
   document.getElementById('master-step-count').textContent =
     (idx + 1) + ' / ' + _masterSteps.length;
 
