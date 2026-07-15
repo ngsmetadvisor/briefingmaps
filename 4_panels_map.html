@@ -643,7 +643,7 @@ var P1_WMS_BASE       = 'https://geo.weather.gc.ca/geomet';
 
 // ── Vorticity: filtered overlay (orange/red only) + multi-cross detection ──
 var P1_VOR_BBOX = [-175.425, 32.025, -51.225, 76.425];   // west, south, east, north
-var P1_VOR_IW = 400, P1_VOR_IH = 300;   // classification raster size
+var P1_VOR_IW = 800, P1_VOR_IH = 600;   // classification raster size (finer grid catches small features)
 var _p1LeafletMap      = null;   // set in initP1WmsLayer
 var _p1VorMaxMarkers   = [];     // one cross per detected cluster
 var _p1FilteredOverlay = null;   // the visible, filtered (orange/red-only) layer
