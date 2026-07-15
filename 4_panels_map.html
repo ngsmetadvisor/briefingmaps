@@ -536,6 +536,7 @@ function frameLoaded(id) {
 // ── Patch every frame ──────────────────────────────────────────────────────
 var _p1DefaultDone = false;
 var _mapSyncDone   = { p1: false, p2: false, p3: false, p4: false };
+var _p1WmsLayer     = null;   // GeoMet Absolute Vorticity 500mb overlay on p1
  
 function patchAll() {
   PANES.forEach(function(p) {
@@ -634,6 +635,74 @@ function initP1Default() {
   }
 }
 
+// ── p1 WMS overlay — GDPS 500mb Absolute Vorticity, GeoMet ────────────────
+function _p1KeyToISO(key) {
+  // key format from p1's own steps array: "YYYYMMDD_HH"
+  if (!key || key.indexOf('_') < 0) return null;
+  var parts = key.split('_');
+  var d = parts[0], h = parts[1];
+  if (!d || d.length !== 8 || !h) return null;
+  var y = d.substring(0, 4), mo = d.substring(4, 6), day = d.substring(6, 8);
+  return y + '-' + mo + '-' + day + 'T' + h.padStart(2, '0') + ':00:00Z';
+}
+
+function initP1WmsLayer(lmap) {
+  try {
+    _p1WmsLayer = L.tileLayer.wms('https://geo.weather.gc.ca/geomet', {
+      layers:      'GDPS_15km_AbsoluteVorticity_500mb',
+      format:      'image/png',
+      transparent: true,
+      version:     '1.3.0',
+      opacity:     0.6
+    });
+    _p1WmsLayer.addTo(lmap);
+    console.log('[AWCC] p1 WMS vorticity layer added');
+    _syncP1Wms();
+    _prefetchP1WmsAllSteps();
+  } catch(e) {
+    console.warn('[AWCC] initP1WmsLayer error:', e);
+  }
+}
+
+// Reads p1's own currently-displayed step and pushes matching TIME to the WMS layer
+function _syncP1Wms() {
+  if (!_p1WmsLayer) return;
+  try {
+    var win    = document.getElementById('frame-p1').contentWindow;
+    var steps  = win['_SYN_TIME_STEPS'];
+    var slider = win.document.getElementById('syn-time-slider');
+    if (!steps || !slider) return;
+    var idx  = parseInt(slider.value);
+    var step = steps[idx];
+    if (!step) return;
+    var iso = _p1KeyToISO(step.key);
+    if (iso) _p1WmsLayer.setParams({ TIME: iso });
+  } catch(e) {
+    console.warn('[AWCC] _syncP1Wms error:', e);
+  }
+}
+
+// Cycles TIME through every step once on load to warm the tile cache for the
+// current view, then restores whatever step is actually showing.
+function _prefetchP1WmsAllSteps() {
+  try {
+    var win   = document.getElementById('frame-p1').contentWindow;
+    var steps = win['_SYN_TIME_STEPS'];
+    if (!steps || !steps.length || !_p1WmsLayer) return;
+    var i = 0;
+    function next() {
+      if (i >= steps.length) { _syncP1Wms(); return; }
+      var iso = _p1KeyToISO(steps[i].key);
+      if (iso) _p1WmsLayer.setParams({ TIME: iso });
+      i++;
+      setTimeout(next, 400);
+    }
+    next();
+  } catch(e) {
+    console.warn('[AWCC] _prefetchP1WmsAllSteps error:', e);
+  }
+}
+
 function patchFrame(p) {
   try {
     var win = document.getElementById(p.frameId).contentWindow;
@@ -704,6 +773,10 @@ function patchMapSync(p) {
     });
 
     attachCrosshairListeners(p, lmap, win);
+
+    if (p.id === 'p1' && !_p1WmsLayer) {
+      initP1WmsLayer(lmap);
+    }
 
     console.log('[AWCC] Map sync patched for', p.id);
   } catch(e) {
@@ -830,6 +903,7 @@ window.addEventListener('message', function(e) {
         btn500.click();
       }
     } catch(e) {}
+    _syncP1Wms();
   }
 
   // Every step from p4 → ensure 700 hPa is active
@@ -1015,6 +1089,7 @@ setPaneBlank(p.id, false, '');
     }
   });
 
+  _syncP1Wms();
   _masterBusy = false;
 }
 // Keep master slider thumb in sync when panes are driven individually
@@ -1081,6 +1156,7 @@ function mirrorStep(src, tgt, srcIdx) {
     if (slider) slider.value = String(targetIdx);
 tgtWin[tgt.fnName](targetIdx);
     tgtWin.__awcc_syncing = false;
+    if (tgt.id === 'p1') _syncP1Wms();
   } catch(e) {
     console.warn('[AWCC] mirrorStep error', tgt.id, e);
   }
