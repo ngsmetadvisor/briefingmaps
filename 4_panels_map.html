@@ -722,12 +722,20 @@ function initP1WmsLayer(lmap) {
       console.error('[AWCC][WMS-debug] p1 iframe has no window.L — Leaflet not found in that frame');
       return;
     }
+if (!lmap.getPane('p1WmsPane')) {
+      lmap.createPane('p1WmsPane');
+      lmap.getPane('p1WmsPane').style.zIndex = 650;   // above heightPane(490)/tempbandsPane(480)
+      lmap.getPane('p1WmsPane').style.pointerEvents = 'none';
+    }
+
     _p1WmsLayer = _L.tileLayer.wms(P1_WMS_BASE, {
       layers:      P1_WMS_LAYER_NAME,
+      styles:      'AbsoluteVorticity_16to50s_Dis',
       format:      'image/png',
       transparent: true,
       version:     '1.3.0',
-      opacity:     0.6
+      opacity:     0.75,
+      pane:        'p1WmsPane'
     });
 
     _p1WmsLayer.on('tileerror', function(err) {
