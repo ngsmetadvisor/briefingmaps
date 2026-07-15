@@ -678,7 +678,7 @@ function _p1ClassifyPx(r, g, b, a) {
 function _p1VorWmsUrl(timeIso) {
   var bb = P1_VOR_BBOX;
   return P1_WMS_BASE + '?service=WMS&version=1.3.0&request=GetMap&layers=' + P1_WMS_LAYER_NAME
-    + '&styles=AbsoluteVorticity_16to50s_Dis&crs=EPSG:4326'
+    + '&styles=ABSOLUTEVORTICITY&crs=EPSG:4326'
     + '&bbox=' + bb[1] + ',' + bb[0] + ',' + bb[3] + ',' + bb[2]
     + '&width=' + P1_VOR_IW + '&height=' + P1_VOR_IH
     + '&format=image/png&transparent=true&time=' + timeIso;
@@ -857,9 +857,9 @@ if (!lmap.getPane('p1WmsPane')) {
       lmap.getPane('p1WmsPane').style.pointerEvents = 'none';
     }
 
-    _p1WmsLayer = _L.tileLayer.wms(P1_WMS_BASE, {
+_p1WmsLayer = _L.tileLayer.wms(P1_WMS_BASE, {
       layers:      P1_WMS_LAYER_NAME,
-      styles:      'AbsoluteVorticity_16to50s_Dis',
+      styles:      'ABSOLUTEVORTICITY',
       format:      'image/png',
       transparent: true,
       version:     '1.3.0',
