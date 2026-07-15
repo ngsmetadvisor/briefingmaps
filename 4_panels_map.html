@@ -1380,13 +1380,13 @@ function drawExportTimestamp(canvas, label) {
   if (!label) return;
   var ctx = canvas.getContext('2d');
   var scale = canvas.width / 2200;   // scale text relative to a ~2200px-wide reference
-  var fontSize = Math.max(14, Math.round(20 * scale));
-  var padX = Math.round(10 * scale);
-  var padY = Math.round(8 * scale);
+  var fontSize = Math.max(28, Math.round(46 * scale));   // bigger font
+  var padX = Math.round(14 * scale);
+  var padY = Math.round(10 * scale);
 
   ctx.save();
   ctx.font = 'bold ' + fontSize + 'px "Courier New", monospace';
-  ctx.textBaseline = 'top';
+  ctx.textBaseline = 'bottom';
   ctx.textAlign = 'left';
 
   var textW = ctx.measureText(label).width;
@@ -1394,14 +1394,20 @@ function drawExportTimestamp(canvas, label) {
   var boxH  = fontSize + padY * 2;
   var margin = Math.round(10 * scale);
 
-  ctx.fillStyle = 'rgba(13,17,23,0.82)';
-  ctx.fillRect(margin, margin, boxW, boxH);
+  // Position over the orange-highlighted area: bottom-left of the
+  // top-left panel (p1), just above the p1/p4 divider line.
+  var panelH = canvas.height / 2;
+  var boxX   = margin;
+  var boxY   = panelH - boxH - margin;
+
+  ctx.fillStyle = 'rgba(13,17,23,0.9)';
+  ctx.fillRect(boxX, boxY, boxW, boxH);
   ctx.strokeStyle = 'rgba(255,255,255,0.25)';
   ctx.lineWidth = 1;
-  ctx.strokeRect(margin + 0.5, margin + 0.5, boxW - 1, boxH - 1);
+  ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxW - 1, boxH - 1);
 
   ctx.fillStyle = '#c8d8ff';
-  ctx.fillText(label, margin + padX, margin + padY);
+  ctx.fillText(label, boxX + padX, boxY + boxH - padY);
   ctx.restore();
 }
 
