@@ -648,6 +648,7 @@ function _p1KeyToISO(key) {
 
 function initP1WmsLayer(lmap) {
   try {
+    console.log('[AWCC][WMS-debug] initP1WmsLayer starting, lmap:', lmap);
     _p1WmsLayer = L.tileLayer.wms('https://geo.weather.gc.ca/geomet', {
       layers:      'GDPS_15km_AbsoluteVorticity_500mb',
       format:      'image/png',
@@ -655,30 +656,50 @@ function initP1WmsLayer(lmap) {
       version:     '1.3.0',
       opacity:     0.6
     });
+
+    _p1WmsLayer.on('loading', function() {
+      console.log('[AWCC][WMS-debug] tile batch loading...');
+    });
+    _p1WmsLayer.on('load', function() {
+      console.log('[AWCC][WMS-debug] tile batch finished loading');
+    });
+    _p1WmsLayer.on('tileerror', function(err) {
+      console.error('[AWCC][WMS-debug] TILE ERROR:', err && err.tile ? err.tile.src : err);
+    });
+    _p1WmsLayer.on('tileload', function(ev) {
+      console.log('[AWCC][WMS-debug] tile loaded ok:', ev.tile && ev.tile.src);
+    });
+
     _p1WmsLayer.addTo(lmap);
-    console.log('[AWCC] p1 WMS vorticity layer added');
+    console.log('[AWCC][WMS-debug] layer.addTo(lmap) called. Is on map?', lmap.hasLayer(_p1WmsLayer));
+    console.log('[AWCC][WMS-debug] current WMS params:', _p1WmsLayer.wmsParams);
+    console.log('[AWCC][WMS-debug] map center/zoom at add time:', lmap.getCenter(), lmap.getZoom());
+
     _syncP1Wms();
     _prefetchP1WmsAllSteps();
   } catch(e) {
-    console.warn('[AWCC] initP1WmsLayer error:', e);
+    console.error('[AWCC][WMS-debug] initP1WmsLayer THREW:', e);
   }
 }
 
 // Reads p1's own currently-displayed step and pushes matching TIME to the WMS layer
 function _syncP1Wms() {
-  if (!_p1WmsLayer) return;
+  if (!_p1WmsLayer) { console.log('[AWCC][WMS-debug] _syncP1Wms: no layer yet'); return; }
   try {
     var win    = document.getElementById('frame-p1').contentWindow;
     var steps  = win['_SYN_TIME_STEPS'];
     var slider = win.document.getElementById('syn-time-slider');
+    console.log('[AWCC][WMS-debug] _syncP1Wms: steps found?', !!steps, 'len:', steps && steps.length, 'slider found?', !!slider);
     if (!steps || !slider) return;
     var idx  = parseInt(slider.value);
     var step = steps[idx];
+    console.log('[AWCC][WMS-debug] _syncP1Wms: idx', idx, 'step', step);
     if (!step) return;
     var iso = _p1KeyToISO(step.key);
+    console.log('[AWCC][WMS-debug] _syncP1Wms: computed TIME =', iso);
     if (iso) _p1WmsLayer.setParams({ TIME: iso });
   } catch(e) {
-    console.warn('[AWCC] _syncP1Wms error:', e);
+    console.error('[AWCC][WMS-debug] _syncP1Wms THREW:', e);
   }
 }
 
@@ -774,7 +795,9 @@ function patchMapSync(p) {
 
     attachCrosshairListeners(p, lmap, win);
 
+    console.log('[AWCC][WMS-debug] patchMapSync reached for', p.id, '— p1WmsLayer exists:', !!_p1WmsLayer);
     if (p.id === 'p1' && !_p1WmsLayer) {
+      console.log('[AWCC][WMS-debug] calling initP1WmsLayer...');
       initP1WmsLayer(lmap);
     }
 
