@@ -536,7 +536,9 @@ function frameLoaded(id) {
 // ── Patch every frame ──────────────────────────────────────────────────────
 var _p1DefaultDone = false;
 var _mapSyncDone   = { p1: false, p2: false, p3: false, p4: false };
-var _p1WmsLayer     = null;   // GeoMet Absolute Vorticity 500mb overlay on p1
+var _p1WmsLayer      = null;   // GeoMet Absolute Vorticity 500mb overlay on p1
+var _p1WmsValidTimes = null;   // sorted array of valid TIME values (ms epoch) from GetCapabilities
+var _p1WmsCapPromise = null;   // in-flight/cached capabilities fetch
  
 function patchAll() {
   PANES.forEach(function(p) {
@@ -636,14 +638,79 @@ function initP1Default() {
 }
 
 // ── p1 WMS overlay — GDPS 500mb Absolute Vorticity, GeoMet ────────────────
-function _p1KeyToISO(key) {
+var P1_WMS_LAYER_NAME = 'GDPS_15km_AbsoluteVorticity_500mb';
+var P1_WMS_BASE       = 'https://geo.weather.gc.ca/geomet';
+
+function _p1KeyToMs(key) {
   // key format from p1's own steps array: "YYYYMMDD_HH"
   if (!key || key.indexOf('_') < 0) return null;
   var parts = key.split('_');
   var d = parts[0], h = parts[1];
   if (!d || d.length !== 8 || !h) return null;
   var y = d.substring(0, 4), mo = d.substring(4, 6), day = d.substring(6, 8);
-  return y + '-' + mo + '-' + day + 'T' + h.padStart(2, '0') + ':00:00Z';
+  var iso = y + '-' + mo + '-' + day + 'T' + h.padStart(2, '0') + ':00:00Z';
+  var ms = Date.parse(iso);
+  return isNaN(ms) ? null : ms;
+}
+
+function _msToISO(ms) {
+  return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+// Fetches GetCapabilities filtered to just this layer and parses the real
+// list of valid TIME values, exactly like the working regional vorticity
+// page does — never assume a step's own timestamp is in range.
+function _fetchP1WmsCapabilities() {
+  if (_p1WmsCapPromise) return _p1WmsCapPromise;
+  var url = P1_WMS_BASE + '?service=WMS&version=1.3.0&request=GetCapabilities&LAYERS=' + P1_WMS_LAYER_NAME + '&_=' + Date.now();
+  console.log('[AWCC][WMS-debug] fetching capabilities:', url);
+  _p1WmsCapPromise = fetch(url, { cache: 'no-store' })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(function(text) {
+      var m = text.match(/<Dimension[^>]*name="time"[^>]*>([\s\S]*?)<\/Dimension>/i)
+           || text.match(/<Extent[^>]*name="time"[^>]*>([\s\S]*?)<\/Extent>/i);
+      if (!m) throw new Error('No time dimension found in capabilities');
+      var raw = m[1].trim();
+      var times = [];
+      if (raw.indexOf('/') >= 0 && raw.split('/').length === 3) {
+        var parts = raw.split('/');
+        var start = parts[0], end = parts[1], period = parts[2];
+        var stepMatchH = period.match(/PT(\d+)H/);
+        var stepMs = (stepMatchH ? parseInt(stepMatchH[1]) : 3) * 3600000;
+        var t = Date.parse(start), endMs = Date.parse(end);
+        while (t <= endMs) { times.push(t); t += stepMs; }
+      } else {
+        times = raw.split(',').map(function(s) { return Date.parse(s.trim()); })
+                    .filter(function(t) { return !isNaN(t); });
+      }
+      times.sort(function(a, b) { return a - b; });
+      _p1WmsValidTimes = times;
+      console.log('[AWCC][WMS-debug] capabilities parsed —', times.length, 'valid times, range:',
+        times.length ? new Date(times[0]).toISOString() : '?', 'to',
+        times.length ? new Date(times[times.length - 1]).toISOString() : '?');
+      return times;
+    })
+    .catch(function(e) {
+      console.error('[AWCC][WMS-debug] capabilities fetch failed:', e);
+      _p1WmsValidTimes = null;
+      return null;
+    });
+  return _p1WmsCapPromise;
+}
+
+// Snaps a target ms timestamp to the nearest value in _p1WmsValidTimes.
+// Falls back to the raw timestamp if capabilities haven't loaded.
+function _nearestValidWmsTime(targetMs) {
+  if (!_p1WmsValidTimes || !_p1WmsValidTimes.length) return targetMs;
+  var best = _p1WmsValidTimes[0], bestDiff = Math.abs(targetMs - best);
+  for (var i = 1; i < _p1WmsValidTimes.length; i++) {
+    var diff = Math.abs(targetMs - _p1WmsValidTimes[i]);
+    if (diff < bestDiff) { bestDiff = diff; best = _p1WmsValidTimes[i]; }
+  }
+  return best;
 }
 
 function initP1WmsLayer(lmap) {
@@ -655,72 +722,71 @@ function initP1WmsLayer(lmap) {
       console.error('[AWCC][WMS-debug] p1 iframe has no window.L — Leaflet not found in that frame');
       return;
     }
-    _p1WmsLayer = _L.tileLayer.wms('https://geo.weather.gc.ca/geomet', {
-      layers:      'GDPS_15km_AbsoluteVorticity_500mb',
+    _p1WmsLayer = _L.tileLayer.wms(P1_WMS_BASE, {
+      layers:      P1_WMS_LAYER_NAME,
       format:      'image/png',
       transparent: true,
       version:     '1.3.0',
       opacity:     0.6
     });
 
-    _p1WmsLayer.on('loading', function() {
-      console.log('[AWCC][WMS-debug] tile batch loading...');
-    });
-    _p1WmsLayer.on('load', function() {
-      console.log('[AWCC][WMS-debug] tile batch finished loading');
-    });
     _p1WmsLayer.on('tileerror', function(err) {
       console.error('[AWCC][WMS-debug] TILE ERROR:', err && err.tile ? err.tile.src : err);
     });
-    _p1WmsLayer.on('tileload', function(ev) {
-      console.log('[AWCC][WMS-debug] tile loaded ok:', ev.tile && ev.tile.src);
-    });
 
     _p1WmsLayer.addTo(lmap);
-    console.log('[AWCC][WMS-debug] layer.addTo(lmap) called. Is on map?', lmap.hasLayer(_p1WmsLayer));
-    console.log('[AWCC][WMS-debug] current WMS params:', _p1WmsLayer.wmsParams);
-    console.log('[AWCC][WMS-debug] map center/zoom at add time:', lmap.getCenter(), lmap.getZoom());
+    console.log('[AWCC][WMS-debug] layer added. Fetching capabilities before first sync...');
 
-    _syncP1Wms();
-    _prefetchP1WmsAllSteps();
+    _fetchP1WmsCapabilities().then(function() {
+      _syncP1Wms();
+      _prefetchP1WmsAllSteps();
+    });
   } catch(e) {
     console.error('[AWCC][WMS-debug] initP1WmsLayer THREW:', e);
   }
 }
 
-// Reads p1's own currently-displayed step and pushes matching TIME to the WMS layer
+// Reads p1's own currently-displayed step and pushes the nearest valid TIME
+// to the WMS layer.
 function _syncP1Wms() {
-  if (!_p1WmsLayer) { console.log('[AWCC][WMS-debug] _syncP1Wms: no layer yet'); return; }
+  if (!_p1WmsLayer) return;
   try {
     var win    = document.getElementById('frame-p1').contentWindow;
     var steps  = win['_SYN_TIME_STEPS'];
     var slider = win.document.getElementById('syn-time-slider');
-    console.log('[AWCC][WMS-debug] _syncP1Wms: steps found?', !!steps, 'len:', steps && steps.length, 'slider found?', !!slider);
     if (!steps || !slider) return;
     var idx  = parseInt(slider.value);
     var step = steps[idx];
-    console.log('[AWCC][WMS-debug] _syncP1Wms: idx', idx, 'step', step);
     if (!step) return;
-    var iso = _p1KeyToISO(step.key);
-    console.log('[AWCC][WMS-debug] _syncP1Wms: computed TIME =', iso);
-    if (iso) _p1WmsLayer.setParams({ TIME: iso });
+    var targetMs = _p1KeyToMs(step.key);
+    if (targetMs === null) return;
+    var snapped = _nearestValidWmsTime(targetMs);
+    console.log('[AWCC][WMS-debug] step', step.key, '→ requesting', _msToISO(snapped));
+    _p1WmsLayer.setParams({ TIME: _msToISO(snapped) });
   } catch(e) {
     console.error('[AWCC][WMS-debug] _syncP1Wms THREW:', e);
   }
 }
 
-// Cycles TIME through every step once on load to warm the tile cache for the
-// current view, then restores whatever step is actually showing.
+// Cycles TIME through every distinct snapped value once on load to warm the
+// tile cache, then restores whatever step is actually showing.
 function _prefetchP1WmsAllSteps() {
   try {
     var win   = document.getElementById('frame-p1').contentWindow;
     var steps = win['_SYN_TIME_STEPS'];
     if (!steps || !steps.length || !_p1WmsLayer) return;
+    var seen = {};
+    var queue = [];
+    steps.forEach(function(s) {
+      var ms = _p1KeyToMs(s.key);
+      if (ms === null) return;
+      var snapped = _nearestValidWmsTime(ms);
+      if (!seen[snapped]) { seen[snapped] = true; queue.push(snapped); }
+    });
     var i = 0;
     function next() {
-      if (i >= steps.length) { _syncP1Wms(); return; }
-      var iso = _p1KeyToISO(steps[i].key);
-      if (iso) _p1WmsLayer.setParams({ TIME: iso });
+      if (i >= queue.length) { _syncP1Wms(); return; }
+      _p1WmsLayer.setParams({ TIME: _msToISO(queue[i]) });
       i++;
       setTimeout(next, 400);
     }
