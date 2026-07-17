@@ -2150,7 +2150,7 @@ from scipy.interpolate import griddata
 from matplotlib import pyplot as plt
 
 # ── Settings — exact match to Cell A ─────────────────────────────────────────
-MSLP_SMOOTH_SIGMA = 8.0
+MSLP_SMOOTH_SIGMA = 10.0
 MSLP_INTERVAL     = 4.0
 QPF_SIGMA         = 1.0
 QPF_INTERVAL      = 1.0
