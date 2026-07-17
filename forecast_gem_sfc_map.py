@@ -2293,22 +2293,12 @@ def _regrid_mslp(lats_g, lons_g, grid):
     src_lats = lats_g.ravel() if lats_g.ndim==2 else np.repeat(lats_g, lons_g.shape[0])
     src_vals = grid.ravel()
     valid    = np.isfinite(src_vals)
-    # linear first, fill remaining NaN with nearest
     grid_reg = griddata(
         (src_lons[valid], src_lats[valid]),
         src_vals[valid],
         (lon2d, lat2d),
         method='linear'
     )
-    _nan_mask = ~np.isfinite(grid_reg)
-    if _nan_mask.any():
-        grid_nn = griddata(
-            (src_lons[valid], src_lats[valid]),
-            src_vals[valid],
-            (lon2d, lat2d),
-            method='nearest'
-        )
-        grid_reg[_nan_mask] = grid_nn[_nan_mask]
     return lon_reg, lat_reg, grid_reg
 
 def _count_contours(grid, lon_vec, lat_vec, interval):
@@ -2369,9 +2359,8 @@ for (_date, _hr) in _sfc_times:
                 f'{"RDPS" if use_rdps else "GDPS"} MSLP fxx={fxx:03d}')
 
         _mslp_lats, _mslp_lons, _mslp_data = _crop_grid(_mslp_lats, _mslp_lons, _mslp_data)
-        lon_vec, lat_vec, _mslp_reg         = _regrid_mslp(_mslp_lats, _mslp_lons, _mslp_data)
-        _mslp_reg = np.where(np.isfinite(_mslp_reg), _mslp_reg, np.nanmean(_mslp_reg))
-        slp_grid  = gaussian_filter(_mslp_reg, sigma=MSLP_SMOOTH_SIGMA)
+        _mslp_data = gaussian_filter(_mslp_data, sigma=MSLP_SMOOTH_SIGMA)
+        lon_vec, lat_vec, slp_grid          = _regrid_mslp(_mslp_lats, _mslp_lons, _mslp_data)
         print(f'  ✓ MSLP {slp_grid.shape} {np.nanmin(slp_grid):.1f}–{np.nanmax(slp_grid):.1f} hPa')
     except Exception as _e:
         slp_grid = lon_vec = lat_vec = None
