@@ -2412,65 +2412,51 @@ from scipy.ndimage import maximum_filter, minimum_filter, label, gaussian_filter
 
 def find_hl_centers(grid, lon_vec, lat_vec,
                     neighborhood=20, min_delta=2.0):
-    sg    = gaussian_filter(grid, sigma=HL_SIGMA)
-    max_f = maximum_filter(sg, size=neighborhood)
-    min_f = minimum_filter(sg, size=neighborhood)
+    lon_reg = np.linspace(MAP_EXTENT[0], MAP_EXTENT[1], REGRID_NLON)
+    lat_reg = np.linspace(MAP_EXTENT[2], MAP_EXTENT[3], REGRID_NLAT)
+    lon2d, lat2d = np.meshgrid(lon_reg, lat_reg)
+    src_lons = lon_vec.ravel() if lon_vec.ndim==2 else np.tile(lon_vec, lat_vec.shape[0])
+    src_lats = lat_vec.ravel() if lat_vec.ndim==2 else np.repeat(lat_vec, lon_vec.shape[0])
+    src_vals = grid.ravel()
+    valid    = np.isfinite(src_vals)
+    grid_reg = griddata(
+        (src_lons[valid], src_lats[valid]),
+        src_vals[valid],
+        (lon2d, lat2d),
+        method='nearest'
+    )
+    grid_reg = np.where(np.isfinite(grid_reg), grid_reg, np.nanmean(grid_reg))
+    _lv = lat_reg
+    _lo = lon_reg
 
-    # use tolerance for float comparison
+    sg    = gaussian_filter(grid_reg.astype(float), sigma=(HL_SIGMA, HL_SIGMA))
+    max_f = maximum_filter(sg, size=(neighborhood, neighborhood))
+    min_f = minimum_filter(sg, size=(neighborhood, neighborhood))
+
     is_max = (np.abs(sg - max_f) < 1e-6) & (sg - min_f > min_delta)
     is_min = (np.abs(sg - min_f) < 1e-6) & (max_f - sg > min_delta)
 
-    # trim edge margin — use 10% of grid size, not neighborhood
-    edge = max(3, int(min(grid.shape) * 0.10))
-
+    edge    = max(3, int(min(grid_reg.shape) * 0.10))
+    W, E, S, N = MAP_EXTENT
     centers = []
+
     for typ, mask in [('H', is_max), ('L', is_min)]:
-        # force-add interior global extremum as fallback for both H and L
-        interior = sg[edge:-edge, edge:-edge]
-        if typ == 'H':
-            gr, gc = np.unravel_index(np.argmax(interior), interior.shape)
-        else:
-            gr, gc = np.unravel_index(np.argmin(interior), interior.shape)
-        gr += edge; gc += edge
         mask = mask.copy()
-        mask[gr, gc] = True
         lbl, n = label(mask)
         for i in range(1, n+1):
             rows, cols = np.where(lbl == i)
             best = np.argmax(sg[rows, cols]) if typ == 'H' else np.argmin(sg[rows, cols])
             r, c = rows[best], cols[best]
+            if r < edge or r > grid_reg.shape[0] - edge: continue
+            if c < edge or c > grid_reg.shape[1] - edge: continue
 
-            # drop edge candidates
-            if r < edge or r > grid.shape[0] - edge: continue
-            if c < edge or c > grid.shape[1] - edge: continue
+            lat = float(_lv[r]); lon = float(_lo[c])
+            if not (W <= lon <= E and S <= lat <= N): continue
 
-            _grid_val = float(grid[r, c])
+            raw = float(grid_reg[r, c])
+            val = math.floor(raw) + 1 if typ == 'H' else math.ceil(raw) - 1
+            centers.append(dict(type=typ, lat=lat, lon=lon, val=val))
 
-            def _grid_at(sta_lat, sta_lon, _lv=lat_vec, _lo=lon_vec, _g=grid):
-                _ri = int(round((sta_lat - _lv[0]) /
-                                (_lv[-1] - _lv[0]) * (len(_lv) - 1)))
-                _ci = int(round((sta_lon - _lo[0]) /
-                                (_lo[-1] - _lo[0]) * (len(_lo) - 1)))
-                _ri = max(0, min(len(_lv) - 1, _ri))
-                _ci = max(0, min(len(_lo) - 1, _ci))
-                return float(_g[_ri, _ci])
-
-            _thresh = SLP_INTERVAL
-
-            if typ == 'H':
-                _mask = (_mr_slp is not None) & (_mr_grid_vals >= _grid_val - _thresh)
-                _inside = _mr_slp[_mask]
-                _val = (math.floor(float(_inside.max())) + 1) if len(_inside) else (math.floor(_grid_val) + 1)
-            else:
-                _mask = (_mr_slp is not None) & (_mr_grid_vals <= _grid_val + _thresh)
-                _inside = _mr_slp[_mask]
-                _val = (math.ceil(float(_inside.min())) - 1) if len(_inside) else (math.ceil(_grid_val) - 1)
-
-            centers.append(dict(
-                type=typ,
-                lat=float(lat_vec[r]), lon=float(lon_vec[c]),
-                val=float(_val)
-            ))
     return centers
 
 
