@@ -1130,6 +1130,116 @@ function _prefetchP1WmsAllSteps() {
   }
 }
 
+// ── p3 WMS overlay — RDPS 1000-500mb Thickness Contours, GeoMet ───────────
+var P3_WMS_LAYER_NAME  = 'RDPS_10km_Thickness-Contour_1000to500mb';
+var P3_WMS_BASE        = 'https://geo.weather.gc.ca/geomet';
+var _p3WmsLayer         = null;
+var _p3WmsValidTimes    = null;
+var _p3WmsCapPromise    = null;
+var _p3LeafletMap       = null;
+
+function _fetchP3WmsCapabilities() {
+  if (_p3WmsCapPromise) return _p3WmsCapPromise;
+  var url = P3_WMS_BASE + '?service=WMS&version=1.3.0&request=GetCapabilities&LAYERS=' + P3_WMS_LAYER_NAME + '&_=' + Date.now();
+  _p3WmsCapPromise = fetch(url, { cache: 'no-store' })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(function(text) {
+      var m = text.match(/<Dimension[^>]*name="time"[^>]*>([\s\S]*?)<\/Dimension>/i)
+           || text.match(/<Extent[^>]*name="time"[^>]*>([\s\S]*?)<\/Extent>/i);
+      if (!m) throw new Error('No time dimension found in capabilities');
+      var raw = m[1].trim();
+      var times = [];
+      if (raw.indexOf('/') >= 0 && raw.split('/').length === 3) {
+        var parts = raw.split('/');
+        var start = parts[0], end = parts[1], period = parts[2];
+        var stepMatchH = period.match(/PT(\d+)H/);
+        var stepMs = (stepMatchH ? parseInt(stepMatchH[1]) : 3) * 3600000;
+        var t = Date.parse(start), endMs = Date.parse(end);
+        while (t <= endMs) { times.push(t); t += stepMs; }
+      } else {
+        times = raw.split(',').map(function(s) { return Date.parse(s.trim()); })
+                    .filter(function(t) { return !isNaN(t); });
+      }
+      times.sort(function(a, b) { return a - b; });
+      _p3WmsValidTimes = times;
+      console.log('[AWCC] p3 capabilities parsed —', times.length, 'valid times');
+      return times;
+    })
+    .catch(function(e) {
+      console.error('[AWCC] p3 capabilities fetch failed:', e);
+      _p3WmsValidTimes = null;
+      return null;
+    });
+  return _p3WmsCapPromise;
+}
+
+function _nearestValidWmsTimeP3(targetMs) {
+  if (!_p3WmsValidTimes || !_p3WmsValidTimes.length) return targetMs;
+  var best = _p3WmsValidTimes[0], bestDiff = Math.abs(targetMs - best);
+  for (var i = 1; i < _p3WmsValidTimes.length; i++) {
+    var diff = Math.abs(targetMs - _p3WmsValidTimes[i]);
+    if (diff < bestDiff) { bestDiff = diff; best = _p3WmsValidTimes[i]; }
+  }
+  return best;
+}
+
+function initP3WmsLayer(lmap) {
+  try {
+    _p3LeafletMap = lmap;
+    var p3win = document.getElementById('frame-p3').contentWindow;
+    var _L = p3win.L;
+    if (!_L) {
+      console.error('[AWCC] p3 iframe has no window.L — Leaflet not found in that frame');
+      return;
+    }
+    if (!lmap.getPane('p3WmsPane')) {
+      lmap.createPane('p3WmsPane');
+      lmap.getPane('p3WmsPane').style.zIndex = 650;
+      lmap.getPane('p3WmsPane').style.pointerEvents = 'none';
+    }
+
+    _p3WmsLayer = _L.tileLayer.wms(P3_WMS_BASE, {
+      layers: P3_WMS_LAYER_NAME,
+      styles: '',
+      format: 'image/png',
+      transparent: true,
+      version: '1.3.0',
+      opacity: 0.85,
+      pane: 'p3WmsPane'
+    });
+    _p3WmsLayer.addTo(lmap);
+
+    _fetchP3WmsCapabilities().then(function() {
+      _syncP3Wms();
+    });
+  } catch(e) {
+    console.error('[AWCC] initP3WmsLayer THREW:', e);
+  }
+}
+
+function _syncP3Wms() {
+  if (!_p3WmsLayer) return;
+  try {
+    var win    = document.getElementById('frame-p3').contentWindow;
+    var steps  = win['_GEM_STEPS'];
+    var slider = win.document.getElementById('gem-time-slider');
+    if (!steps || !slider) return;
+    var idx  = parseInt(slider.value);
+    var step = steps[idx];
+    if (!step) return;
+    var targetMs = _p1KeyToMs(step.key);
+    if (targetMs === null) return;
+    var snapped    = _nearestValidWmsTimeP3(targetMs);
+    var isoSnapped = _msToISO(snapped);
+    _p3WmsLayer.setParams({ TIME: isoSnapped });
+  } catch(e) {
+    console.error('[AWCC] _syncP3Wms THREW:', e);
+  }
+}
+
 function patchFrame(p) {
   try {
     var win = document.getElementById(p.frameId).contentWindow;
@@ -1205,6 +1315,10 @@ function patchMapSync(p) {
     if (p.id === 'p1' && !_p1WmsLayer) {
       console.log('[AWCC][WMS-debug] calling initP1WmsLayer...');
       initP1WmsLayer(lmap);
+    }
+
+    if (p.id === 'p3' && !_p3WmsLayer) {
+      initP3WmsLayer(lmap);
     }
 
     console.log('[AWCC] Map sync patched for', p.id);
@@ -1335,7 +1449,7 @@ window.addEventListener('message', function(e) {
     _syncP1Wms();
   }
 
-  // Every step from p4 → ensure 700 hPa is active
+// Every step from p4 → ensure 700 hPa is active
   if (src.id === 'p4') {
     try {
       var p4win = document.getElementById('frame-p4').contentWindow;
@@ -1344,6 +1458,11 @@ window.addEventListener('message', function(e) {
         btn700.click();
       }
     } catch(e) {}
+  }
+
+  // Every step from p3 → keep thickness contour overlay in sync
+  if (src.id === 'p3') {
+    _syncP3Wms();
   }
 
   // First step from any pane → safe to attach map sync (Leaflet is fully ready)
@@ -1519,6 +1638,7 @@ setPaneBlank(p.id, false, '');
   });
 
   _syncP1Wms();
+  _syncP3Wms();
   _masterBusy = false;
 }
 // Keep master slider thumb in sync when panes are driven individually
@@ -1585,7 +1705,8 @@ function mirrorStep(src, tgt, srcIdx) {
     if (slider) slider.value = String(targetIdx);
 tgtWin[tgt.fnName](targetIdx);
     tgtWin.__awcc_syncing = false;
-    if (tgt.id === 'p1') _syncP1Wms();
+if (tgt.id === 'p1') _syncP1Wms();
+    if (tgt.id === 'p3') _syncP3Wms();
   } catch(e) {
     console.warn('[AWCC] mirrorStep error', tgt.id, e);
   }
