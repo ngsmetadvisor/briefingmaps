@@ -4295,16 +4295,16 @@ _bar_html = '''
   bottom: 0; left: 0; right: 0;
   z-index: 10000;
   background: #e6e6ea;
-  border-top: 2px solid #4a7fc1;
-  padding: 4px 16px;
+  border-top: 1px solid #4a7fc1;
+  padding: 2px 16px;
   display: flex;
   align-items: center;
   gap: 14px;
   font-family: "Courier New", monospace;
-  font-size: 11px;
+  font-size: 9px;
   color: #2a2a3a;
   box-shadow: 0 -3px 12px rgba(0,0,0,0.25);
-  min-height: 26px;
+  min-height: 13px;
 }
 #syn-bar .bar-label {
   font-size: 8px; color: #5a5a6a; font-weight: bold;
@@ -4319,10 +4319,10 @@ _bar_html = '''
 }
 #syn-bar .bar-section:last-child { border-right: none; }
 .syn-lvl-btn {
-  font-size: 12px; padding: 4px 14px;
+  font-size: 9px; padding: 2px 7px;
   cursor: pointer;
   border: 1px solid #3a4a6a;
-  border-radius: 4px;
+  border-radius: 3px;
   background: #2a2a4a;
   color: #c0c8e0;
   font-family: "Courier New", monospace;
@@ -4332,10 +4332,10 @@ _bar_html = '''
 .syn-lvl-btn:hover { background: #3a4a7a; }
 .syn-lvl-btn.active { background: #4a7fc1; color: #fff; border-color: #6a9fe1; }
 .syn-exp-btn {
-  font-size: 11px; padding: 4px 12px;
+  font-size: 8px; padding: 2px 6px;
   cursor: pointer;
   border: 1px solid #4a7fc1;
-  border-radius: 4px;
+  border-radius: 3px;
   background: #2a3a5a;
   color: #c0d0ff;
   font-family: "Courier New", monospace;
