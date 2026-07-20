@@ -4017,6 +4017,19 @@ m.get_root().html.add_child(Element(borders_js))
 if 'make_fire_zones_html' in globals():
     m.get_root().html.add_child(Element(make_fire_zones_html('synoptic')))
 
+# ── Model run label, bottom-right ──────────────────────────────────────────
+_ua_run_label_html = (
+    '<div id="ua-run-label" style="'
+    'position:fixed;bottom:34px;right:8px;z-index:10001;'
+    'background:rgba(255,255,255,0.85);border:1px solid #aaa;border-radius:4px;'
+    'padding:3px 8px;font-family:Courier New,monospace;font-size:11px;'
+    'color:#222;line-height:1.5;pointer-events:none;text-align:right;">'
+    f"<b>RDPS run:</b> {_rdps_run_dt.strftime('%Y-%m-%d %HZ')}<br>"
+    f"<b>GDPS run:</b> {_gdps_run_dt.strftime('%Y-%m-%d %HZ')}"
+    '</div>'
+)
+m.get_root().html.add_child(Element(_ua_run_label_html))
+
 # ── Force KML zone lines above grey land fill ─────────────────────────────
 m.get_root().html.add_child(Element(
     '<script>\n'
@@ -4779,6 +4792,20 @@ function _synCapture(cfg, onDone) {{
       out.height = cropH + BANNER_H + CREDIT_H;
       var ctx = out.getContext("2d");
       ctx.drawImage(canvas, 0, 0, cropW, cropH, 0, 0, cropW, cropH);
+
+      // ── Model run time, bottom-right of chart ─────────────────────────────
+      var _rdpsRunLbl = "{_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else 'unknown'}";
+      var _gdpsRunLbl = "{_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else 'unknown'}";
+      ctx.font         = "26px Arial, sans-serif";
+      ctx.fillStyle    = "rgba(255,255,255,0.75)";
+      ctx.textAlign    = "right";
+      ctx.textBaseline = "bottom";
+      ctx.fillText("RDPS run: " + _rdpsRunLbl, cropW - 10, cropH - 38);
+      ctx.fillText("GDPS run: " + _gdpsRunLbl, cropW - 10, cropH - 10);
+      ctx.font         = "26px Arial, sans-serif";
+      ctx.fillStyle    = "#888888";
+      ctx.fillText("RDPS run: " + _rdpsRunLbl, cropW - 10, cropH - 38);
+      ctx.fillText("GDPS run: " + _gdpsRunLbl, cropW - 10, cropH - 10);
 
       var step   = _SYN_TIME_STEPS[_synStepIdx] || {{}};
       var _key   = step.key || "";
@@ -6498,6 +6525,20 @@ function _doExportPDF(level, onComplete) {{
           out.height = cropH + BANNER_H + TITLE_H + CREDIT_H;
           var ctx    = out.getContext("2d");
           ctx.drawImage(canvas, 0, 0, cropW, cropH, 0, 0, cropW, cropH);
+
+          // ── Model run time, bottom-right of chart ─────────────────────────
+          var _rdpsRunLbl = "{_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else 'unknown'}";
+          var _gdpsRunLbl = "{_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else 'unknown'}";
+          ctx.font         = "20px Arial, sans-serif";
+          ctx.fillStyle    = "rgba(255,255,255,0.75)";
+          ctx.textAlign    = "right";
+          ctx.textBaseline = "bottom";
+          ctx.fillText("RDPS run: " + _rdpsRunLbl, cropW - 10, cropH - 30);
+          ctx.fillText("GDPS run: " + _gdpsRunLbl, cropW - 10, cropH - 10);
+          ctx.font         = "20px Arial, sans-serif";
+          ctx.fillStyle    = "#888888";
+          ctx.fillText("RDPS run: " + _rdpsRunLbl, cropW - 10, cropH - 30);
+          ctx.fillText("GDPS run: " + _gdpsRunLbl, cropW - 10, cropH - 10);
 
           var _key   = step.key || "";
           var _dYear = parseInt(_key.substring(0,4),10);
