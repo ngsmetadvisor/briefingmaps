@@ -6807,10 +6807,10 @@ _borders_js = '''
     if(!_runDiv){
       _runDiv = document.createElement("div");
       _runDiv.id = "gem-run-label";
-      _runDiv.style.cssText = "position:fixed;top:32px;left:6px;z-index:10003;"
+      _runDiv.style.cssText = "position:fixed;bottom:34px;right:8px;z-index:10003;"
         + "background:rgba(255,255,255,0.82);border:1px solid #aaa;border-radius:4px;"
         + "padding:2px 7px;font-family:Courier New,monospace;font-size:10px;"
-        + "color:#222;line-height:1.5;pointer-events:none;";
+        + "color:#222;line-height:1.5;pointer-events:none;text-align:right;";
       _runDiv.innerHTML = "<b>''' + ('RDPS' if '_rdps_run_dt' in dir() else '') + r''' run:</b> ''' + (_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else '?') + r'''<br>"
         + "<b>GDPS run:</b> ''' + (_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else '?') + r'''";
       document.body.appendChild(_runDiv);
@@ -7251,19 +7251,19 @@ function _gemRunExportQueue(done){{
       var ctx=out.getContext("2d");
       ctx.drawImage(canvas,0,0,cropW,cropH,0,0,cropW,cropH);
 
-      // ── Run time top-left ─────────────────────────────────────────────────
+      // ── Run time bottom-right ─────────────────────────────────────────────
       var _rdpsRun = "{_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else 'unknown'}";
       var _gdpsRun = "{_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else 'unknown'}";
       ctx.font         = "26px Arial, sans-serif";
       ctx.fillStyle    = "rgba(255,255,255,0.75)";
-      ctx.textAlign    = "left";
-      ctx.textBaseline = "top";
-      ctx.fillText("RDPS run: " + _rdpsRun, 10, 10);
-      ctx.fillText("GDPS run: " + _gdpsRun, 10, 38);
+      ctx.textAlign    = "right";
+      ctx.textBaseline = "bottom";
+      ctx.fillText("RDPS run: " + _rdpsRun, cropW - 10, cropH - 38);
+      ctx.fillText("GDPS run: " + _gdpsRun, cropW - 10, cropH - 10);
       ctx.font         = "26px Arial, sans-serif";
       ctx.fillStyle    = "#888888";
-      ctx.fillText("RDPS run: " + _rdpsRun, 10, 10);
-      ctx.fillText("GDPS run: " + _gdpsRun, 10, 38);
+      ctx.fillText("RDPS run: " + _rdpsRun, cropW - 10, cropH - 38);
+      ctx.fillText("GDPS run: " + _gdpsRun, cropW - 10, cropH - 10);
 
       var step=_GEM_STEPS[idx]||{{}};
       var key=step.key||"";
@@ -7340,18 +7340,18 @@ function _gemRunExportQueue(done){{
       // 1. map pixels from the html2canvas capture
       fc.drawImage(canvas,0,0,cropW,cropH,0,0,cropW,cropH);
 
-      // ── Run time top-left ─────────────────────────────────────────────────
+      // ── Run time bottom-right ─────────────────────────────────────────────
       var _rdpsRun = {repr(_rdps_run_dt.strftime('%Y-%m-%d %HZ') if '_rdps_run_dt' in dir() else 'unknown')};
       var _gdpsRun = {repr(_gdps_run_dt.strftime('%Y-%m-%d %HZ') if '_gdps_run_dt' in dir() else 'unknown')};
       fc.font         = "26px Arial, sans-serif";
       fc.fillStyle    = "rgba(255,255,255,0.75)";
-      fc.textAlign    = "left";
-      fc.textBaseline = "top";
-      fc.fillText("RDPS run: " + _rdpsRun, 10, 10);
-      fc.fillText("GDPS run: " + _gdpsRun, 10, 38);
+      fc.textAlign    = "right";
+      fc.textBaseline = "bottom";
+      fc.fillText("RDPS run: " + _rdpsRun, cropW - 10, cropH - 38);
+      fc.fillText("GDPS run: " + _gdpsRun, cropW - 10, cropH - 10);
       fc.fillStyle    = "#888888";
-      fc.fillText("RDPS run: " + _rdpsRun, 10, 10);
-      fc.fillText("GDPS run: " + _gdpsRun, 10, 38);
+      fc.fillText("RDPS run: " + _rdpsRun, cropW - 10, cropH - 38);
+      fc.fillText("GDPS run: " + _gdpsRun, cropW - 10, cropH - 10);
       // 2. scale bar — floated bottom-left of map, above banner
 
 
