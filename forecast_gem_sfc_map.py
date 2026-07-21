@@ -1547,7 +1547,7 @@ for (lat, lon, vt_str), fields in _sfc_merged.items():
         'QPF12H':     qpf12h,
         'CAPE':       cape,
         '_model':     prefix,
-    })  })
+    })
 
 gem_ua_df = (pd.DataFrame(rows)[_COLS + ['_model']]
              if rows else pd.DataFrame(columns=_COLS + ['_model']))
