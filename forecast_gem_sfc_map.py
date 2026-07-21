@@ -2360,8 +2360,9 @@ for (_date, _hr) in _sfc_times:
 
     try:
         # use cached file from UA-2a if available — avoids re-download
-        _fetch_hr    = int(_hr) + 6   # 00Z label→06Z fetch, 12Z label→18Z fetch
-        _vt_mslp_str = f'{_date_str[:4]}-{_date_str[4:6]}-{_date_str[6:8]} {_fetch_hr:02d}Z'
+        # NOTE: _raw_grids is keyed by the LABEL hour (0Z/12Z), same as _hr itself —
+        # Cell UA-2b stores it under vt_mslp's own hour, not the +6h fetch endpoint.
+        _vt_mslp_str = f'{_date_str[:4]}-{_date_str[4:6]}-{_date_str[6:8]} {int(_hr):02d}Z'
         _cache_entry = _raw_grids.get(('Pressure_MSL', _vt_mslp_str), {})
         _cache_path  = _cache_entry.get('cache_path')
 
