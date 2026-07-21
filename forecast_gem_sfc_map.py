@@ -1964,7 +1964,7 @@ def _make_figure(mode, segs, T, lv, ltv,
         slvls = np.arange(s_min, s_max + SLP_INTERVAL, SLP_INTERVAL)
         ax.contour(SL, SLA, mslp_grid, levels=slvls,
                    colors='white', alpha=0.50,
-                   linewidths=[1.6 if int(l) % 20 == 0 else 0.6 for l in slvls])
+                   linewidths=[0.8 if int(l) % 20 == 0 else 0.3 for l in slvls])
 
     total_pts = 0
     for seg in segs:
@@ -4502,7 +4502,7 @@ function synRenderUA(fullKey, stepLabel) {{
       Math.round(ct.level) === KEY_HGT_M[_synLevel]));
     var _hLine = L.polyline(ll, {{
       color:   "#000000",
-      weight:  isKey ? 5.5 : 2.5,
+      weight:  isKey ? 2.75 : 1.25,
       opacity: isKey ? 1.0 : 1.0,
       pane:    "heightPane"
     }});
@@ -5889,7 +5889,7 @@ function synRenderUA(fullKey, stepLabel) {{
       Math.round(ct.level) === KEY_HGT_M[_synLevel]));
     var _hLine = L.polyline(ll, {{
       color:   "#000000",
-      weight:  isKey ? 4.5 : 1.5,
+      weight:  isKey ? 2.25 : 0.75,
       opacity: isKey ? 1.0 : 0.85,
       pane:    "heightPane"
     }});
@@ -6694,7 +6694,7 @@ def _extract_contours(grid, lon_vec, lat_vec, interval):
     contours = []
     for li, lvl in enumerate(cs.levels):
         is_major = (round((lvl - 1000) % 16) == 0)
-        weight   = 3.5 if is_major else 3.0
+        weight   = 1.75 if is_major else 1.5
         opacity  = 1.0 if is_major else 1.0
         for coords in cs.allsegs[li]:
             if len(coords) < 2: continue
