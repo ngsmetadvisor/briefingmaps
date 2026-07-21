@@ -6996,8 +6996,10 @@ for _key in _sfc_keys:
     print(f'  {_key}: {len(_mslp_contours)} MSLP segs, {len(_qpf_bands)} QPF bands, {len(_cape_bands)} CAPE bands')
     if _qpf_bands:
         print(f'    QPF levels present: {sorted(set(b["level"] for b in _qpf_bands))}')
-    else:
+    elif _qpf is not None:
         print(f'    QPF max value: {_qpf.max():.2f} mm — may be below 0.5 mm threshold')
+    else:
+        print(f'    QPF grid unavailable for this step — MSLP only')
 
 print(f'✓ Baked {len(_frame_data)} frames')
 
