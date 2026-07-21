@@ -7276,7 +7276,7 @@ function gemRender(idx){{
         color:"none",
         weight:0,
         fillColor:band.color,
-        fillOpacity:0.45,
+        fillOpacity:0.75,
         fillRule:"evenodd",
         interactive:false,
         pane:"qpfPane"
