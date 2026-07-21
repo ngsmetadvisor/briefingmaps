@@ -6822,6 +6822,74 @@ def _extract_contours(grid, lon_vec, lat_vec, interval):
 
 
 # ── QPF fill bands — vectorised ───────────────────────────────────────────────
+# ── Shared: convert one contourf level's raw loops into polygons WITH holes ──
+# Without this, holes (areas belonging to the next band up) get drawn as solid
+# same-color fills instead of being cut out — the "torn"/patchy artifact.
+def _contourf_seglist_to_fill_polys(seg_list):
+    from shapely.geometry import Polygon as _SP
+
+    polys = []
+    for verts in seg_list:
+        verts = np.asarray(verts)
+        if len(verts) < 3:
+            continue
+        pts = [(float(v[0]), float(v[1])) for v in verts if not np.isnan(v).any()]
+        if len(pts) < 3:
+            continue
+        try:
+            p = _SP(pts)
+            if not p.is_valid:
+                p = p.buffer(0)
+            if p.is_valid and not p.is_empty:
+                polys.append(p)
+        except Exception:
+            continue
+    if not polys:
+        return []
+
+    polys.sort(key=lambda p: p.area, reverse=True)
+    n = len(polys)
+    depth = [0] * n
+    for i in range(1, n):
+        try:
+            pt = polys[i].representative_point()
+        except Exception:
+            continue
+        for j in range(i - 1, -1, -1):
+            try:
+                if polys[j].contains(pt) or polys[j].covers(pt):
+                    depth[i] = depth[j] + 1
+                    break
+            except Exception:
+                continue
+
+    outers = [polys[i] for i in range(n) if depth[i] % 2 == 0]
+    holes  = [polys[i] for i in range(n) if depth[i] % 2 == 1]
+
+    results = []
+    for outer in outers:
+        my_holes = []
+        for h in holes:
+            try:
+                pt = h.representative_point()
+                if outer.contains(pt) or outer.covers(pt):
+                    my_holes.append(h)
+            except Exception:
+                continue
+        try:
+            outer_coords = [[round(float(lat), 3), round(float(lon), 3)]
+                             for lon, lat in outer.exterior.coords]
+            hole_coords = [
+                [[round(float(lat), 3), round(float(lon), 3)] for lon, lat in h.exterior.coords]
+                for h in my_holes
+            ]
+            results.append({'coords': outer_coords, 'holes': hole_coords})
+        except Exception:
+            continue
+    return results
+
+
+# ── QPF fill bands — vectorised ───────────────────────────────────────────────
 _QPF_LEVELS = [0.6, 1.5, 3, 5, 10, 20, 30, 40, 50, 60, 80, 100, 120]
 _QPF_COLORS = {
     0.6:  '#c8f0a0', 1.5:  '#78d048', 3:    '#228b22',
@@ -6852,15 +6920,9 @@ def _extract_qpf_bands(grid, lat_vec, lon_vec, n_interp=120):
     bands = []
     for li, (lvl, seg_list) in enumerate(zip(cs.levels, cs.allsegs)):
         color = _QPF_COLORS.get(lvl, _QPF_COLORS[_QPF_LEVELS[-1]])
-        for verts in seg_list:
-            verts = np.array(verts)
-            if len(verts) < 3:
-                continue
-            coords = [[round(float(v[1]),3), round(float(v[0]),3)]
-                      for v in verts if not np.isnan(v).any()]
-            if len(coords) < 3:
-                continue
-            bands.append({'level': float(lvl), 'color': color, 'coords': coords})
+        for poly in _contourf_seglist_to_fill_polys(seg_list):
+            bands.append({'level': float(lvl), 'color': color,
+                          'coords': poly['coords'], 'holes': poly['holes']})
     return bands
 
 
@@ -6894,15 +6956,9 @@ def _extract_cape_bands(grid, lat_vec, lon_vec, n_interp=120):
     bands = []
     for li, (lvl, seg_list) in enumerate(zip(cs.levels, cs.allsegs)):
         color = CAPE_COLORS.get(lvl, CAPE_COLORS[CAPE_LEVELS[-1]])
-        for verts in seg_list:
-            verts = np.array(verts)
-            if len(verts) < 3:
-                continue
-            coords = [[round(float(v[1]), 3), round(float(v[0]), 3)]
-                      for v in verts if not np.isnan(v).any()]
-            if len(coords) < 3:
-                continue
-            bands.append({'level': float(lvl), 'color': color, 'coords': coords})
+        for poly in _contourf_seglist_to_fill_polys(seg_list):
+            bands.append({'level': float(lvl), 'color': color,
+                          'coords': poly['coords'], 'holes': poly['holes']})
     return bands
 
 
@@ -7191,11 +7247,13 @@ function gemRender(idx){{
     }}
     fd.cape.slice().sort(function(a,b){{return a.level-b.level;}}).forEach(function(band){{
       if(!band.coords||band.coords.length<3) return;
-      L.polygon([band.coords],{{
+      var rings=[band.coords].concat(band.holes||[]);
+      L.polygon(rings,{{
         color:"none",
         weight:0,
         fillColor:band.color,
         fillOpacity:0.45,
+        fillRule:"evenodd",
         interactive:false,
         pane:"capePane"
       }}).addTo(_gemCapeLayer);
@@ -7213,11 +7271,13 @@ function gemRender(idx){{
     }}
     fd.qpf.slice().sort(function(a,b){{return a.level-b.level;}}).forEach(function(band){{
       if(!band.coords||band.coords.length<3) return;
-      L.polygon([band.coords],{{
+      var rings=[band.coords].concat(band.holes||[]);
+      L.polygon(rings,{{
         color:"none",
         weight:0,
         fillColor:band.color,
         fillOpacity:0.45,
+        fillRule:"evenodd",
         interactive:false,
         pane:"qpfPane"
       }}).addTo(_gemQpfLayer);
