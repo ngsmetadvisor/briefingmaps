@@ -7028,40 +7028,7 @@ _borders_js = '''
 '''
 m.get_root().html.add_child(Element(_borders_js))
 
-_fullscreen_html = '''
-<style>
-#syn-fs-btn{
-  position:fixed;top:10px;left:10px;z-index:10001;
-  background:rgba(255,255,255,0.96);border:1px solid #aaa;border-radius:6px;
-  padding:5px 10px;font-family:Courier New,monospace;font-size:12px;
-  box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer;color:#1a3a6a;
-}
-#syn-fs-btn:hover{background:#e8f0fe;}
-</style>
-<button id="syn-fs-btn" onclick="synToggleFS()">&#x26F6; Fullscreen</button>
-<script>
-var _synFS=false,_synMapEl=null,_synOrigStyle="";
-function synToggleFS(){
-  var btn=document.getElementById("syn-fs-btn");
-  var keys=Object.keys(window).filter(function(k){return k.startsWith("map_");});
-  if(!keys.length)return;
-  var MAP=window[keys[0]];
-  if(!_synMapEl){_synMapEl=document.getElementById(keys[0])||document.querySelector(".leaflet-container");}
-  if(!_synMapEl)return;
-  _synFS=!_synFS;
-  if(_synFS){
-    _synOrigStyle=_synMapEl.getAttribute("style")||"";
-    _synMapEl.setAttribute("style","position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:9999!important;margin:0!important;");
-    btn.innerHTML="&#x274C; Exit Fullscreen";
-  } else {
-    _synMapEl.setAttribute("style",_synOrigStyle);
-    btn.innerHTML="&#x26F6; Fullscreen";
-  }
-  setTimeout(function(){MAP.invalidateSize();},100);
-}
-</script>
-'''
-m.get_root().html.add_child(Element(_fullscreen_html))
+
 
 if 'make_fire_zones_html' in globals():
     m.get_root().html.add_child(Element(make_fire_zones_html('surface')))
