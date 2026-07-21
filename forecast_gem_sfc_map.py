@@ -4453,9 +4453,8 @@ _bar_html = '''
     <button class="syn-lvl-btn"        id="btn-500" onclick="synSetLevel(\'500\')">500 hPa</button>
   </div>
   <div class="bar-section">
-    <span class="bar-label">500 hPa Only</span>
     <button class="syn-lvl-btn" id="btn-thickness" onclick="synToggleThickness()"
-            style="opacity:0.35;pointer-events:none;">700-500 &Delta;T</button>
+            style="display:none;">700-500 &Delta;T</button>
   </div>
   <div class="bar-section">
     <span class="bar-label">Time</span>
@@ -4516,8 +4515,7 @@ function synSetLevel(lvl) {{
   _btnOn("btn-" + lvl);
   var _tBtn = document.getElementById("btn-thickness");
   if (_tBtn) {{
-    _tBtn.style.opacity        = (lvl === "500") ? "1" : "0.35";
-    _tBtn.style.pointerEvents  = (lvl === "500") ? "auto" : "none";
+    _tBtn.style.display = (lvl === "500") ? "inline-block" : "none";
   }}
   synRender();
 }}
@@ -6979,7 +6977,8 @@ for _key in _sfc_keys:
     _mslp_contours = _extract_contours(_slp, _lonv, _latv, _MSLP_INTERVAL)
     _qpf_latv  = globals().get(f'qpf_lat_vec_{_key}', _latv)
     _qpf_lonv  = globals().get(f'qpf_lon_vec_{_key}', _lonv)
-    _qpf_bands = _extract_qpf_bands(_qpf, _qpf_latv, _qpf_lonv) if _qpf is not None else []
+    _qpf_available = _qpf is not None
+    _qpf_bands = _extract_qpf_bands(_qpf, _qpf_latv, _qpf_lonv) if _qpf_available else []
 
     _cape       = globals().get(f'cape_grid_{_key}')
     _cape_lonv  = globals().get(f'cape_lon_vec_{_key}', _lonv)
@@ -6989,6 +6988,7 @@ for _key in _sfc_keys:
     _frame_data[_key] = {
         'mslp': _mslp_contours,
         'qpf':  _qpf_bands,
+        'qpf_available': _qpf_available,
         'cape': _cape_bands,
         'hl':   hl_centers_by_key.get(_key, []),
         'bbox': [float(_latv[0]), float(_lonv[0]), float(_latv[-1]), float(_lonv[-1])]
@@ -7225,6 +7225,21 @@ function gemSliderChange(v){{
   gemRender(_gemStepIdx);
 }}
 
+function _gemEnsureNoQpfLabel(){{
+  var el=document.getElementById("gem-noqpf-label");
+  if(!el){{
+    el=document.createElement("div");
+    el.id="gem-noqpf-label";
+    el.style.cssText="position:fixed;top:34px;left:8px;z-index:10003;"
+      +"background:rgba(255,255,255,0.92);border:1px solid #cc0000;border-radius:4px;"
+      +"padding:3px 8px;font-family:Courier New,monospace;font-size:11px;"
+      +"color:#cc0000;font-weight:bold;pointer-events:none;display:none;";
+    el.textContent="No QPF data on this timeframe";
+    document.body.appendChild(el);
+  }}
+  return el;
+}}
+
 function gemRender(idx){{
   var MAP=_getMap(); if(!MAP) return;
   var step=_GEM_STEPS[idx]; if(!step) return;
@@ -7238,6 +7253,9 @@ function gemRender(idx){{
   if(_gemCapeLayer){{ MAP.removeLayer(_gemCapeLayer); _gemCapeLayer=null; }}
 
   var fd=_GEM_FRAMES[step.key]; if(!fd) return;
+
+  var _noQpfEl=_gemEnsureNoQpfLabel();
+  _noQpfEl.style.display=(fd.qpf_available===false)?"block":"none";
 
   // ── CAPE fill ─────────────────────────────────────────────────────────
   if(_gemShowCape && fd.cape && fd.cape.length){{
