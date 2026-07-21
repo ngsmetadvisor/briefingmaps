@@ -3338,6 +3338,7 @@ for (_date_val, _hr) in _synoptic_times:
                                  'ttdp': [], 'sped': []}
                        for pl in [850, 700, 500, 250]},
             'instab': [],
+            'thickness_fill': [],
             'thermal_ridge_850': [], 'thermal_trough_850': [],
             'thermal_ridge_700': [], 'thermal_trough_700': [],
             'thermal_ridge_500': [], 'thermal_trough_500': [],
@@ -3376,7 +3377,8 @@ for (_date_val, _hr) in _synoptic_times:
                       f'  val={c["val"]:.1f}°C  pers={c["persistence"]:.1f}')
 
     # ── Instability (T700 - T500) ─────────────────────────────────────────
-    _instab_cts = []
+    _instab_cts      = []
+    _thickness_fills = []
     _col700, _col500 = 'TEMP_700', 'TEMP_500'
     if _col700 in _df_hr.columns and _col500 in _df_hr.columns:
         _mask_i = _df_hr[_col700].notna() & _df_hr[_col500].notna()
@@ -3407,6 +3409,30 @@ for (_date_val, _hr) in _synoptic_times:
                 np.where(np.isnan(_diff_grid), 0, _diff_grid),
                 sigma=max(1, int(sigmaT700500 * 2)))
             _diff_grid_sm[np.isnan(_diff_grid)] = np.nan
+
+            # ── Thickness (T700−T500) filled bands — 500 hPa toggle layer ──
+            _THICK_LEVELS = [16, 18, 26, 999]
+            _THICK_COLORS = ['#ffcc66', '#e65c00', '#3a3a3a']  # light orange / deep orange / dark grey
+            _thick_fill_grid = np.where(np.isnan(_diff_grid_sm), -999, _diff_grid_sm)
+            if np.nanmax(_diff_grid_sm) >= _THICK_LEVELS[0]:
+                _fig_t, _ax_t = plt.subplots(figsize=(1, 1))
+                try:
+                    _cs_t = _ax_t.contourf(_iglon, _iglat, _thick_fill_grid, levels=_THICK_LEVELS)
+                    for _bi, _col_t in enumerate(_THICK_COLORS):
+                        if _bi >= len(_cs_t.allsegs):
+                            continue
+                        for _poly in _cs_t.allsegs[_bi]:
+                            if len(_poly) < 3:
+                                continue
+                            _thickness_fills.append({
+                                'color':  _col_t,
+                                'coords': [[float(p[1]), float(p[0])] for p in _poly],
+                            })
+                except Exception as _e:
+                    print(f'    ⚠ thickness fill error: {_e}')
+                plt.close(_fig_t)
+            print(f'    Thickness fills (700-500 ΔT): {len(_thickness_fills)} polygons')
+
             for _band_lvl in [16, 18]:
                 _binary = np.where(
                     (~np.isnan(_diff_grid_sm)) & (_diff_grid_sm >= _band_lvl) &
@@ -3441,6 +3467,7 @@ for (_date_val, _hr) in _synoptic_times:
     _ts_ua[_key] = {
         'levels':             _hr_data,
         'instab':             _instab_cts,
+        'thickness_fill':     _thickness_fills,
         'thermal_ridge_850':  [_seg_to_dict(s) for s in globals().get(f'ridge_segs_{_key}',        [])],
         'thermal_trough_850': [_seg_to_dict(s) for s in globals().get(f'trough_segs_{_key}',       [])],
         'thermal_ridge_700':  [_seg_to_dict(s) for s in globals().get(f'ridge_segs_700_{_key}',    [])],
@@ -4425,6 +4452,11 @@ _bar_html = '''
     <button class="syn-lvl-btn"        id="btn-500" onclick="synSetLevel(\'500\')">500 hPa</button>
   </div>
   <div class="bar-section">
+    <span class="bar-label">500 hPa Only</span>
+    <button class="syn-lvl-btn" id="btn-thickness" onclick="synToggleThickness()"
+            style="opacity:0.35;pointer-events:none;">700-500 &Delta;T</button>
+  </div>
+  <div class="bar-section">
     <span class="bar-label">Time</span>
     <input type="range" id="syn-time-slider" min="0" value="0"
            oninput="synSliderChange(this.value)">
@@ -4450,8 +4482,9 @@ var _synLevel        = "850";
 var _synStepIdx      = 0;
 var _synUALayer      = null;
 var _synStnLayer     = null;
-var _synShowStations = {'true' if SHOW_STATION_SYMBOLS else 'false'};
-var _synShowTooltips = {'true' if SHOW_TOOLTIPS else 'false'};
+var _synShowStations  = {'true' if SHOW_STATION_SYMBOLS else 'false'};
+var _synShowTooltips  = {'true' if SHOW_TOOLTIPS else 'false'};
+var _synShowThickness = false;   // 700-500 hPa ΔT fill — 500 hPa only, default off
 var _synBaseZoom     = 5;   // zoom at which H/L and W/C symbols are drawn at base size
 
 function _synZoomFactor(MAP) {{
@@ -4480,6 +4513,20 @@ function synSetLevel(lvl) {{
   _synLevel = lvl;
   _btnOff("btn-850"); _btnOff("btn-700"); _btnOff("btn-500");
   _btnOn("btn-" + lvl);
+  var _tBtn = document.getElementById("btn-thickness");
+  if (_tBtn) {{
+    _tBtn.style.opacity        = (lvl === "500") ? "1" : "0.35";
+    _tBtn.style.pointerEvents  = (lvl === "500") ? "auto" : "none";
+  }}
+  synRender();
+}}
+
+// ── Thickness (700-500 hPa ΔT) toggle — 500 hPa only ───────────────────────
+function synToggleThickness() {{
+  if (_synLevel !== "500") return;
+  _synShowThickness = !_synShowThickness;
+  var _tBtn = document.getElementById("btn-thickness");
+  if (_tBtn) _tBtn.classList.toggle("active", _synShowThickness);
   synRender();
 }}
 
@@ -4534,6 +4581,26 @@ function synRenderUA(fullKey, stepLabel) {{
         interactive: false, pane: "tempbandsPane"
       }}).addTo(_synUALayer);
     }});
+  }}
+
+// ── 700-500 hPa Thickness (ΔT) fill — 500 hPa toggle layer ────────────
+  if (_synLevel === "500" && _synShowThickness) {{
+    var _thickFills = (_SYN_UA[fullKey] || {{}}).thickness_fill || [];
+    if (_thickFills.length) {{
+      if (!MAP.getPane("thicknessPane")) {{
+        MAP.createPane("thicknessPane");
+        MAP.getPane("thicknessPane").style.zIndex        = 470;
+        MAP.getPane("thicknessPane").style.pointerEvents = "none";
+      }}
+      _thickFills.forEach(function(poly) {{
+        if (!poly.coords || poly.coords.length < 3) return;
+        L.polygon([poly.coords], {{
+          color: "none", weight: 0,
+          fillColor: poly.color, fillOpacity: 0.45,
+          interactive: false, pane: "thicknessPane"
+        }}).addTo(_synUALayer);
+      }});
+    }}
   }}
 
   // ── Height contours ───────────────────────────────────────────────────
@@ -5842,7 +5909,7 @@ var _synUALayer      = null;
 var _synStnLayer     = null;
 var _synShowStations = {'true' if SHOW_STATION_SYMBOLS else 'false'};
 var _synShowTooltips = {'true' if SHOW_TOOLTIPS else 'false'};
-var _synBaseZoom     = 5;   // zoom at which H/L and W/C symbols are drawn at base size
+var _synBaseZoom     = 5;   // zoom at which H/L and W/C symbols are drawn at base size , LLJ
 
 function _synZoomFactor(MAP) {{
   var z = MAP ? MAP.getZoom() : _synBaseZoom;
@@ -5850,7 +5917,7 @@ function _synZoomFactor(MAP) {{
   return Math.max(0.4, Math.min(3.0, f));
 }}
 
-// ── Helpers ───────────────────────────────────────────────────────────────
+// ── Helpers ────LLJ───────────────────────────────────────────────────────────
 function _getMap() {{
   var k = Object.keys(window).filter(function(k) {{ return k.startsWith("map_"); }});
   return k.length ? window[k[0]] : null;
