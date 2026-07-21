@@ -582,6 +582,7 @@ _PROBE_ISOB_VAR = 'AirTemp'   # representative for all isobaric vars at a given 
 _SFC_VAR_MAP = {
     'Pressure_MSL': 'MSLP',
     'Precip-Accum': '_PACC',
+    'CAPE':         '_CAPE',
 }
 _SFC_VARS = list(_SFC_VAR_MAP.keys())
 
@@ -740,7 +741,7 @@ async def _probe_run(session, run_dt, is_rdps, target_vts, sfc_target_vts):
     # Surface probes
     if FETCH_SFC:
         sfc_vars_to_probe = (
-            ['Pressure_MSL', 'Precip-Accum'] if PROBE_MODE == 'representative'
+            ['Pressure_MSL', 'Precip-Accum', 'CAPE'] if PROBE_MODE == 'representative'
             else _SFC_VARS
         )
         for vt in sorted(sfc_target_vts):
@@ -753,6 +754,10 @@ async def _probe_run(session, run_dt, is_rdps, target_vts, sfc_target_vts):
             if 'Pressure_MSL' in sfc_vars_to_probe and 0 <= fxx_mslp <= max_fxx:
                 url = url_sfc_fn(run_dt, fxx_mslp, 'Pressure_MSL')
                 probes.append((f'fxx={fxx_mslp:03d}  Pressure_MSL@Sfc', url, False))
+
+            if 'CAPE' in sfc_vars_to_probe and 0 <= fxx_mslp <= max_fxx:
+                url = url_sfc_fn(run_dt, fxx_mslp, 'CAPE')
+                probes.append((f'fxx={fxx_mslp:03d}  CAPE@Sfc', url, False))
 
             if 'Precip-Accum' in sfc_vars_to_probe and 0 <= fxx_tgt <= max_fxx:
                 url = url_sfc_fn(run_dt, fxx_tgt, 'Precip-Accum')
@@ -1096,6 +1101,12 @@ for vt in _sfc_target_vts:
                            url_fn(run_dt, fxx_mslp, 'Pressure_MSL'),
                            'Pressure_MSL', vt_mslp, ''))
 
+    # CAPE at 00Z (same fxx/valid time as MSLP)
+    if 0 <= fxx_mslp <= max_fxx:
+        _sfc_tasks.append((model_lbl,
+                           url_fn(run_dt, fxx_mslp, 'CAPE'),
+                           'CAPE', vt_mslp, ''))
+
     # Precip target at 06Z
     _sfc_tasks.append((model_lbl,
                        url_fn(run_dt, fxx_tgt, 'Precip-Accum'),
@@ -1253,7 +1264,7 @@ async def _fetch_and_extract_all():
             continue
         for var_name in _SFC_VARS:
             for suffix, label in [('', '@Sfc'), ('_PRIOR', '@Sfc-Prior')]:
-                if var_name == 'Pressure_MSL' and suffix == '_PRIOR':
+                if var_name in ('Pressure_MSL', 'CAPE') and suffix == '_PRIOR':
                     continue
                 col     = _SFC_VAR_MAP[var_name] + suffix
                 field   = f'{var_name}{label}'
@@ -1421,7 +1432,7 @@ if _n_err:
 
 _COLS = ['icao','wmo','stn_name','lat','lon','valid_time','hour',
          'PRES','HGHT','TEMP','DWPT','RELH','MIXR','DRCT','SPED',
-         'THTA','THTE','THTV','MSLP','QPF12H']
+         'THTA','THTE','THTV','MSLP','QPF12H','CAPE']
 
 rows = []
 
@@ -1467,6 +1478,7 @@ for (lat, lon, vt_str, pres), fields in _point_data.items():
         'THTV':       _theta_v(temp, mixr, pres),
         'MSLP':       None,
         'QPF12H':     None,
+        'CAPE':       None,
         '_model':     prefix,
     })
 
@@ -1495,6 +1507,11 @@ for (lat, lon, vt_str), fields in _sfc_merged.items():
     mslp_raw = fields.get('MSLP')
     mslp = (round(mslp_raw / 100.0, 1)
             if mslp_raw is not None and not _math.isnan(float(mslp_raw))
+            else None)
+
+    cape_raw = fields.get('_CAPE')
+    cape = (round(float(cape_raw), 1)
+            if cape_raw is not None and not _math.isnan(float(cape_raw))
             else None)
 
     pacc       = fields.get('_PACC')
@@ -1528,8 +1545,9 @@ for (lat, lon, vt_str), fields in _sfc_merged.items():
         'THTV':       None,
         'MSLP':       mslp,
         'QPF12H':     qpf12h,
+        'CAPE':       cape,
         '_model':     prefix,
-    })
+    })  })
 
 gem_ua_df = (pd.DataFrame(rows)[_COLS + ['_model']]
              if rows else pd.DataFrame(columns=_COLS + ['_model']))
@@ -2365,6 +2383,30 @@ for (_date, _hr) in _sfc_times:
     except Exception as _e:
         slp_grid = lon_vec = lat_vec = None
         print(f'  ✗ MSLP failed: {_e}')
+
+    # ── CAPE — pulled directly from the raw grid cached in UA-2b ──────────────
+    try:
+        _cape_entry = _raw_grids.get(('CAPE', _vt_mslp_str), {})
+        if _cape_entry:
+            _cape_lats_raw = _cape_entry['lats']
+            _cape_lons_raw = _cape_entry['lons']
+            _cape_data_raw = _cape_entry['data'].astype(float)
+            _cape_lats_c, _cape_lons_c, _cape_data_c = _crop_grid(
+                _cape_lats_raw, _cape_lons_raw, _cape_data_raw)
+            cape_lon_vec, cape_lat_vec, cape_grid = _regrid_mslp(
+                _cape_lats_c, _cape_lons_c, _cape_data_c)
+            print(f'  ✓ CAPE {cape_grid.shape} '
+                  f'{np.nanmin(cape_grid):.0f}–{np.nanmax(cape_grid):.0f} J/kg')
+        else:
+            cape_grid = cape_lon_vec = cape_lat_vec = None
+            print(f'  ⚠ CAPE not cached for {_vt_mslp_str}')
+    except Exception as _e:
+        cape_grid = cape_lon_vec = cape_lat_vec = None
+        print(f'  ✗ CAPE failed: {_e}')
+
+    globals()[f'cape_grid_{_key}']    = cape_grid
+    globals()[f'cape_lon_vec_{_key}'] = cape_lon_vec
+    globals()[f'cape_lat_vec_{_key}'] = cape_lat_vec
 
     # ── QPF from ua_raw_df ────────────────────────────────────────────────────
     _qpf_lats = np.array(sorted(_sub['lat'].dropna().unique()))
@@ -6754,6 +6796,48 @@ def _extract_qpf_bands(grid, lat_vec, lon_vec, n_interp=120):
     return bands
 
 
+# ── CAPE fill bands — vectorised ──────────────────────────────────────────────
+CAPE_LEVELS = [800, 1200, 1500, 2000, 3000]
+CAPE_COLORS = {
+    800:  '#888888', 1200: '#ffff00', 1500: '#ffaa00',
+    2000: '#ff0000', 3000: '#8800cc',
+}
+CAPE_FILL_OPACITY = 0.45
+
+def _extract_cape_bands(grid, lat_vec, lon_vec, n_interp=120):
+    if grid is None:
+        return []
+    zoom_lat = n_interp / grid.shape[0]
+    zoom_lon = n_interp / grid.shape[1]
+    gq = _zoom(grid, (zoom_lat, zoom_lon), order=1)
+    gq = np.clip(gq, 0, None)
+    if gq.max() < CAPE_LEVELS[0]:
+        return []   # below 800 J/kg everywhere — no fill (matches "0-800 no color")
+    latf = np.linspace(lat_vec[0], lat_vec[-1], n_interp)
+    lonf = np.linspace(lon_vec[0], lon_vec[-1], n_interp)
+    glon, glat = np.meshgrid(lonf, latf)
+    fig, ax = plt.subplots(figsize=(1, 1))
+    try:
+        cs = ax.contourf(glon, glat, gq, levels=CAPE_LEVELS, extend='max')
+    except Exception:
+        plt.close(fig)
+        return []
+    plt.close(fig)
+    bands = []
+    for li, (lvl, seg_list) in enumerate(zip(cs.levels, cs.allsegs)):
+        color = CAPE_COLORS.get(lvl, CAPE_COLORS[CAPE_LEVELS[-1]])
+        for verts in seg_list:
+            verts = np.array(verts)
+            if len(verts) < 3:
+                continue
+            coords = [[round(float(v[1]), 3), round(float(v[0]), 3)]
+                      for v in verts if not np.isnan(v).any()]
+            if len(coords) < 3:
+                continue
+            bands.append({'level': float(lvl), 'color': color, 'coords': coords})
+    return bands
+
+
 # ── Bake all frames ───────────────────────────────────────────────────────────
 _MSLP_INTERVAL = float(globals().get('MSLP_INTERVAL', 16.0))
 
@@ -6772,13 +6856,20 @@ for _key in _sfc_keys:
     _qpf_latv  = globals().get(f'qpf_lat_vec_{_key}', _latv)
     _qpf_lonv  = globals().get(f'qpf_lon_vec_{_key}', _lonv)
     _qpf_bands = _extract_qpf_bands(_qpf, _qpf_latv, _qpf_lonv) if _qpf is not None else []
+
+    _cape       = globals().get(f'cape_grid_{_key}')
+    _cape_lonv  = globals().get(f'cape_lon_vec_{_key}', _lonv)
+    _cape_latv  = globals().get(f'cape_lat_vec_{_key}', _latv)
+    _cape_bands = _extract_cape_bands(_cape, _cape_latv, _cape_lonv) if _cape is not None else []
+
     _frame_data[_key] = {
         'mslp': _mslp_contours,
         'qpf':  _qpf_bands,
+        'cape': _cape_bands,
         'hl':   hl_centers_by_key.get(_key, []),
         'bbox': [float(_latv[0]), float(_lonv[0]), float(_latv[-1]), float(_lonv[-1])]
     }
-    print(f'  {_key}: {len(_mslp_contours)} MSLP segs, {len(_qpf_bands)} QPF bands')
+    print(f'  {_key}: {len(_mslp_contours)} MSLP segs, {len(_qpf_bands)} QPF bands, {len(_cape_bands)} CAPE bands')
     if _qpf_bands:
         print(f'    QPF levels present: {sorted(set(b["level"] for b in _qpf_bands))}')
     else:
@@ -6940,6 +7031,7 @@ _bar_html = '''
     <span class="bar-label">Layers</span>
     <button class="gem-layer-btn active" id="btn-mslp" onclick="gemToggle('mslp')">MSLP</button>
     <button class="gem-layer-btn active" id="btn-qpf"  onclick="gemToggle('qpf')">QPF 12h</button>
+    <button class="gem-layer-btn"        id="btn-cape" onclick="gemToggle('cape')">CAPE</button>
   </div>
   <div class="bar-section">
     <span class="bar-label">Time</span>
@@ -6967,6 +7059,14 @@ _bar_html = '''
       <span style="background:#cc0000;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">80</span>
       <span style="background:#880000;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">100</span>
       <span style="background:#111111;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">120+</span>
+    </span>
+    <span style="font-size:10px;color:#aac4ff;margin-left:8px;">CAPE (J/kg):</span>
+    <span style="display:inline-flex;align-items:center;gap:3px;margin-left:4px;">
+      <span style="background:#888888;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">800</span>
+      <span style="background:#ffff00;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">1200</span>
+      <span style="background:#ffaa00;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">1500</span>
+      <span style="background:#ff0000;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">2000</span>
+      <span style="background:#8800cc;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">3000+</span>
     </span>
   </div>
 </div>
@@ -7009,8 +7109,10 @@ function _utcKeyToLocalStr(key) {{
 var _gemStepIdx   = 0;
 var _gemShowMslp  = true;
 var _gemShowQpf   = true;
+var _gemShowCape  = false;
 var _gemMslpLayer  = null;
 var _gemQpfLayer   = null;
+var _gemCapeLayer  = null;
 var _gemExporting  = false;
 
 function _getMap(){{
@@ -7019,8 +7121,9 @@ function _getMap(){{
 }}
 
 function gemToggle(which){{
-  if(which==="mslp"){{ _gemShowMslp=!_gemShowMslp; document.getElementById("btn-mslp").classList.toggle("active",_gemShowMslp); }}
-  else              {{ _gemShowQpf =!_gemShowQpf;  document.getElementById("btn-qpf" ).classList.toggle("active",_gemShowQpf);  }}
+  if(which==="mslp")      {{ _gemShowMslp=!_gemShowMslp; document.getElementById("btn-mslp").classList.toggle("active",_gemShowMslp); }}
+  else if(which==="qpf")  {{ _gemShowQpf =!_gemShowQpf;  document.getElementById("btn-qpf" ).classList.toggle("active",_gemShowQpf);  }}
+  else if(which==="cape") {{ _gemShowCape=!_gemShowCape; document.getElementById("btn-cape").classList.toggle("active",_gemShowCape); }}
   gemRender(_gemStepIdx);
 }}
 
@@ -7039,8 +7142,31 @@ function gemRender(idx){{
 
   if(_gemQpfLayer) {{ MAP.removeLayer(_gemQpfLayer);  _gemQpfLayer=null; }}
   if(_gemMslpLayer){{ MAP.removeLayer(_gemMslpLayer); _gemMslpLayer=null; }}
+  if(_gemCapeLayer){{ MAP.removeLayer(_gemCapeLayer); _gemCapeLayer=null; }}
 
   var fd=_GEM_FRAMES[step.key]; if(!fd) return;
+
+  // ── CAPE fill ─────────────────────────────────────────────────────────
+  if(_gemShowCape && fd.cape && fd.cape.length){{
+    _gemCapeLayer=L.layerGroup();
+    if(!MAP.getPane("capePane")){{
+      MAP.createPane("capePane");
+      MAP.getPane("capePane").style.zIndex=478;
+      MAP.getPane("capePane").style.pointerEvents="none";
+    }}
+    fd.cape.slice().sort(function(a,b){{return a.level-b.level;}}).forEach(function(band){{
+      if(!band.coords||band.coords.length<3) return;
+      L.polygon([band.coords],{{
+        color:"none",
+        weight:0,
+        fillColor:band.color,
+        fillOpacity:0.45,
+        interactive:false,
+        pane:"capePane"
+      }}).addTo(_gemCapeLayer);
+    }});
+    _gemCapeLayer.addTo(MAP);
+  }}
 
   // ── QPF dots ──────────────────────────────────────────────────────────
   if(_gemShowQpf && fd.qpf && fd.qpf.length){{
