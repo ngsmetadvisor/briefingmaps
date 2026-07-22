@@ -3857,6 +3857,13 @@ CONV_FILL_COLOR   = '#dd88ff'
 CONV_FILL_OPACITY = 0.30
 CONV_WEIGHT       = 2.5
 
+# ── 850 hPa convergence-zone fill (decimated wind → divergence) ───────────
+# Reuses the same decimation scale as trough detection below so this stays
+# fast — do not remove max_pts, it's what avoided the 20-min timeout.
+CONV850_GRID_N     = 120
+CONV850_DECIMATE   = 300
+CONV850_SIGMA      = 2.0
+
 # ── Trough detection tuning — prominence units match each field ───────────
 TROUGH_PROMINENCE = {'mslp': 0.3, '850': 8.0, '700': 12.0, '500': 20.0}
 TROUGH_SIGMA_PRE  = {'mslp': 2.0, '850': 2.0, '700': 2.0,  '500': 2.0}
@@ -4013,9 +4020,112 @@ for _lvl in ['850', '700', '500']:
         _trough_ua_by_key[_lvl][_key] = segs
         print(f'    {_lvl} {_key}: {len(segs)} seg(s) from {len(_pts)} pts')
 
-# ── Backward-compat stubs (convergence not computed here) ─────────────────
+# ══════════════════════════════════════════════════════════
+#  850 hPa CONVERGENCE ZONE  (decimated wind → divergence fill)
+# ══════════════════════════════════════════════════════════
+import math
+from shapely.geometry import Polygon as _ConvSP
+from shapely.ops import unary_union as _conv_unary_union
+
+def _uv_from_met(drct_deg, sped_kt):
+    _rad = math.radians(drct_deg)
+    _sped_ms = sped_kt * 0.514444
+    return -_sped_ms * math.sin(_rad), -_sped_ms * math.cos(_rad)
+
+def _divergence_from_grid(u_grid, v_grid, lon_vec, lat_vec):
+    dlon_deg = lon_vec[1] - lon_vec[0]
+    dlat_deg = lat_vec[1] - lat_vec[0]
+    dlon_m = np.array([dlon_deg * 111_320.0 * np.cos(np.radians(lt)) for lt in lat_vec])
+    dlat_m = dlat_deg * 111_320.0
+    du_dx = np.gradient(u_grid, axis=1) / dlon_m[:, None]
+    dv_dy = np.gradient(v_grid, axis=0) / dlat_m
+    return du_dx + dv_dy
+
+def _conv_zone_polys(div_grid, lon_vec, lat_vec, threshold=CONV_THRESHOLD):
+    """Filled polygons where divergence < threshold (i.e. convergence)."""
+    glon, glat = np.meshgrid(lon_vec, lat_vec)
+    fig, ax = plt.subplots(figsize=(1, 1))
+    try:
+        cs = ax.contourf(glon, glat, div_grid, levels=[-1e3, threshold])
+    except Exception:
+        plt.close(fig)
+        return []
+    plt.close(fig)
+    if not cs.allsegs or not cs.allsegs[0]:
+        return []
+    polys = []
+    for verts in cs.allsegs[0]:
+        if len(verts) < 3:
+            continue
+        try:
+            p = _ConvSP(verts)
+            if not p.is_valid:
+                p = p.buffer(0)
+            if p.is_valid and not p.is_empty:
+                polys.append(p)
+        except Exception:
+            continue
+    if not polys:
+        return []
+    merged = _conv_unary_union(polys) if len(polys) > 1 else polys[0]
+    geoms = list(merged.geoms) if merged.geom_type == 'MultiPolygon' else [merged]
+    out = []
+    for g in geoms:
+        if g.is_empty or g.geom_type != 'Polygon':
+            continue
+        out.append({
+            'coords': [[float(c[1]), float(c[0])] for c in g.exterior.coords],
+            'holes':  [[[float(c[1]), float(c[0])] for c in interior.coords]
+                       for interior in g.interiors],
+        })
+    return out
+
+print('\n  Computing 850 hPa convergence zones...')
+_conv_850_by_hr = {}
+for (date_val, hr) in _synoptic_times:
+    _key = f"{pd.Timestamp(date_val).strftime('%Y%m%d')}_{int(hr):02d}"
+    _df  = ua_summary_df[(ua_summary_df['_date'] == date_val) &
+                         (ua_summary_df['_hour'] == hr)]
+    _pts_u, _pts_v = [], []
+    for _, _r in _df.iterrows():
+        _wd, _ws = _r.get('DRCT_850'), _r.get('SPED_850')
+        if _wd is None or _ws is None:
+            continue
+        if isinstance(_wd, float) and np.isnan(_wd):
+            continue
+        if isinstance(_ws, float) and np.isnan(_ws):
+            continue
+        _u, _v = _uv_from_met(float(_wd), float(_ws))
+        _pts_u.append((float(_r['lat']), float(_r['lon']), _u))
+        _pts_v.append((float(_r['lat']), float(_r['lon']), _v))
+
+    if len(_pts_u) < 12:
+        _conv_850_by_hr[_key] = []
+        print(f'    850 CONV {_key}: skipped ({len(_pts_u)} pts)')
+        continue
+
+    _ug, _lvu, _ltvu = _build_field_grid(_pts_u, N=CONV850_GRID_N,
+                                         sigma=CONV850_SIGMA, max_pts=CONV850_DECIMATE)
+    _vg, _lvv, _ltvv = _build_field_grid(_pts_v, N=CONV850_GRID_N,
+                                         sigma=CONV850_SIGMA, max_pts=CONV850_DECIMATE)
+    if _ug is None or _vg is None:
+        _conv_850_by_hr[_key] = []
+        print(f'    850 CONV {_key}: grid build failed')
+        continue
+
+    _div   = _divergence_from_grid(_ug, _vg, _lvu, _ltvu)
+    _polys = _conv_zone_polys(_div, _lvu, _ltvu)
+    _conv_850_by_hr[_key] = _polys
+    print(f'    850 CONV {_key}: div [{_div.min():.2e}, {_div.max():.2e}]  polys={len(_polys)}')
+
+print(f'  ✓ 850 hPa convergence: {sum(len(v) for v in _conv_850_by_hr.values())} polygon(s) '
+      f'across {len(_conv_850_by_hr)} time(s)')
+
+# ── SFC convergence — needs 10m/surface wind (UGRD/VGRD), which this
+#    pipeline doesn't fetch (metar_records here are synthetic GEM
+#    MSLP/QPF/CAPE only, with no wind field). Left empty rather than
+#    faked from MSLP gradients — ask if you want the fetch added.
 _conv_sfc_by_ts   = {f"{pd.Timestamp(d).strftime('%Y%m%d')}_{int(h):02d}": [] for d, h in _synoptic_times}
-_conv_850_by_hr   = {f"{pd.Timestamp(d).strftime('%Y%m%d')}_{int(h):02d}": [] for d, h in _synoptic_times}
 _sfc_trough_by_ts = _trough_mslp_by_key   # legacy alias
 
 _conv_payload = {
@@ -4653,7 +4763,7 @@ _bar_html = '''
   <div class="bar-section">
     <button class="syn-lvl-btn" id="btn-thickness" onclick="synToggleThickness()"
             style="display:none;">700-500 &Delta;T</button>
-<button class="syn-lvl-btn active" id="btn-analysis" onclick="synToggleAnalysis()">Analysis</button>
+    <button class="syn-lvl-btn active" id="btn-analysis" onclick="synToggleAnalysis()">Analysis</button>  
   </div>
   <div class="bar-section">
     <span class="bar-label">Time</span>
@@ -4674,6 +4784,7 @@ var _SYN_TIME_STEPS  = {_time_steps_str};
 var _SYN_UA_STNS     = {_ts_ua_stn_json_str};
 var _SYN_UA          = {_ts_ua_json_str};
 var _TROUGH_DATA     = ({_conv_json_str}).trough || {{}};
+var _CONV850_DATA    = ({_conv_json_str})["850"] || {{}};
 var KEY_HGT_DAM      = {{"850":{int(KEY_HGT_850/10)},"700":{int(KEY_HGT_700/10)},"500":{int(KEY_HGT_500/10)},"250":{int(KEY_HGT_250/10)}}};
 var KEY_HGT_M        = {{"850":{int(KEY_HGT_850)},"700":{int(KEY_HGT_700)},"500":{int(KEY_HGT_500)},"250":{int(KEY_HGT_250)}}};
 
@@ -4748,6 +4859,51 @@ function _synDrawDoubleLine(coords, color, pane, group) {{
   L.polyline(off2, {{ color: color, weight: 2.6, opacity: 0.95, pane: pane }}).addTo(group);
 }}
 
+// ── Draw a convergence zone: translucent fill + dashed "x" boundary + label
+function _synDrawConvZone(poly, color, fillColor, label, pane, group) {{
+  if (!poly.coords || poly.coords.length < 3) return;
+  var outerLL = poly.coords.map(function(c) {{ return [c[0], c[1]]; }});
+  var holes   = (poly.holes || []).map(function(h) {{
+    return h.map(function(c) {{ return [c[0], c[1]]; }});
+  }});
+  var rings = [outerLL].concat(holes);
+
+  L.polygon(rings, {{
+    color: color, weight: 2.2, opacity: 0.9, dashArray: "1 9",
+    lineCap: "round", fillColor: fillColor, fillOpacity: 0.28,
+    fillRule: "evenodd", pane: pane
+  }}).addTo(group);
+
+  var spacingDeg = 1.4, accum = 0;
+  for (var i = 1; i < outerLL.length; i++) {{
+    var d = Math.hypot(outerLL[i][0]-outerLL[i-1][0], outerLL[i][1]-outerLL[i-1][1]);
+    accum += d;
+    if (accum >= spacingDeg) {{
+      var p = outerLL[i];
+      L.marker(p, {{
+        icon: L.divIcon({{
+          html: '<div style="font-size:13px;font-weight:900;color:' + color + ';'
+              + 'text-shadow:1px 1px 0 #fff,-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff;">x</div>',
+          iconSize: [14,14], iconAnchor: [7,7], className: ""
+        }}),
+        pane: pane, interactive: false
+      }}).addTo(group);
+      accum = 0;
+    }}
+  }}
+
+  var topPt = outerLL.reduce(function(a, b) {{ return b[0] > a[0] ? b : a; }});
+  L.marker([topPt[0] + 0.3, topPt[1]], {{
+    icon: L.divIcon({{
+      html: '<div style="font-size:11px;font-weight:bold;color:' + color + ';'
+          + 'font-family:Courier New,monospace;background:rgba(255,255,255,0.85);'
+          + 'padding:0 3px;border-radius:2px;white-space:nowrap;">' + label + '</div>',
+      iconSize: [70,14], iconAnchor: [35,7], className: ""
+    }}),
+    pane: pane, interactive: false
+  }}).addTo(group);
+}}
+
 // ── Render trough / analysis layer for the current timestep ────────────────
 // MSLP surface trough always shows when Analysis is on; the upper-air
 // trough shown is limited to whichever level (850/700/500) is currently
@@ -4780,6 +4936,15 @@ function synRenderAnalysis(fullKey) {{
       }}).addTo(_synAnalysisLayer);
     }});
   }});
+
+  // Convergence zone only exists for 850 hPa — shown only when that level
+  // is selected, still gated by the same Analysis toggle.
+  if (_synLevel === "850") {{
+    var _c850 = _CONV850_DATA[fullKey] || [];
+    _c850.forEach(function(poly) {{
+      _synDrawConvZone(poly, "#cc0000", "#dd4444", "850 CONV", "analysisPane", _synAnalysisLayer);
+    }});
+  }}
 
   _synAnalysisLayer.addTo(MAP);
 }}
