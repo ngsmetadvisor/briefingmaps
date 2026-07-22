@@ -4653,7 +4653,7 @@ _bar_html = '''
   <div class="bar-section">
     <button class="syn-lvl-btn" id="btn-thickness" onclick="synToggleThickness()"
             style="display:none;">700-500 &Delta;T</button>
-<button class="syn-lvl-btn active" id="btn-analysis" onclick="synToggleAnalysis()">Analysis</button>
+<button class="syn-lvl-btn active" id="btn-analysis" onclick="synToggleAnalysis()" oncontextmenu="synAnalysisContextMenu(event)">Analysis</button>
   </div>
   <div class="bar-section">
     <span class="bar-label">Time</span>
@@ -4684,6 +4684,7 @@ var _synUALayer      = null;
 var _synStnLayer     = null;
 var _synAnalysisLayer = null;
 var _synShowAnalysis  = true;
+var _synShowThermal   = false;   // thermal ridge/trough overlay — default off
 var _synShowStations  = {'true' if SHOW_STATION_SYMBOLS else 'false'};
 var _synShowTooltips  = {'true' if SHOW_TOOLTIPS else 'false'};
 var _synShowThickness = false;   // 700-500 hPa ΔT fill — 500 hPa only, default off
@@ -4773,6 +4774,50 @@ function synToggleAnalysis() {{
   synRender();
 }}
 
+function synToggleThermal() {{
+  _synShowThermal = !_synShowThermal;
+  synRender();
+}}
+
+// ── Right-click context menu on Analysis button ────────────────────────────
+function _synCloseCtxMenu() {{
+  var m = document.getElementById("syn-analysis-ctx");
+  if (m) m.remove();
+  document.removeEventListener("click", _synCloseCtxMenu);
+}}
+function synAnalysisContextMenu(ev) {{
+  ev.preventDefault();
+  _synCloseCtxMenu();
+  var menu = document.createElement("div");
+  menu.id = "syn-analysis-ctx";
+  menu.style.cssText = "position:fixed;z-index:20000;background:#1c2333;"
+    + "border:1px solid #4a7fc1;border-radius:4px;padding:4px 0;"
+    + "font-family:Courier New,monospace;font-size:11px;color:#e0e0e0;"
+    + "box-shadow:0 4px 12px rgba(0,0,0,0.5);min-width:170px;";
+  menu.style.left = ev.clientX + "px";
+  menu.style.top  = (ev.clientY - menu.offsetHeight) + "px";
+
+  var item = document.createElement("div");
+  item.style.cssText = "padding:6px 12px;cursor:pointer;display:flex;"
+    + "align-items:center;gap:6px;";
+  item.onmouseenter = function() {{ item.style.background = "#2a3a5a"; }};
+  item.onmouseleave = function() {{ item.style.background = ""; }};
+  item.innerHTML = '<span style="width:12px;display:inline-block;">'
+    + (_synShowThermal ? "\u2713" : "") + '</span>'
+    + '<span>Thermal ridge/trough</span>';
+  item.onclick = function(e) {{
+    e.stopPropagation();
+    synToggleThermal();
+    _synCloseCtxMenu();
+  }};
+  menu.appendChild(item);
+
+  document.body.appendChild(menu);
+  var rect = menu.getBoundingClientRect();
+  menu.style.top = (ev.clientY - rect.height) + "px";
+  setTimeout(function() {{ document.addEventListener("click", _synCloseCtxMenu); }}, 0);
+}}
+
 // ── Draw a double parallel line to approximate a "══" trough symbol ────────
 function _synDrawDoubleLine(coords, color, pane, group) {{
   var offDeg = 0.045;
@@ -4817,7 +4862,8 @@ function synRenderAnalysis(fullKey) {{
     }});
   }});
 
-  // ── Thermal ridge/trough — only the feature for the currently active level ──
+// ── Thermal ridge/trough — only the feature for the currently active level ──
+  if (!_synShowThermal) return;
   var _thermalData = _SYN_UA[fullKey] || {{}};
   var _thermalJobs = [];
   if (_synLevel === "500") {{
@@ -4832,11 +4878,6 @@ function synRenderAnalysis(fullKey) {{
     job.segs.forEach(function(seg) {{
       var ll = (seg.coords || []).map(function(c) {{ return [c[1], c[0]]; }});
       if (ll.length < 2) return;
-
-      L.polyline(ll, {{
-        color: job.color, weight: 3.0, opacity: 0.85,
-        dashArray: "4 4", pane: "analysisPane"
-      }}).addTo(_synAnalysisLayer);
 
       var _pts = _synInterpLine(ll, 0.35);
       _pts.forEach(function(p) {{
