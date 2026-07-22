@@ -7278,6 +7278,21 @@ function _gemEnsureNoQpfLabel(){{
   return el;
 }}
 
+function _gemEnsureNoQpf3hLabel(){{
+  var el=document.getElementById("gem-noqpf3h-label");
+  if(!el){{
+    el=document.createElement("div");
+    el.id="gem-noqpf3h-label";
+    el.style.cssText="position:fixed;top:58px;left:8px;z-index:10003;"
+      +"background:rgba(255,255,255,0.92);border:1px solid #cc0000;border-radius:4px;"
+      +"padding:3px 8px;font-family:Courier New,monospace;font-size:11px;"
+      +"color:#cc0000;font-weight:bold;pointer-events:none;display:none;";
+    el.textContent="3hr QPF not available on this timeframe";
+    document.body.appendChild(el);
+  }}
+  return el;
+}}
+
 function gemRender(idx){{
   var MAP=_getMap(); if(!MAP) return;
   var step=_GEM_STEPS[idx]; if(!step) return;
@@ -7295,6 +7310,9 @@ function gemRender(idx){{
 
   var _noQpfEl=_gemEnsureNoQpfLabel();
   _noQpfEl.style.display=(fd.qpf_available===false)?"block":"none";
+
+  var _noQpf3hEl=_gemEnsureNoQpf3hLabel();
+  _noQpf3hEl.style.display=(fd.qpf3h_available===false)?"block":"none";
 
   // ── CAPE fill ─────────────────────────────────────────────────────────
   if(_gemShowCape && fd.cape && fd.cape.length){{
