@@ -580,9 +580,10 @@ _PROBE_ISOB_VAR = 'AirTemp'   # representative for all isobaric vars at a given 
 
 # ── Surface variable map ──────────────────────────────────────────────────────
 _SFC_VAR_MAP = {
-    'Pressure_MSL': 'MSLP',
-    'Precip-Accum': '_PACC',
-    'CAPE':         '_CAPE',
+    'Pressure_MSL':    'MSLP',
+    'Precip-Accum':    '_PACC',
+    'Precip-Accum3h':  '_PACC3H',
+    'CAPE':            '_CAPE',
 }
 _SFC_VARS = list(_SFC_VAR_MAP.keys())
 
@@ -1107,7 +1108,7 @@ for vt in _sfc_target_vts:
                            url_fn(run_dt, fxx_mslp, 'CAPE'),
                            'CAPE', vt_mslp, ''))
 
-    # Precip target at 06Z
+# Precip target at 06Z
     _sfc_tasks.append((model_lbl,
                        url_fn(run_dt, fxx_tgt, 'Precip-Accum'),
                        'Precip-Accum', vt_pacc, ''))
@@ -1117,6 +1118,12 @@ for vt in _sfc_target_vts:
         _sfc_tasks.append((model_lbl,
                            url_fn(run_dt, fxx_prior, 'Precip-Accum'),
                            'Precip-Accum', vt_pacc, '_PRIOR'))
+
+    # Precip-Accum3h — direct 3-hour accumulation product at target fxx
+    if 0 <= fxx_tgt <= max_fxx:
+        _sfc_tasks.append((model_lbl,
+                           url_fn(run_dt, fxx_tgt, 'Precip-Accum3h'),
+                           'Precip-Accum3h', vt_pacc, ''))
 
 print(f'\nIsobaric tasks  : {len(_tasks)} GRIB2 files')
 print(f'Surface tasks   : {len(_sfc_tasks)} GRIB2 files '
@@ -1264,7 +1271,7 @@ async def _fetch_and_extract_all():
             continue
         for var_name in _SFC_VARS:
             for suffix, label in [('', '@Sfc'), ('_PRIOR', '@Sfc-Prior')]:
-                if var_name in ('Pressure_MSL', 'CAPE') and suffix == '_PRIOR':
+                if var_name in ('Pressure_MSL', 'CAPE', 'Precip-Accum3h') and suffix == '_PRIOR':
                     continue
                 col     = _SFC_VAR_MAP[var_name] + suffix
                 field   = f'{var_name}{label}'
@@ -1432,7 +1439,7 @@ if _n_err:
 
 _COLS = ['icao','wmo','stn_name','lat','lon','valid_time','hour',
          'PRES','HGHT','TEMP','DWPT','RELH','MIXR','DRCT','SPED',
-         'THTA','THTE','THTV','MSLP','QPF12H','CAPE']
+         'THTA','THTE','THTV','MSLP','QPF12H','QPF3H','CAPE']
 
 rows = []
 
@@ -1478,6 +1485,7 @@ for (lat, lon, vt_str, pres), fields in _point_data.items():
         'THTV':       _theta_v(temp, mixr, pres),
         'MSLP':       None,
         'QPF12H':     None,
+        'QPF3H':      None,
         'CAPE':       None,
         '_model':     prefix,
     })
@@ -1524,6 +1532,9 @@ for (lat, lon, vt_str), fields in _sfc_merged.items():
     else:
         qpf12h = None
 
+    pacc3h = fields.get('_PACC3H')
+    qpf3h  = round(max(0.0, float(pacc3h)), 2) if _is_valid(pacc3h) else None
+
     rows.append({
         'icao':       _icao(lat, lon, prefix),
         'wmo':        None,
@@ -1545,6 +1556,7 @@ for (lat, lon, vt_str), fields in _sfc_merged.items():
         'THTV':       None,
         'MSLP':       mslp,
         'QPF12H':     qpf12h,
+        'QPF3H':      qpf3h,
         'CAPE':       cape,
         '_model':     prefix,
     })
@@ -2223,13 +2235,13 @@ _ua_times_for_sfc = pd.DataFrame({
 _sfc_times = sorted(_ua_times_for_sfc.itertuples(index=False, name=None))
 print(f'  Valid times  : {len(_sfc_times)}  (synced to 850/700/500 hPa fetch timesteps)')
 
-def _qpf_build_grid(df, sigma=0.5, lon_vec=None, lat_vec=None):
-    sub = df[['lat', 'lon', 'QPF12H']].dropna(subset=['QPF12H'])
+def _qpf_build_grid(df, sigma=0.5, lon_vec=None, lat_vec=None, col='QPF12H'):
+    sub = df[['lat', 'lon', col]].dropna(subset=[col])
     if len(sub) < 8:
         return None
     lats = sub['lat'].values
     lons = sub['lon'].values
-    vals = sub['QPF12H'].values.astype(float)
+    vals = sub[col].values.astype(float)
     if lon_vec is None:
         lon_vec = np.array(sorted(np.unique(lons)))
     if lat_vec is None:
@@ -2418,14 +2430,20 @@ for (_date, _hr) in _sfc_times:
     globals()[f'cape_lon_vec_{_key}'] = cape_lon_vec
     globals()[f'cape_lat_vec_{_key}'] = cape_lat_vec
 
-    # ── QPF from ua_raw_df ────────────────────────────────────────────────────
+# ── QPF from ua_raw_df ────────────────────────────────────────────────────
     _qpf_lats = np.array(sorted(_sub['lat'].dropna().unique()))
     _qpf_lons = np.array(sorted(_sub['lon'].dropna().unique()))
     qpf_grid  = _qpf_build_grid(_sub, sigma=QPF_SIGMA,
-                                 lon_vec=_qpf_lons, lat_vec=_qpf_lats)
+                                 lon_vec=_qpf_lons, lat_vec=_qpf_lats, col='QPF12H')
     if qpf_grid is not None:
         print(f'  ✓ QPF12H {qpf_grid.shape} '
               f'{qpf_grid.min():.1f}–{qpf_grid.max():.1f} mm')
+
+    qpf3h_grid = _qpf_build_grid(_sub, sigma=QPF_SIGMA,
+                                  lon_vec=_qpf_lons, lat_vec=_qpf_lats, col='QPF3H')
+    if qpf3h_grid is not None:
+        print(f'  ✓ QPF3H  {qpf3h_grid.shape} '
+              f'{qpf3h_grid.min():.1f}–{qpf3h_grid.max():.1f} mm')
 
     _mslp_segs = _count_contours(slp_grid, lon_vec, lat_vec, MSLP_INTERVAL) if slp_grid is not None else 0
     _qpf_segs  = _count_contours(qpf_grid,
@@ -2438,6 +2456,7 @@ for (_date, _hr) in _sfc_times:
 
     globals()[f'slp_grid_{_key}']    = slp_grid
     globals()[f'qpf_grid_{_key}']    = qpf_grid
+    globals()[f'qpf3h_grid_{_key}']  = qpf3h_grid
     globals()[f'precip_grid_{_key}'] = qpf_grid
     globals()[f'lon_vec_{_key}']     = lon_vec
     globals()[f'lat_vec_{_key}']     = lat_vec
@@ -6989,6 +7008,10 @@ for _key in _sfc_keys:
     _qpf_available = _qpf is not None
     _qpf_bands = _extract_qpf_bands(_qpf, _qpf_latv, _qpf_lonv) if _qpf_available else []
 
+    _qpf3h = globals().get(f'qpf3h_grid_{_key}')
+    _qpf3h_available = _qpf3h is not None
+    _qpf3h_bands = _extract_qpf_bands(_qpf3h, _qpf_latv, _qpf_lonv) if _qpf3h_available else []
+
     _cape       = globals().get(f'cape_grid_{_key}')
     _cape_lonv  = globals().get(f'cape_lon_vec_{_key}', _lonv)
     _cape_latv  = globals().get(f'cape_lat_vec_{_key}', _latv)
@@ -6998,6 +7021,8 @@ for _key in _sfc_keys:
         'mslp': _mslp_contours,
         'qpf':  _qpf_bands,
         'qpf_available': _qpf_available,
+        'qpf3h': _qpf3h_bands,
+        'qpf3h_available': _qpf3h_available,
         'cape': _cape_bands,
         'hl':   hl_centers_by_key.get(_key, []),
         'bbox': [float(_latv[0]), float(_lonv[0]), float(_latv[-1]), float(_lonv[-1])]
@@ -7133,6 +7158,7 @@ _bar_html = '''
     <span class="bar-label">Layers</span>
     <button class="gem-layer-btn active" id="btn-mslp" onclick="gemToggle('mslp')">MSLP</button>
     <button class="gem-layer-btn active" id="btn-qpf"  onclick="gemToggle('qpf')">QPF 12h</button>
+    <button class="gem-layer-btn"        id="btn-qpf3h" onclick="gemToggle('qpf3h')">QPF 3h</button>
     <button class="gem-layer-btn"        id="btn-cape" onclick="gemToggle('cape')">CAPE</button>
   </div>
   <div class="bar-section">
@@ -7211,9 +7237,11 @@ function _utcKeyToLocalStr(key) {{
 var _gemStepIdx   = 0;
 var _gemShowMslp  = true;
 var _gemShowQpf   = true;
+var _gemShowQpf3h = false;
 var _gemShowCape  = false;
 var _gemMslpLayer  = null;
 var _gemQpfLayer   = null;
+var _gemQpf3hLayer = null;
 var _gemCapeLayer  = null;
 var _gemExporting  = false;
 
@@ -7223,9 +7251,10 @@ function _getMap(){{
 }}
 
 function gemToggle(which){{
-  if(which==="mslp")      {{ _gemShowMslp=!_gemShowMslp; document.getElementById("btn-mslp").classList.toggle("active",_gemShowMslp); }}
-  else if(which==="qpf")  {{ _gemShowQpf =!_gemShowQpf;  document.getElementById("btn-qpf" ).classList.toggle("active",_gemShowQpf);  }}
-  else if(which==="cape") {{ _gemShowCape=!_gemShowCape; document.getElementById("btn-cape").classList.toggle("active",_gemShowCape); }}
+  if(which==="mslp")       {{ _gemShowMslp =!_gemShowMslp;  document.getElementById("btn-mslp" ).classList.toggle("active",_gemShowMslp);  }}
+  else if(which==="qpf")   {{ _gemShowQpf  =!_gemShowQpf;   document.getElementById("btn-qpf"  ).classList.toggle("active",_gemShowQpf);   }}
+  else if(which==="qpf3h") {{ _gemShowQpf3h=!_gemShowQpf3h; document.getElementById("btn-qpf3h").classList.toggle("active",_gemShowQpf3h); }}
+  else if(which==="cape")  {{ _gemShowCape =!_gemShowCape;  document.getElementById("btn-cape" ).classList.toggle("active",_gemShowCape);  }}
   gemRender(_gemStepIdx);
 }}
 
@@ -7257,9 +7286,10 @@ function gemRender(idx){{
   var bannerEl=document.getElementById("gem-banner-time");
   if(bannerEl) bannerEl.textContent=_utcKeyToLocalStr(step.key);
 
-  if(_gemQpfLayer) {{ MAP.removeLayer(_gemQpfLayer);  _gemQpfLayer=null; }}
-  if(_gemMslpLayer){{ MAP.removeLayer(_gemMslpLayer); _gemMslpLayer=null; }}
-  if(_gemCapeLayer){{ MAP.removeLayer(_gemCapeLayer); _gemCapeLayer=null; }}
+  if(_gemQpfLayer)  {{ MAP.removeLayer(_gemQpfLayer);   _gemQpfLayer=null;   }}
+  if(_gemQpf3hLayer){{ MAP.removeLayer(_gemQpf3hLayer); _gemQpf3hLayer=null; }}
+  if(_gemMslpLayer) {{ MAP.removeLayer(_gemMslpLayer);  _gemMslpLayer=null;  }}
+  if(_gemCapeLayer) {{ MAP.removeLayer(_gemCapeLayer);  _gemCapeLayer=null;  }}
 
   var fd=_GEM_FRAMES[step.key]; if(!fd) return;
 
@@ -7312,6 +7342,30 @@ function gemRender(idx){{
       }}).addTo(_gemQpfLayer);
     }});
     _gemQpfLayer.addTo(MAP);
+  }}
+
+  // ── QPF 3h fill ───────────────────────────────────────────────────────
+  if(_gemShowQpf3h && fd.qpf3h && fd.qpf3h.length){{
+    _gemQpf3hLayer=L.layerGroup();
+    if(!MAP.getPane("qpf3hPane")){{
+      MAP.createPane("qpf3hPane");
+      MAP.getPane("qpf3hPane").style.zIndex=479;
+      MAP.getPane("qpf3hPane").style.pointerEvents="none";
+    }}
+    fd.qpf3h.slice().sort(function(a,b){{return a.level-b.level;}}).forEach(function(band){{
+      if(!band.coords||band.coords.length<3) return;
+      var rings=[band.coords].concat(band.holes||[]);
+      L.polygon(rings,{{
+        color:"none",
+        weight:0,
+        fillColor:band.color,
+        fillOpacity:0.75,
+        fillRule:"evenodd",
+        interactive:false,
+        pane:"qpf3hPane"
+      }}).addTo(_gemQpf3hLayer);
+    }});
+    _gemQpf3hLayer.addTo(MAP);
   }}
 
 
