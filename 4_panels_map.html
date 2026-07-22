@@ -1326,6 +1326,11 @@ function initP3WmsLayer(lmap) {
 
     _fetchP3WmsCapabilities().then(function() {
       _syncP3Wms();
+      // Warm the browser's HTTP cache for every step's contour tiles now,
+      // in the background, so during export the setParams(TIME) calls hit
+      // cache instead of a live network fetch — this is what actually makes
+      // per-step waits during export fast.
+      setTimeout(_prefetchP3WmsAllSteps, 500);
     });
 
     _p3DisWmsLayer = _L.tileLayer.wms(P3_WMS_BASE, {
@@ -1387,6 +1392,69 @@ function _syncP3Wms() {
   } catch(e) {
     console.error('[AWCC] _syncP3Wms THREW:', e);
     return Promise.resolve();
+  }
+}
+
+function _prefetchP3WmsAllSteps() {
+  try {
+    var win   = document.getElementById('frame-p3').contentWindow;
+    var steps = win['_GEM_STEPS'];
+    if (!steps || !steps.length || !_p3WmsLayer) return;
+
+    var coords = [];
+    if (_p3WmsLayer._tiles) {
+      coords = Object.keys(_p3WmsLayer._tiles).map(function(key) {
+        var parts = key.split(':');
+        return { x: parseInt(parts[0], 10), y: parseInt(parts[1], 10), z: parseInt(parts[2], 10) };
+      });
+    }
+    if (!coords.length) {
+      setTimeout(_prefetchP3WmsAllSteps, 300);
+      return;
+    }
+
+    var seen = {}, timeList = [];
+    steps.forEach(function(s) {
+      var ms = _p1KeyToMs(s.key);
+      if (ms === null) return;
+      var snapped = _nearestValidWmsTimeP3(ms);
+      if (!seen[snapped]) { seen[snapped] = true; timeList.push(snapped); }
+    });
+
+    var jobs = [];
+    timeList.forEach(function(ms) {
+      var iso = _msToISO(ms);
+      coords.forEach(function(c) { jobs.push({ coords: c, iso: iso }); });
+    });
+
+    console.log('[AWCC] preloading', jobs.length, 'p3 contour tile requests across', timeList.length, 'steps (background)');
+
+    var originalTime = _p3WmsLayer.wmsParams.TIME;
+    var idx = 0, active = 0, done = 0, CONCURRENCY = 6;
+
+    function launchOne() {
+      if (idx >= jobs.length) return;
+      var job = jobs[idx++];
+      active++;
+      _p3WmsLayer.wmsParams.TIME = job.iso;
+      var url = _p3WmsLayer.getTileUrl(job.coords);
+      var img = new Image();
+      img.onload = img.onerror = function() {
+        active--; done++;
+        if (idx < jobs.length) {
+          launchOne();
+        } else if (active === 0) {
+          _p3WmsLayer.wmsParams.TIME = originalTime;
+          console.log('[AWCC] p3 contour background preload complete —', done, '/', jobs.length);
+          _syncP3Wms();
+        }
+      };
+      img.src = url;
+    }
+
+    for (var k = 0; k < CONCURRENCY && k < jobs.length; k++) launchOne();
+  } catch(e) {
+    console.warn('[AWCC] _prefetchP3WmsAllSteps error:', e);
   }
 }
 
@@ -1962,7 +2030,7 @@ var EXPORT_ZOOM_LEVEL = 3.25;   // fixed zoom used for all exports, independent 
 async function zoomOutAndCenterEdmonton() {
   applyZoomToAllPanes(EXPORT_ZOOM_LEVEL);
   // Let tiles catch up after the view change
-  await sleep(1000);
+  await sleep(600);
 }
 
 function drawExportTimestamp(canvas, label) {
@@ -2057,11 +2125,42 @@ async function captureCombinedPanel() {
     );
   }
 
-  for (var pi = 0; pi < PANES.length; pi++) {
-    var p = PANES[pi];
+// Launch all 4 iframe captures in parallel — each html2canvas call only
+  // reads its own iframe's DOM, so there's no reason to serialize them and
+  // wait ~4x as long as necessary.
+  var captureJobs = PANES.map(function(p) {
     var pos = positions[p.id];
     var blankEl = document.getElementById('blank-' + p.id);
     if (blankEl && blankEl.classList.contains('visible')) {
+      return { p: p, pos: pos, blank: true };
+    }
+    var win = document.getElementById(p.frameId).contentWindow;
+    var capturePromise = html2canvas(win.document.body, {
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: '#1a1f26',
+      logging: false,
+      width: logHalfW,
+      height: logHalfH,
+      windowWidth: logHalfW,
+      windowHeight: logHalfH,
+      scale: EXPORT_SCALE
+    }).catch(function(capErr) {
+      console.warn('[AWCC] capture failed', p.id, capErr);
+      return null;
+    });
+    return { p: p, pos: pos, blank: false, capturePromise: capturePromise };
+  });
+
+  await Promise.all(captureJobs.map(function(job) {
+    return job.blank ? Promise.resolve() : job.capturePromise;
+  }));
+
+  for (var pi = 0; pi < captureJobs.length; pi++) {
+    var job = captureJobs[pi];
+    var p = job.p, pos = job.pos;
+
+    if (job.blank) {
       if (p.id === 'p3') {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(pos[0], pos[1], cropW, cropH);
@@ -2077,17 +2176,14 @@ async function captureCombinedPanel() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Icon (⊘), matching .no-data-icon
         ctx.fillStyle = 'rgba(85,94,107,0.3)';
         ctx.font = (28 * EXPORT_SCALE) + 'px "Courier New", monospace';
         ctx.fillText('⊘', cx, cy - 24 * EXPORT_SCALE);
 
-        // Label, matching .no-data-label
         ctx.fillStyle = '#555e6b';
         ctx.font = 'bold ' + (11 * EXPORT_SCALE) + 'px "Courier New", monospace';
         ctx.fillText(labelText.toUpperCase(), cx, cy + 6 * EXPORT_SCALE);
 
-        // Timestamp line, matching .no-data-ts
         if (tsText) {
           ctx.fillStyle = '#ced4da';
           ctx.font = (10 * EXPORT_SCALE) + 'px "Courier New", monospace';
@@ -2095,31 +2191,16 @@ async function captureCombinedPanel() {
         }
       }
       drawFrame(pos);
-      continue; // leave blank (other panes keep dark background)
+      continue;
     }
 
-    try {
-      var win = document.getElementById(p.frameId).contentWindow;
-      var paneCanvas = await html2canvas(win.document.body, {
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: '#1a1f26',
-        logging: false,
-        width: logHalfW,
-        height: logHalfH,
-        windowWidth: logHalfW,
-        windowHeight: logHalfH,
-        scale: EXPORT_SCALE
-      });
-      // Crop this pane's own capture centered on its own middle (Edmonton),
-      // then place the crop into its quadrant of the final grid.
+    var paneCanvas = await job.capturePromise;
+    if (paneCanvas) {
       ctx.drawImage(
         paneCanvas,
         srcX, srcY, cropW, cropH,
         pos[0], pos[1], cropW, cropH
       );
-    } catch (capErr) {
-      console.warn('[AWCC] capture failed', p.id, capErr);
     }
     drawFrame(pos);
   }
