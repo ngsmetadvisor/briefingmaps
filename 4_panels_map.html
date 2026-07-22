@@ -816,7 +816,7 @@ function _p1ShowFilteredOverlay(dataUrl) {
 // if the user scrubs the slider again before this one resolves.
 function _p1BuildFilteredOverlay(timeIso) {
   _p1LatestRequestedTime = timeIso;
-  _p1FetchAndCacheFilteredFrame(timeIso).then(function(dataUrl) {
+  return _p1FetchAndCacheFilteredFrame(timeIso).then(function(dataUrl) {
     if (_p1LatestRequestedTime !== timeIso) return;   // superseded — drop it
     _p1ShowFilteredOverlay(dataUrl);
   }).catch(function(e) {
@@ -931,8 +931,8 @@ function _p1ClearVorMax() {
 // orange/red cluster (min separation P1_VOR_MIN_SEP_KM apart), and draws a
 // bold red cross at each. Yellow-or-weaker clusters never get a cross.
 function _p1UpdateVorticityMax(timeIso) {
-  if (!_p1LeafletMap) return;
-  _p1LoadImgPixels(_p1VorWmsUrl(timeIso)).then(function(img) {
+  if (!_p1LeafletMap) return Promise.resolve();
+  return _p1LoadImgPixels(_p1VorWmsUrl(timeIso)).then(function(img) {
     var c = document.createElement('canvas');
     c.width = P1_VOR_IW; c.height = P1_VOR_IH;
     var ctx = c.getContext('2d', { willReadFrequently: true });
@@ -1083,24 +1083,27 @@ console.log('[AWCC][WMS-debug] filtered overlay mode — no raw tile layer added
 // Reads p1's own currently-displayed step and pushes the nearest valid TIME
 // to the WMS layer.
 function _syncP1Wms() {
-  if (!_p1LeafletMap) return;
+  if (!_p1LeafletMap) return Promise.resolve();
   try {
     var win    = document.getElementById('frame-p1').contentWindow;
     var steps  = win['_SYN_TIME_STEPS'];
     var slider = win.document.getElementById('syn-time-slider');
-    if (!steps || !slider) return;
+    if (!steps || !slider) return Promise.resolve();
     var idx  = parseInt(slider.value);
     var step = steps[idx];
-    if (!step) return;
+    if (!step) return Promise.resolve();
     var targetMs = _p1KeyToMs(step.key);
-    if (targetMs === null) return;
+    if (targetMs === null) return Promise.resolve();
     var snapped   = _nearestValidWmsTime(targetMs);
     var isoSnapped = _msToISO(snapped);
     console.log('[AWCC][WMS-debug] step', step.key, '→ requesting', isoSnapped);
-    _p1BuildFilteredOverlay(isoSnapped);
-    _p1UpdateVorticityMax(isoSnapped);
+    return Promise.all([
+      _p1BuildFilteredOverlay(isoSnapped),
+      _p1UpdateVorticityMax(isoSnapped)
+    ]);
   } catch(e) {
     console.error('[AWCC][WMS-debug] _syncP1Wms THREW:', e);
+    return Promise.resolve();
   }
 }
 
@@ -1344,43 +1347,68 @@ function initP3WmsLayer(lmap) {
   }
 }
 
+function _waitForWmsLayerLoad(layer, timeoutMs) {
+  return new Promise(function(resolve) {
+    if (!layer) { resolve(); return; }
+    var done = false;
+    var timer = setTimeout(function() {
+      if (done) return;
+      done = true;
+      layer.off('load', onLoad);
+      resolve();
+    }, timeoutMs || 4000);
+    function onLoad() {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      layer.off('load', onLoad);
+      resolve();
+    }
+    layer.once('load', onLoad);
+  });
+}
+
 function _syncP3Wms() {
-  if (!_p3WmsLayer) return;
+  if (!_p3WmsLayer) return Promise.resolve();
   try {
     var win    = document.getElementById('frame-p3').contentWindow;
     var steps  = win['_GEM_STEPS'];
     var slider = win.document.getElementById('gem-time-slider');
-    if (!steps || !slider) return;
+    if (!steps || !slider) return Promise.resolve();
     var idx  = parseInt(slider.value);
     var step = steps[idx];
-    if (!step) return;
+    if (!step) return Promise.resolve();
     var targetMs = _p1KeyToMs(step.key);
-    if (targetMs === null) return;
+    if (targetMs === null) return Promise.resolve();
     var snapped    = _nearestValidWmsTimeP3(targetMs);
     var isoSnapped = _msToISO(snapped);
     _p3WmsLayer.setParams({ TIME: isoSnapped });
+    return _waitForWmsLayerLoad(_p3WmsLayer, 4000);
   } catch(e) {
     console.error('[AWCC] _syncP3Wms THREW:', e);
+    return Promise.resolve();
   }
 }
 
 function _syncP3DisWms() {
-  if (!_p3DisWmsLayer || !_p3ThicknessDisOn) return;
+  if (!_p3DisWmsLayer || !_p3ThicknessDisOn) return Promise.resolve();
   try {
     var win    = document.getElementById('frame-p3').contentWindow;
     var steps  = win['_GEM_STEPS'];
     var slider = win.document.getElementById('gem-time-slider');
-    if (!steps || !slider) return;
+    if (!steps || !slider) return Promise.resolve();
     var idx  = parseInt(slider.value);
     var step = steps[idx];
-    if (!step) return;
+    if (!step) return Promise.resolve();
     var targetMs = _p1KeyToMs(step.key);
-    if (targetMs === null) return;
+    if (targetMs === null) return Promise.resolve();
     var snapped    = _nearestValidWmsTimeP3Dis(targetMs);
     var isoSnapped = _msToISO(snapped);
     _p3DisWmsLayer.setParams({ TIME: isoSnapped });
+    return _waitForWmsLayerLoad(_p3DisWmsLayer, 4000);
   } catch(e) {
     console.error('[AWCC] _syncP3DisWms THREW:', e);
+    return Promise.resolve();
   }
 }
 
@@ -2110,6 +2138,10 @@ async function exportAllPanels() {
     return;
   }
 
+  if (document.hidden) {
+    alert('This tab is in the background. Browsers throttle timers and network requests for background tabs, which can cause exported contour/vorticity layers to lag behind the displayed timestamp. Please bring this tab to the foreground and keep it focused for the duration of the export.');
+  }
+
   _exportRunning = true;
   var btn = document.getElementById('export-btn');
   var overlay = document.getElementById('export-overlay');
@@ -2134,8 +2166,15 @@ var zip = new JSZip();
       document.getElementById('master-slider').value = String(idx);
       onMasterSlider(idx);
 
-      // Give tiles / overlays time to finish rendering before capture
-      await sleep(1200);
+      // Wait for the actual WMS layers to finish loading this step's tiles
+      // instead of a fixed delay. A fixed delay is unreliable because
+      // background/unfocused tabs are throttled by the browser (slower
+      // timers AND deprioritized network requests) — the old sleep(1200)
+      // could elapse before contour/vorticity tiles for the new step had
+      // actually loaded, so the capture grabbed stale contours next to a
+      // timestamp that had already moved on.
+      await Promise.all([ _syncP1Wms(), _syncP3Wms(), _syncP3DisWms() ]);
+      await sleep(300);   // brief settle for paint/layout after load fires
 
       var combinedCanvas = await captureCombinedPanel();
       drawExportTimestamp(combinedCanvas, stepLabel);
