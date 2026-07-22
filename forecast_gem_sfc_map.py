@@ -312,6 +312,22 @@ def wind_barb_svg(cx, cy, R, wind_dir, wind_spd, wind_gust, S):
     )
 
 
+def _llj_barb_svg(wind_dir, wind_spd, S=30):
+    """Standalone wind barb icon (no circle/labels) — used for LLJ grid overlay."""
+    PAD = S * 0.9
+    W   = S * 1.4 + PAD * 2
+    H   = S * (BARB_STAFF_LEN + 0.6) + PAD * 2
+    cx  = W / 2
+    cy  = H - PAD
+    R   = S * 0.05
+    barb = wind_barb_svg(cx, cy, R, wind_dir, wind_spd, 0, S)
+    svg = (
+        f'<svg width="{W:.0f}" height="{H:.0f}" viewBox="0 0 {W:.2f} {H:.2f}" '
+        f'xmlns="http://www.w3.org/2000/svg" style="overflow:visible">{barb}</svg>'
+    )
+    return svg, W, H, cx, cy
+
+
 def pressure_tendency_svg(cx, cy, R, tendency, S, fs):
     """
     WMO pressure tendency symbol to the right of the station circle.
@@ -2629,6 +2645,24 @@ _INTERVALS = {'HGHT': 6.0, 'TEMP': 2.0, 'TTDP': 2.0, 'SPED': 5.0}
 LLJ_LEVELS = [25, 35, 45, 55, 999]
 LLJ_COLORS = ['#ffff00', '#ffaa00', '#ff0000', '#8800cc']
 
+# LLJ value-label grid — Alberta + 500 km buffer, ~100 km spacing
+import math
+LLJ_VAL_SPACING_KM = 100.0
+LLJ_VAL_BUFFER_KM  = 500.0
+_AB_LAT_MIN, _AB_LAT_MAX = 49.0, 60.0
+_AB_LON_MIN, _AB_LON_MAX = -120.0, -110.0
+_llj_buf_deg_lat = LLJ_VAL_BUFFER_KM / 111.0
+_llj_buf_deg_lon = LLJ_VAL_BUFFER_KM / (111.0 * math.cos(math.radians((_AB_LAT_MIN + _AB_LAT_MAX) / 2)))
+LLJ_VAL_LAT_MIN = _AB_LAT_MIN - _llj_buf_deg_lat
+LLJ_VAL_LAT_MAX = _AB_LAT_MAX + _llj_buf_deg_lat
+LLJ_VAL_LON_MIN = _AB_LON_MIN - _llj_buf_deg_lon
+LLJ_VAL_LON_MAX = _AB_LON_MAX + _llj_buf_deg_lon
+LLJ_VAL_SPACING_DEG_LAT = LLJ_VAL_SPACING_KM / 111.0
+
+# Outside the AB+buffer box, use a coarser grid across the rest of the domain
+LLJ_VAL_OUTER_SPACING_KM      = 500.0
+LLJ_VAL_OUTER_SPACING_DEG_LAT = LLJ_VAL_OUTER_SPACING_KM / 111.0
+
 
 HL_LEVELS           = [850, 700, 500]
 HL_SMOOTH_N         = 3
@@ -3295,9 +3329,12 @@ def _process_level(_df_hr, _plvl, _bands_850, _bands_500, _hght_levels, _key):
 
     _lvl_data['relh']       = _relh_segs
     _lvl_data['relh_fills'] = _relh_fills
-# ── Wind speed ────────────────────────────────────────────────────────
+
+  
+  # ── Wind speed ────────────────────────────────────────────────────────
     _sped_segs = []
     _llj_fills = []
+    _llj_value_pts = []
     lons_s, lats_s, vals_s = _pts_for(_col('SPED'))
     if lons_s is not None and len(lons_s) >= 8:
         grid_s, lv_s, ltv_s = _make_grid(lons_s, lats_s, vals_s, N=_n)
@@ -3325,8 +3362,80 @@ def _process_level(_df_hr, _plvl, _bands_850, _bands_500, _hght_levels, _key):
             except Exception as _e:
                 print(f'    ⚠ LLJ fill error: {_e}')
             plt.close(_fig_llj)
-    _lvl_data['sped']      = _sped_segs
-    _lvl_data['llj_fills'] = _llj_fills
+if _plvl == 850:
+            try:
+                _dcol = _col('DRCT')
+                _mask_uv = _df_hr[_col('SPED')].notna() & _df_hr[_dcol].notna()
+                _sub_uv  = _df_hr[_mask_uv]
+                if len(_sub_uv) >= 8:
+                    _lons_uv = _sub_uv['lon'].values.astype(float)
+                    _lats_uv = _sub_uv['lat'].values.astype(float)
+                    _spd_uv  = _sub_uv[_col('SPED')].values.astype(float)
+                    _dir_uv  = _sub_uv[_dcol].values.astype(float)
+                    _u_uv    = -_spd_uv * np.sin(np.radians(_dir_uv))
+                    _v_uv    = -_spd_uv * np.cos(np.radians(_dir_uv))
+                    if len(_u_uv) > _MAX_PTS:
+                        _n_side   = int(np.ceil(np.sqrt(_MAX_PTS)))
+                        _lon_bins = np.linspace(_lons_uv.min(), _lons_uv.max(), _n_side + 1)
+                        _lat_bins = np.linspace(_lats_uv.min(), _lats_uv.max(), _n_side + 1)
+                        _lon_idx  = np.clip(np.searchsorted(_lon_bins, _lons_uv) - 1, 0, _n_side - 1)
+                        _lat_idx  = np.clip(np.searchsorted(_lat_bins, _lats_uv) - 1, 0, _n_side - 1)
+                        _cell_key = _lat_idx * _n_side + _lon_idx
+                        _, _first = np.unique(_cell_key, return_index=True)
+                        _lons_uv, _lats_uv, _u_uv, _v_uv = (
+                            _lons_uv[_first], _lats_uv[_first], _u_uv[_first], _v_uv[_first])
+                    _ugrid, _lv_u, _ltv_u = _make_grid(_lons_uv, _lats_uv, _u_uv, N=_n)
+                    _vgrid, _, _         = _make_grid(_lons_uv, _lats_uv, _v_uv, N=_n)
+                    _ugrid = _smooth(_ugrid, _SIGMA['SPED'])
+                    _vgrid = _smooth(_vgrid, _SIGMA['SPED'])
+
+                    from scipy.interpolate import RegularGridInterpolator
+                    _interp_u = RegularGridInterpolator(
+                        (_ltv_u, _lv_u), _ugrid, bounds_error=False, fill_value=np.nan)
+                    _interp_v = RegularGridInterpolator(
+                        (_ltv_u, _lv_u), _vgrid, bounds_error=False, fill_value=np.nan)
+
+                    def _add_llj_barb_pt(_plat, _plon, _out_list, _size=26):
+                        _uv = _interp_u([[_plat, _plon]])[0]
+                        _vv = _interp_v([[_plat, _plon]])[0]
+                        if np.isnan(_uv) or np.isnan(_vv):
+                            return
+                        _pspd = float(np.sqrt(_uv**2 + _vv**2))
+                        _pdir = float((math.degrees(math.atan2(-_uv, -_vv)) + 360) % 360)
+                        _bsvg, _bw, _bh, _bcx, _bcy = _llj_barb_svg(_pdir, _pspd, S=_size)
+                        _out_list.append({
+                            'lat': round(float(_plat), 2),
+                            'lon': round(float(_plon), 2),
+                            'val': round(_pspd, 1),
+                            'dir': round(_pdir, 1),
+                            'svg': _bsvg, 'w': int(_bw), 'h': int(_bh),
+                            'cx': int(_bcx), 'cy': int(_bcy),
+                        })
+
+                    # ── Inner grid: AB + 500km buffer, 100km spacing ────────
+                    _lat_pts = np.arange(LLJ_VAL_LAT_MIN, LLJ_VAL_LAT_MAX + 0.01, LLJ_VAL_SPACING_DEG_LAT)
+                    for _plat in _lat_pts:
+                        _lon_spacing = LLJ_VAL_SPACING_KM / (111.0 * max(0.15, math.cos(math.radians(_plat))))
+                        _lon_pts = np.arange(LLJ_VAL_LON_MIN, LLJ_VAL_LON_MAX + 0.01, _lon_spacing)
+                        for _plon in _lon_pts:
+                            _add_llj_barb_pt(_plat, _plon, _llj_value_pts, _size=26)
+
+                    # ── Outer grid: rest of GEM domain, 500km spacing ───────
+                    _outer_lat_pts = np.arange(GEM_LAT_MIN, GEM_LAT_MAX + 0.01, LLJ_VAL_OUTER_SPACING_DEG_LAT)
+                    for _plat in _outer_lat_pts:
+                        _out_lon_spacing = LLJ_VAL_OUTER_SPACING_KM / (111.0 * max(0.15, math.cos(math.radians(_plat))))
+                        _outer_lon_pts = np.arange(GEM_LON_MIN, GEM_LON_MAX + 0.01, _out_lon_spacing)
+                        for _plon in _outer_lon_pts:
+                            _inside_inner = (LLJ_VAL_LAT_MIN <= _plat <= LLJ_VAL_LAT_MAX
+                                              and LLJ_VAL_LON_MIN <= _plon <= LLJ_VAL_LON_MAX)
+                            if _inside_inner:
+                                continue
+                            _add_llj_barb_pt(_plat, _plon, _llj_value_pts, _size=22)
+            except Exception as _e:
+                print(f'    ⚠ LLJ barb grid error: {_e}')
+    _lvl_data['sped']          = _sped_segs
+    _lvl_data['llj_fills']     = _llj_fills
+    _lvl_data['llj_barb_pts']  = _llj_value_pts
 
     # ── H/L detection ─────────────────────────────────────────────────────
     _ua_hl = []
@@ -4676,7 +4785,7 @@ _bar_html = '''
   <div class="bar-section">
     <button class="syn-lvl-btn" id="btn-thickness" onclick="synToggleThickness()"
             style="display:none;">700-500 &Delta;T</button>
-<button class="syn-lvl-btn" id="btn-llj" onclick="synToggleLLJ()" style="display:inline-block;">LLJ</button>
+<button class="syn-lvl-btn" id="btn-llj" onclick="synToggleLLJ()" oncontextmenu="synLLJValuesContextMenu(event)" title="Right-click for value labels" style="display:inline-block;">LLJ</button>
 <button class="syn-lvl-btn" id="btn-analysis" onclick="synToggleAnalysis()" oncontextmenu="synAnalysisContextMenu(event)">Analysis</button>
   </div>
   <div class="bar-section">
@@ -4715,6 +4824,7 @@ var _synShowStations  = {'true' if SHOW_STATION_SYMBOLS else 'false'};
 var _synShowTooltips  = {'true' if SHOW_TOOLTIPS else 'false'};
 var _synShowThickness = false;   // 700-500 hPa ΔT fill — 500 hPa only, default off
 var _synShowLLJ       = false;   // 850 hPa LLJ wind-speed shading — default off
+var _synShowLLJBarbs  = false;   // 850 hPa LLJ wind barbs (right-click toggle) — default off
 var _synBaseZoom     = 5;   // zoom at which H/L and W/C symbols are drawn at base size
 
 function _synZoomFactor(MAP) {{
@@ -4907,6 +5017,52 @@ function synToggleLLJ() {{
   if (_lljBtn) _lljBtn.classList.toggle("active", _synShowLLJ);
   _synBuildLegend();
   synRender();
+}}
+
+function synToggleLLJBarbs() {{
+  _synShowLLJBarbs = !_synShowLLJBarbs;
+  synRender();
+}}
+
+function _synCloseLLJCtxMenu() {{
+  var m = document.getElementById("syn-llj-ctx");
+  if (m) m.remove();
+  document.removeEventListener("click", _synCloseLLJCtxMenu);
+}}
+
+function synLLJValuesContextMenu(ev) {{
+  ev.preventDefault();
+  _synCloseLLJCtxMenu();
+  var menu = document.createElement("div");
+  menu.id = "syn-llj-ctx";
+  menu.style.cssText = "position:fixed;z-index:20000;background:#1c2333;"
+    + "border:1px solid #4a7fc1;border-radius:4px;padding:4px 0;"
+    + "font-family:Courier New,monospace;font-size:11px;color:#e0e0e0;"
+    + "box-shadow:0 4px 12px rgba(0,0,0,0.5);min-width:280px;";
+  menu.style.left = ev.clientX + "px";
+  menu.style.top  = ev.clientY + "px";
+
+  var item = document.createElement("div");
+  item.style.cssText = "padding:6px 12px;cursor:pointer;display:flex;"
+    + "align-items:center;gap:6px;";
+  item.onmouseenter = function() {{ item.style.background = "#2a3a5a"; }};
+  item.onmouseleave = function() {{ item.style.background = ""; }};
+  item.innerHTML = '<span style="width:12px;display:inline-block;">'
+    + (_synShowLLJBarbs ? "\u2713" : "") + '</span>'
+    + '<span>Show LLJ wind barbs (AB + 500km, 100km spacing)</span>';
+  item.onclick = function(e) {{
+    e.stopPropagation();
+    synToggleLLJBarbs();
+    _synCloseLLJCtxMenu();
+  }};
+  menu.appendChild(item);
+
+  document.body.appendChild(menu);
+  var rect = menu.getBoundingClientRect();
+  if (ev.clientY + rect.height > window.innerHeight) {{
+    menu.style.top = (ev.clientY - rect.height) + "px";
+  }}
+  setTimeout(function() {{ document.addEventListener("click", _synCloseLLJCtxMenu); }}, 0);
 }}
 
 // ── Analysis (trough lines: MSLP + 850/700/500 hPa) toggle ─────────────────
@@ -5123,7 +5279,7 @@ function synRenderUA(fullKey, stepLabel) {{
     }}
   }}
 
-  // ── 850 hPa LLJ wind-speed shading — 850 hPa toggle layer ──────────────
+// ── 850 hPa LLJ wind-speed shading — 850 hPa toggle layer ──────────────
   if (_synLevel === "850" && _synShowLLJ) {{
     var _lljFills = uaData.llj_fills || [];
     if (_lljFills.length) {{
@@ -5139,6 +5295,31 @@ function synRenderUA(fullKey, stepLabel) {{
           fillColor: poly.color, fillOpacity: 0.55,
           interactive: false, pane: "lljPane"
         }}).addTo(_synUALayer);
+      }});
+    }}
+  }}
+
+// ── 850 hPa LLJ wind barbs — right-click toggle ─────────────────────────
+  if (_synLevel === "850" && _synShowLLJBarbs) {{
+    var _lljBarbs = uaData.llj_barb_pts || [];
+    if (_lljBarbs.length) {{
+      if (!MAP.getPane("lljBarbPane")) {{
+        MAP.createPane("lljBarbPane");
+        MAP.getPane("lljBarbPane").style.zIndex        = 476;
+        MAP.getPane("lljBarbPane").style.pointerEvents = "none";
+      }}
+      _lljBarbs.forEach(function(p) {{
+        var _tipMark = L.marker([p.lat, p.lon], {{
+          icon: L.divIcon({{
+            html: p.svg,
+            iconSize: [p.w, p.h],
+            iconAnchor: [p.cx, p.cy],
+            className: ""
+          }}),
+          pane: "lljBarbPane"
+        }});
+        if (_synShowTooltips) _tipMark.bindTooltip(Math.round(p.val) + " kt / " + Math.round(p.dir) + "\u00b0");
+        _tipMark.addTo(_synUALayer);
       }});
     }}
   }}
