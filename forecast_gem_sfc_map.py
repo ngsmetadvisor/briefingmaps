@@ -4676,6 +4676,8 @@ var _SYN_UA          = {_ts_ua_json_str};
 var _TROUGH_DATA     = ({_conv_json_str}).trough || {{}};
 var KEY_HGT_DAM      = {{"850":{int(KEY_HGT_850/10)},"700":{int(KEY_HGT_700/10)},"500":{int(KEY_HGT_500/10)},"250":{int(KEY_HGT_250/10)}}};
 var KEY_HGT_M        = {{"850":{int(KEY_HGT_850)},"700":{int(KEY_HGT_700)},"500":{int(KEY_HGT_500)},"250":{int(KEY_HGT_250)}}};
+var _TEMP_BANDS_850  = {json.dumps(UA_TEMP_BANDS_850)};
+var _TEMP_BANDS_500  = {json.dumps(UA_TEMP_BANDS_500)};
 
 // ── State ─────────────────────────────────────────────────────────────────
 var _synLevel        = "850";
@@ -4791,6 +4793,38 @@ function _synDotMarker(lat, lon, color) {{
 }}
 
 // ── Level selector ────────────────────────────────────────────────────────
+function _synBuildLegend() {{
+  var el = document.getElementById("syn-legend");
+  if (!el) return;
+  if (_synLevel === "850" || _synLevel === "500") {{
+    var bands  = (_synLevel === "850") ? _TEMP_BANDS_850 : _TEMP_BANDS_500;
+    var sorted = bands.slice().sort(function(a,b) {{ return a[1] - b[1]; }});
+    el.innerHTML = sorted.map(function(b) {{
+      var lo = b[1], color = b[2];
+      return '<span style="display:inline-flex;align-items:center;gap:2px;margin:0 2px;">'
+        + '<span style="background:' + color + ';width:13px;height:11px;display:inline-block;border:1px solid #888;"></span>'
+        + '<span style="font-size:9px;">' + lo + '</span></span>';
+    }}).join('');
+  }} else if (_synLevel === "700") {{
+    el.innerHTML =
+        '<span style="font-size:10px;">RH:</span>'
+      + '<span style="display:inline-flex;align-items:center;gap:2px;margin:0 6px;">'
+      + '<span style="background:#add8e6;width:14px;height:11px;display:inline-block;border:1px solid #888;"></span>'
+      + '<span style="font-size:9px;">70-90%</span></span>'
+      + '<span style="display:inline-flex;align-items:center;gap:2px;margin:0 6px;">'
+      + '<span style="background:#00008b;width:14px;height:11px;display:inline-block;border:1px solid #888;"></span>'
+      + '<span style="font-size:9px;">90%+</span></span>'
+      + '<span style="margin:0 6px;display:inline-flex;align-items:center;gap:3px;">'
+      + '<svg width="26" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#008000" stroke-width="1.5" stroke-dasharray="4,3"/></svg>'
+      + '<span style="font-size:9px;">RH contour</span></span>'
+      + '<span style="margin:0 6px;display:inline-flex;align-items:center;gap:3px;">'
+      + '<svg width="26" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#008000" stroke-width="2"/></svg>'
+      + '<span style="font-size:9px;">70% / 90%</span></span>';
+  }} else {{
+    el.innerHTML = '';
+  }}
+}}
+
 function synSetLevel(lvl) {{
   _synLevel = lvl;
   _btnOff("btn-850"); _btnOff("btn-700"); _btnOff("btn-500");
@@ -4799,6 +4833,7 @@ function synSetLevel(lvl) {{
   if (_tBtn) {{
     _tBtn.style.display = (lvl === "500") ? "inline-block" : "none";
   }}
+  _synBuildLegend();
   synRender();
 }}
 
@@ -5055,9 +5090,9 @@ function synRenderUA(fullKey, stepLabel) {{
       L.marker([_lblLat, _lblLon], {{ icon: L.divIcon({{
         html: '<div style="font-size:12px;font-weight:bold;color:#fff;'
             + 'font-family:Courier New,monospace;background:#000000;'
-            + 'padding:0 2px;line-height:1.4;text-align:center;min-width:24px;">'
+            + 'padding:0 1px;line-height:1.2;text-align:center;">'
             + Math.round(ct.level / 10) + '</div>',
-        iconSize: [28,12], iconAnchor: [14,6], className: ""
+        iconSize: [20,12], iconAnchor: [10,6], className: ""
       }}), pane: "heightPane" }}).addTo(_synUALayer);
     }}
   }});
@@ -5717,7 +5752,14 @@ else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700);
 </script>
 '''
 
+_syn_legend_html = (
+    '<div id="syn-legend" style="'
+    'position:fixed;bottom:15px;left:0;right:0;z-index:10000;'
+    "text-align:center;font-family:'Courier New',monospace;font-size:10px;"
+    'color:#2a3a6a;pointer-events:none;"></div>'
+)
 m.get_root().html.add_child(Element(_bar_html))
+m.get_root().html.add_child(Element(_syn_legend_html))
 m.get_root().html.add_child(Element(_js))
 
 # ── Save ──────────────────────────────────────────────────────────────────
@@ -6295,6 +6337,8 @@ var _SYN_UA_STNS     = {_ts_ua_stn_json_str};
 var _SYN_UA          = {_ts_ua_json_str};
 var KEY_HGT_DAM      = {{"850":{int(KEY_HGT_850/10)},"700":{int(KEY_HGT_700/10)},"500":{int(KEY_HGT_500/10)},"250":{int(KEY_HGT_250/10)}}};
 var KEY_HGT_M        = {{"850":{int(KEY_HGT_850)},"700":{int(KEY_HGT_700)},"500":{int(KEY_HGT_500)},"250":{int(KEY_HGT_250)}}};
+var _TEMP_BANDS_850  = {json.dumps(UA_TEMP_BANDS_850)};
+var _TEMP_BANDS_500  = {json.dumps(UA_TEMP_BANDS_500)};
 
 // ── State ─────────────────────────────────────────────────────────────────
 var _synLevel        = "850";
@@ -6412,11 +6456,11 @@ function synRenderUA(fullKey, stepLabel) {{
       var _lblLat = _best ? _best[1] : ct.label_lat;
       var _lblLon = _best ? _best[0] : ct.label_lon;
       L.marker([_lblLat, _lblLon], {{ icon: L.divIcon({{
-        html: '<div style="font-size:14px;font-weight:bold;color:#fff;'
+        html: '<div style="font-size:12px;font-weight:bold;color:#fff;'
             + 'font-family:Courier New,monospace;background:#000000;'
-            + 'padding:0 3px;line-height:1.4;text-align:center;min-width:28px;">'
+            + 'padding:0 1px;line-height:1.2;text-align:center;">'
             + Math.round(ct.level / 10) + '</div>',
-        iconSize: [32,14], iconAnchor: [16,7], className: ""
+        iconSize: [20,12], iconAnchor: [10,6], className: ""
       }}), pane: "heightPane" }}).addTo(_synUALayer);
     }}
   }});
@@ -7538,37 +7582,42 @@ _bar_html = '''
   <div class="bar-section">
     <span id="gem-ts-label">—</span>
   </div>
-  <div class="bar-section">
-    <span class="bar-label">Legend</span>
-    <span style="font-size:10px;color:#aac4ff;">━ MSLP 4 hPa &nbsp;┅ bold 16 hPa</span>
-    <span style="font-size:10px;color:#aac4ff;margin-left:8px;">QPF 12h (mm):</span>
-    <span style="display:inline-flex;align-items:center;gap:3px;margin-left:4px;">
-      <span style="background:#c8f0a0;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">0.6</span>
-      <span style="background:#78d048;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">1.5</span>
-      <span style="background:#228b22;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">3</span>
-      <span style="background:#00aaaa;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">5</span>
-      <span style="background:#1a78c2;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">10</span>
-      <span style="background:#6a0dad;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">20</span>
-      <span style="background:#cc00cc;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">30</span>
-      <span style="background:#ffff00;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">40</span>
-      <span style="background:#ffaa00;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">50</span>
-      <span style="background:#ff4400;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">60</span>
-      <span style="background:#cc0000;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">80</span>
-      <span style="background:#880000;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">100</span>
-      <span style="background:#111111;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">120+</span>
-    </span>
-    <span style="font-size:10px;color:#aac4ff;margin-left:8px;">CAPE (J/kg):</span>
-    <span style="display:inline-flex;align-items:center;gap:3px;margin-left:4px;">
-      <span style="background:#888888;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">800</span>
-      <span style="background:#ffff00;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">1200</span>
-      <span style="background:#ffaa00;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">1500</span>
-      <span style="background:#ff0000;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">2000</span>
-      <span style="background:#8800cc;width:18px;height:14px;display:inline-block;border:1px solid #555;"></span><span style="font-size:9px;">3000+</span>
-    </span>
   </div>
-</div>
 '''
 m.get_root().html.add_child(Element(_bar_html))
+
+_gem_qpf_swatches = ''.join(
+    f'<span style="display:inline-flex;align-items:center;gap:2px;margin:0 3px;">'
+    f'<span style="background:{c};width:14px;height:11px;display:inline-block;border:1px solid #555;"></span>'
+    f'<span style="font-size:9px;">{l}</span></span>'
+    for l, c in [
+        ('0.6', '#c8f0a0'), ('1.5', '#78d048'), ('3', '#228b22'), ('5', '#00aaaa'),
+        ('10', '#1a78c2'), ('20', '#6a0dad'), ('30', '#cc00cc'), ('40', '#ffff00'),
+        ('50', '#ffaa00'), ('60', '#ff4400'), ('80', '#cc0000'), ('100', '#880000'),
+        ('120+', '#111111'),
+    ]
+)
+_gem_cape_swatches = ''.join(
+    f'<span style="display:inline-flex;align-items:center;gap:2px;margin:0 3px;">'
+    f'<span style="background:{c};width:14px;height:11px;display:inline-block;border:1px solid #555;"></span>'
+    f'<span style="font-size:9px;">{l}</span></span>'
+    for l, c in [
+        ('800', '#888888'), ('1200', '#ffff00'), ('1500', '#ffaa00'),
+        ('2000', '#ff0000'), ('3000+', '#8800cc'),
+    ]
+)
+
+_gem_mslp_legend_html = (
+    '<div id="gem-legend-mslp" style="'
+    'position:fixed;bottom:18px;left:0;right:0;z-index:10000;'
+    "text-align:center;font-family:'Courier New',monospace;font-size:10px;"
+    'color:#2a3a6a;pointer-events:none;">'
+    '━ MSLP 4 hPa &nbsp;&nbsp;┅ bold 16 hPa'
+    '&nbsp;&nbsp;&nbsp;<b>QPF 12h (mm):</b> ' + _gem_qpf_swatches +
+    '&nbsp;&nbsp;&nbsp;<b>CAPE (J/kg):</b> ' + _gem_cape_swatches +
+    '</div>'
+)
+m.get_root().html.add_child(Element(_gem_mslp_legend_html))
 
 _time_steps_str = _json.dumps(_sfc_time_steps)
 _frame_data_str = _json.dumps(_frame_data)
@@ -7877,9 +7926,9 @@ function gemRender(idx){{
         icon:L.divIcon({{
           html:'<div style="font-size:12px;font-weight:bold;color:#fff;'
               +'font-family:Courier New,monospace;background:#000000;'
-              +'padding:0 2px;line-height:1.4;text-align:center;min-width:24px;">'
+              +'padding:0 1px;line-height:1.2;text-align:center;">'
               +ct.level.toFixed(0)+'</div>',
-          iconSize:[32,12],iconAnchor:[16,6],className:""
+          iconSize:[26,12],iconAnchor:[13,6],className:""
         }}),
         pane:"heightPane"
       }}).addTo(_gemMslpLayer);
