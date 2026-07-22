@@ -7314,6 +7314,19 @@ function gemRender(idx){{
   var _noQpf3hEl=_gemEnsureNoQpf3hLabel();
   _noQpf3hEl.style.display=(fd.qpf3h_available===false)?"block":"none";
 
+  var _qpf3hBtn=document.getElementById("btn-qpf3h");
+  if(_qpf3hBtn){{
+    if(fd.qpf3h_available===false){{
+      _qpf3hBtn.style.background="#cc0000";
+      _qpf3hBtn.style.borderColor="#ff4444";
+      _qpf3hBtn.style.color="#ffffff";
+    }} else {{
+      _qpf3hBtn.style.background="";
+      _qpf3hBtn.style.borderColor="";
+      _qpf3hBtn.style.color="";
+    }}
+  }}
+
   // ── CAPE fill ─────────────────────────────────────────────────────────
   if(_gemShowCape && fd.cape && fd.cape.length){{
     _gemCapeLayer=L.layerGroup();
