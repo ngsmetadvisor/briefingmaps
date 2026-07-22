@@ -4749,6 +4749,9 @@ function _synDrawDoubleLine(coords, color, pane, group) {{
 }}
 
 // ── Render trough / analysis layer for the current timestep ────────────────
+// MSLP surface trough always shows when Analysis is on; the upper-air
+// trough shown is limited to whichever level (850/700/500) is currently
+// selected, so only one upper trough is ever on screen at a time.
 function synRenderAnalysis(fullKey) {{
   var MAP = _getMap(); if (!MAP) return;
   if (_synAnalysisLayer) {{ MAP.removeLayer(_synAnalysisLayer); _synAnalysisLayer = null; }}
@@ -4760,25 +4763,21 @@ function synRenderAnalysis(fullKey) {{
   }}
   _synAnalysisLayer = L.layerGroup();
 
+  var _lvlColors = {{ "500": "#1a4dff", "700": "#8B4513", "850": "#cc0000" }};
+
   var _jobs = [
-    {{ segs: (_TROUGH_DATA["mslp"] || {{}})[fullKey] || [], color: "#000000", dotted: true  }},
-    {{ segs: (_TROUGH_DATA["500"]  || {{}})[fullKey] || [], color: "#1a4dff", dotted: false }},
-    {{ segs: (_TROUGH_DATA["700"]  || {{}})[fullKey] || [], color: "#8B4513", dotted: false }},
-    {{ segs: (_TROUGH_DATA["850"]  || {{}})[fullKey] || [], color: "#cc0000", dotted: false }},
+    {{ segs: (_TROUGH_DATA["mslp"]     || {{}})[fullKey] || [], color: "#000000" }},
+    {{ segs: (_TROUGH_DATA[_synLevel]  || {{}})[fullKey] || [], color: _lvlColors[_synLevel] || "#1a4dff" }},
   ];
 
   _jobs.forEach(function(job) {{
     job.segs.forEach(function(seg) {{
       if (!seg.coords || seg.coords.length < 2) return;
       var ll = seg.coords.map(function(c) {{ return [c[1], c[0]]; }});
-      if (job.dotted) {{
-        L.polyline(ll, {{
-          color: job.color, weight: 2.2, opacity: 0.95,
-          dashArray: "2 6", pane: "analysisPane"
-        }}).addTo(_synAnalysisLayer);
-      }} else {{
-        _synDrawDoubleLine(ll, job.color, "analysisPane", _synAnalysisLayer);
-      }}
+      L.polyline(ll, {{
+        color: job.color, weight: 4.5, opacity: 0.95,
+        dashArray: "12 8", lineCap: "round", pane: "analysisPane"
+      }}).addTo(_synAnalysisLayer);
     }});
   }});
 
@@ -7254,6 +7253,7 @@ for _key in _sfc_keys:
         'qpf3h_available': _qpf3h_available,
         'cape': _cape_bands,
         'hl':   hl_centers_by_key.get(_key, []),
+        'trough': globals().get('_trough_mslp_by_key', {}).get(_key, []),
         'bbox': [float(_latv[0]), float(_lonv[0]), float(_latv[-1]), float(_lonv[-1])]
     }
     print(f'  {_key}: {len(_mslp_contours)} MSLP segs, {len(_qpf_bands)} QPF bands, {len(_cape_bands)} CAPE bands')
@@ -7389,6 +7389,7 @@ _bar_html = '''
     <button class="gem-layer-btn active" id="btn-qpf"  onclick="gemToggle('qpf')">QPF 12h</button>
     <button class="gem-layer-btn"        id="btn-qpf3h" onclick="gemToggle('qpf3h')">QPF 3h</button>
     <button class="gem-layer-btn"        id="btn-cape" onclick="gemToggle('cape')">CAPE</button>
+    <button class="gem-layer-btn"        id="btn-analysis" onclick="gemToggle('analysis')">Analysis</button>
   </div>
   <div class="bar-section">
     <span class="bar-label">Time</span>
@@ -7468,11 +7469,13 @@ var _gemShowMslp  = true;
 var _gemShowQpf   = true;
 var _gemShowQpf3h = false;
 var _gemShowCape  = false;
-var _gemMslpLayer  = null;
-var _gemQpfLayer   = null;
-var _gemQpf3hLayer = null;
-var _gemCapeLayer  = null;
-var _gemExporting  = false;
+var _gemMslpLayer     = null;
+var _gemQpfLayer      = null;
+var _gemQpf3hLayer    = null;
+var _gemCapeLayer     = null;
+var _gemAnalysisLayer = null;
+var _gemShowAnalysis  = false;
+var _gemExporting     = false;
 
 function _getMap(){{
   var k=Object.keys(window).filter(function(k){{return k.startsWith("map_");}});
@@ -7480,10 +7483,11 @@ function _getMap(){{
 }}
 
 function gemToggle(which){{
-  if(which==="mslp")       {{ _gemShowMslp =!_gemShowMslp;  document.getElementById("btn-mslp" ).classList.toggle("active",_gemShowMslp);  }}
-  else if(which==="qpf")   {{ _gemShowQpf  =!_gemShowQpf;   document.getElementById("btn-qpf"  ).classList.toggle("active",_gemShowQpf);   }}
-  else if(which==="qpf3h") {{ _gemShowQpf3h=!_gemShowQpf3h; document.getElementById("btn-qpf3h").classList.toggle("active",_gemShowQpf3h); }}
-  else if(which==="cape")  {{ _gemShowCape =!_gemShowCape;  document.getElementById("btn-cape" ).classList.toggle("active",_gemShowCape);  }}
+  if(which==="mslp")           {{ _gemShowMslp =!_gemShowMslp;  document.getElementById("btn-mslp" ).classList.toggle("active",_gemShowMslp);  }}
+  else if(which==="qpf")       {{ _gemShowQpf  =!_gemShowQpf;   document.getElementById("btn-qpf"  ).classList.toggle("active",_gemShowQpf);   }}
+  else if(which==="qpf3h")     {{ _gemShowQpf3h=!_gemShowQpf3h; document.getElementById("btn-qpf3h").classList.toggle("active",_gemShowQpf3h); }}
+  else if(which==="cape")      {{ _gemShowCape =!_gemShowCape;  document.getElementById("btn-cape" ).classList.toggle("active",_gemShowCape);  }}
+  else if(which==="analysis")  {{ _gemShowAnalysis=!_gemShowAnalysis; document.getElementById("btn-analysis").classList.toggle("active",_gemShowAnalysis); }}
   gemRender(_gemStepIdx);
 }}
 
@@ -7530,10 +7534,11 @@ function gemRender(idx){{
   var bannerEl=document.getElementById("gem-banner-time");
   if(bannerEl) bannerEl.textContent=_utcKeyToLocalStr(step.key);
 
-  if(_gemQpfLayer)  {{ MAP.removeLayer(_gemQpfLayer);   _gemQpfLayer=null;   }}
-  if(_gemQpf3hLayer){{ MAP.removeLayer(_gemQpf3hLayer); _gemQpf3hLayer=null; }}
-  if(_gemMslpLayer) {{ MAP.removeLayer(_gemMslpLayer);  _gemMslpLayer=null;  }}
-  if(_gemCapeLayer) {{ MAP.removeLayer(_gemCapeLayer);  _gemCapeLayer=null;  }}
+  if(_gemQpfLayer)      {{ MAP.removeLayer(_gemQpfLayer);      _gemQpfLayer=null;      }}
+  if(_gemQpf3hLayer)    {{ MAP.removeLayer(_gemQpf3hLayer);    _gemQpf3hLayer=null;    }}
+  if(_gemMslpLayer)     {{ MAP.removeLayer(_gemMslpLayer);     _gemMslpLayer=null;     }}
+  if(_gemCapeLayer)     {{ MAP.removeLayer(_gemCapeLayer);     _gemCapeLayer=null;     }}
+  if(_gemAnalysisLayer) {{ MAP.removeLayer(_gemAnalysisLayer); _gemAnalysisLayer=null; }}
 
   var fd=_GEM_FRAMES[step.key]; if(!fd) return;
 
@@ -7708,6 +7713,25 @@ function gemRender(idx){{
     }});
 
     _gemMslpLayer.addTo(MAP);
+  }}
+
+  // ── Surface trough (Analysis toggle) ───────────────────────────────────
+  if(_gemShowAnalysis && fd.trough && fd.trough.length){{
+    _gemAnalysisLayer=L.layerGroup();
+    if(!MAP.getPane("analysisPane")){{
+      MAP.createPane("analysisPane");
+      MAP.getPane("analysisPane").style.zIndex=500;
+      MAP.getPane("analysisPane").style.pointerEvents="none";
+    }}
+    fd.trough.forEach(function(seg){{
+      if(!seg.coords||seg.coords.length<2) return;
+      var ll=seg.coords.map(function(c){{return [c[1],c[0]];}});
+      L.polyline(ll,{{
+        color:"#000000", weight:4.5, opacity:0.95,
+        dashArray:"12 8", lineCap:"round", pane:"analysisPane"
+      }}).addTo(_gemAnalysisLayer);
+    }});
+    _gemAnalysisLayer.addTo(MAP);
   }}
 }}
 
