@@ -1231,7 +1231,7 @@ function _fetchP3WmsCapabilities() {
   return _p3WmsCapPromise;
 }
 
-function _nearestValidWmsTimeP3(targetMs) {
+ 
 function _nearestValidWmsTimeP3(targetMs) {
   if (!_p3WmsValidTimes || !_p3WmsValidTimes.length) return targetMs;
   var best = _p3WmsValidTimes[0], bestDiff = Math.abs(targetMs - best);
