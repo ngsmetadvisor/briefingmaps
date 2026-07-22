@@ -4809,9 +4809,10 @@ function _synBuildLegend() {{
   var el = document.getElementById("syn-legend");
   if (!el) return;
 
-  if (_synLevel === "850" || _synLevel === "500") {{
+if (_synLevel === "850" || _synLevel === "500") {{
     var bands  = (_synLevel === "850") ? _TEMP_BANDS_850 : _TEMP_BANDS_500;
-    var sorted = bands.slice().sort(function(a,b) {{ return a[1] - b[1]; }});
+    var sorted = bands.slice().sort(function(a,b) {{ return a[1] - b[1]; }})
+      .filter(function(b) {{ return b[2].toLowerCase() !== "#ffffff"; }});
     var swatches = sorted.map(function(b) {{ return _synSwatchCol(b[1], b[2]); }}).join('');
     el.innerHTML = _synLegendLabel("Temp (\u00b0C)") + swatches;
     el.style.display = "flex";
