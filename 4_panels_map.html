@@ -349,6 +349,51 @@
     text-align: right;
   }
 
+  #thickness-toggle-wrap {
+    position: absolute;
+    bottom: 8px; left: 8px;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(13,17,23,0.82);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    backdrop-filter: blur(4px);
+  }
+  #thickness-toggle-label {
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  #thickness-toggle-btn {
+    width: 32px; height: 16px;
+    border-radius: 8px;
+    background: #444c56;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  #thickness-toggle-btn.on {
+    background: var(--accent3);
+  }
+  #thickness-toggle-btn .knob {
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #fff;
+    transition: left 0.15s;
+  }
+  #thickness-toggle-btn.on .knob {
+    left: 18px;
+  }
+
   #export-overlay {
     position: fixed; inset: 0;
     background: rgba(13,17,23,0.92);
@@ -483,6 +528,10 @@
     <div class="pane-loading p3" id="load-p3">
       <div class="spinner"></div>
       <span>Loading surface map…</span>
+    </div>
+    <div id="thickness-toggle-wrap">
+      <span id="thickness-toggle-label">1000-500mb Thickness</span>
+      <button id="thickness-toggle-btn" class="on" onclick="toggleP3Thickness()"><span class="knob"></span></button>
     </div>
     <div class="pane-blank" id="blank-p3">
       <div class="no-data-icon">⊘</div>
@@ -1137,6 +1186,7 @@ var _p3WmsLayer         = null;
 var _p3WmsValidTimes    = null;
 var _p3WmsCapPromise    = null;
 var _p3LeafletMap       = null;
+var _p3ThicknessOn      = true;
 
 function _fetchP3WmsCapabilities() {
   if (_p3WmsCapPromise) return _p3WmsCapPromise;
@@ -1210,7 +1260,7 @@ function initP3WmsLayer(lmap) {
       opacity: 0.85,
       pane: 'p3WmsPane'
     });
-    _p3WmsLayer.addTo(lmap);
+    if (_p3ThicknessOn) _p3WmsLayer.addTo(lmap);
 
     _fetchP3WmsCapabilities().then(function() {
       _syncP3Wms();
@@ -1220,8 +1270,24 @@ function initP3WmsLayer(lmap) {
   }
 }
 
+function toggleP3Thickness() {
+  _p3ThicknessOn = !_p3ThicknessOn;
+  var btn = document.getElementById('thickness-toggle-btn');
+  if (btn) btn.classList.toggle('on', _p3ThicknessOn);
+
+  if (!_p3WmsLayer || !_p3LeafletMap) return;
+
+  if (_p3ThicknessOn) {
+    if (!_p3LeafletMap.hasLayer(_p3WmsLayer)) _p3WmsLayer.addTo(_p3LeafletMap);
+    _syncP3Wms();
+  } else {
+    if (_p3LeafletMap.hasLayer(_p3WmsLayer)) _p3LeafletMap.removeLayer(_p3WmsLayer);
+  }
+}
+
 function _syncP3Wms() {
   if (!_p3WmsLayer) return;
+  if (!_p3ThicknessOn) return;
   try {
     var win    = document.getElementById('frame-p3').contentWindow;
     var steps  = win['_GEM_STEPS'];
