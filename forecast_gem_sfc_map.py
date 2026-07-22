@@ -4862,6 +4862,8 @@ function synRenderAnalysis(fullKey) {{
     }});
   }});
 
+  _synAnalysisLayer.addTo(MAP);
+
 // ── Thermal ridge/trough — only the feature for the currently active level ──
   if (!_synShowThermal) return;
   var _thermalData = _SYN_UA[fullKey] || {{}};
