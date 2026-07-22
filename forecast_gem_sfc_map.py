@@ -3863,20 +3863,37 @@ TROUGH_SIGMA_PRE  = {'mslp': 2.0, '850': 2.0, '700': 2.0,  '500': 2.0}
 TROUGH_MAX_DIST   = 4.0
 TROUGH_MIN_PTS    = 4
 
-def _build_field_grid(pts, pad=1.5, N=150, sigma=3.0):
+def _decimate_field_pts(la, lo, va, max_pts=400):
+    """Grid-cell decimation — same approach as _decimate() in Block 05.
+    RBFInterpolator is ~O(n^3); without this, dense GEM point clouds
+    (tens of thousands of pts) make the fit effectively never finish."""
+    if len(va) <= max_pts:
+        return la, lo, va
+    n_side   = int(np.ceil(np.sqrt(max_pts)))
+    lon_bins = np.linspace(lo.min(), lo.max(), n_side + 1)
+    lat_bins = np.linspace(la.min(), la.max(), n_side + 1)
+    lon_idx  = np.clip(np.searchsorted(lon_bins, lo) - 1, 0, n_side - 1)
+    lat_idx  = np.clip(np.searchsorted(lat_bins, la) - 1, 0, n_side - 1)
+    cell_key = lat_idx * n_side + lon_idx
+    _, first = np.unique(cell_key, return_index=True)
+    return la[first], lo[first], va[first]
+
+
+def _build_field_grid(pts, pad=1.5, N=150, sigma=3.0, max_pts=400):
     """pts: list of (lat, lon, val). Returns (grid, lon_vec, lat_vec) or (None,None,None)."""
     if len(pts) < 8:
         return None, None, None
     la = np.array([p[0] for p in pts])
     lo = np.array([p[1] for p in pts])
     va = np.array([p[2] for p in pts])
+    la, lo, va = _decimate_field_pts(la, lo, va, max_pts=max_pts)
     lv  = np.linspace(lo.min()-pad, lo.max()+pad, N)
     ltv = np.linspace(la.min()-pad, la.max()+pad, N)
     GL, GLA = np.meshgrid(lv, ltv)
     try:
         rbf  = RBFInterpolator(np.column_stack([lo, la]), va,
                                kernel='thin_plate_spline',
-                               smoothing=max(0.3*len(pts), 1e-6))
+                               smoothing=max(0.3*len(va), 1e-6))
         grid = rbf(np.column_stack([GL.ravel(), GLA.ravel()])).reshape(N, N)
     except Exception:
         return None, None, None
