@@ -2208,11 +2208,20 @@ _sfc_df['_vt']   = pd.to_datetime(
 _sfc_df['_date'] = _sfc_df['_vt'].dt.date
 _sfc_df['_hour'] = _sfc_df['_vt'].dt.hour
 
-_sfc_times = sorted(
-    _sfc_df[['_date', '_hour']].drop_duplicates()
-    .itertuples(index=False, name=None)
-)
-print(f'  Valid times  : {len(_sfc_times)}')
+# ── Drive MSLP timesteps off the SAME fetching schedule as 850/700/500 hPa ──
+# (ua_summary_df is the source used to build _synoptic_times for the UA levels
+#  in Block 5A / Block 06 — reuse it here so MSLP never drifts from those times)
+if 'ua_summary_df' not in globals():
+    raise RuntimeError('❌ ua_summary_df not found — run the UA summary cell first')
+
+_ua_vt_for_sfc  = pd.to_datetime(ua_summary_df['valid_time'])
+_ua_times_for_sfc = pd.DataFrame({
+    '_date': _ua_vt_for_sfc.dt.date,
+    '_hour': ua_summary_df['hour'],
+}).drop_duplicates()
+
+_sfc_times = sorted(_ua_times_for_sfc.itertuples(index=False, name=None))
+print(f'  Valid times  : {len(_sfc_times)}  (synced to 850/700/500 hPa fetch timesteps)')
 
 def _qpf_build_grid(df, sigma=0.5, lon_vec=None, lat_vec=None):
     sub = df[['lat', 'lon', 'QPF12H']].dropna(subset=['QPF12H'])
