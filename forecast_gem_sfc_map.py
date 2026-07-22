@@ -4696,6 +4696,51 @@ function _synZoomFactor(MAP) {{
   return Math.max(0.4, Math.min(3.0, f));
 }}
 
+// ── Shared H/L symbol sizing (20% smaller than before) ─────────────────────
+// Used identically by the UA map and the MSLP surface map — change sizes
+// here (and the matching block in the MSLP script) only.
+function _hlWcBaseSizes(zf) {{
+  return {{
+    r:       6.4 * zf,
+    boxW:    56  * zf,
+    boxH:    76  * zf,
+    innerW:  48  * zf,
+    cyBase:  52  * zf,
+    fontHL:  Math.round(41.6 * zf),
+    fontVal: Math.round(12   * zf),
+    strokeW: 2.0 * zf
+  }};
+}}
+
+function _hlMarkerHtml(c, zf, valDivisor) {{
+  var s = _hlWcBaseSizes(zf);
+  var _shadow = "1px 1px 0 white,-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white";
+  var _cx = s.boxW / 2, _cy = s.cyBase - s.r;
+  var _svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + s.boxW + '" height="' + s.boxH + '" style="overflow:visible;pointer-events:none;">'
+    + '<circle cx="' + _cx + '" cy="' + _cy + '" r="' + s.r + '" '
+    + 'fill="none" stroke="#000000" stroke-width="' + s.strokeW + '"/>'
+    + '<line x1="' + (_cx - s.r * 0.65) + '" y1="' + (_cy - s.r * 0.65) + '" '
+    + 'x2="' + (_cx + s.r * 0.65) + '" y2="' + (_cy + s.r * 0.65) + '" '
+    + 'stroke="#000000" stroke-width="' + s.strokeW + '"/>'
+    + '<line x1="' + (_cx + s.r * 0.65) + '" y1="' + (_cy - s.r * 0.65) + '" '
+    + 'x2="' + (_cx - s.r * 0.65) + '" y2="' + (_cy + s.r * 0.65) + '" '
+    + 'stroke="#000000" stroke-width="' + s.strokeW + '"/>'
+    + '</svg>';
+  var _valLabel = Math.round(c.val / valDivisor);
+  var _html = '<div style="position:relative;width:' + s.innerW + 'px;height:' + s.boxH + 'px;pointer-events:none;">'
+    + '<div style="position:absolute;top:' + (-15 * zf) + 'px;left:0;width:' + s.innerW + 'px;text-align:center;'
+    + 'font-size:' + s.fontHL + 'px;font-weight:bold;color:#000000;'
+    + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
+    + 'text-shadow:' + _shadow + ';">' + c.type + '</div>'
+    + _svg
+    + '<div style="position:absolute;top:' + (_cy + s.r + 2) + 'px;left:0;width:' + s.innerW + 'px;'
+    + 'text-align:center;font-size:' + s.fontVal + 'px;font-weight:bold;color:#000000;'
+    + 'font-family:Courier New,monospace;line-height:1;">'
+    + _valLabel + '</div>'
+    + '</div>';
+  return {{ html: _html, boxW: s.boxW, boxH: s.boxH, cx: _cx, cy: _cy }};
+}}
+
 
 
 
@@ -5008,11 +5053,11 @@ function synRenderUA(fullKey, stepLabel) {{
       var _lblLat = _best ? _best[1] : ct.label_lat;
       var _lblLon = _best ? _best[0] : ct.label_lon;
       L.marker([_lblLat, _lblLon], {{ icon: L.divIcon({{
-        html: '<div style="font-size:14px;font-weight:bold;color:#fff;'
+        html: '<div style="font-size:12px;font-weight:bold;color:#fff;'
             + 'font-family:Courier New,monospace;background:#000000;'
-            + 'padding:0 3px;line-height:1.4;text-align:center;min-width:28px;">'
+            + 'padding:0 2px;line-height:1.4;text-align:center;min-width:24px;">'
             + Math.round(ct.level / 10) + '</div>',
-        iconSize: [32,14], iconAnchor: [16,7], className: ""
+        iconSize: [28,12], iconAnchor: [14,6], className: ""
       }}), pane: "heightPane" }}).addTo(_synUALayer);
     }}
   }});
@@ -5085,7 +5130,7 @@ function synRenderUA(fullKey, stepLabel) {{
       var ll  = ct.coords.map(function(c) {{ return [c[1], c[0]]; }});
       var isBold = (Math.round(rh) === 90 || Math.round(rh) === 70);
       var _rLine = L.polyline(ll, {{
-        color: "#008000", weight: isBold ? 4 : 2,
+        color: "#008000", weight: isBold ? 2 : 1,
         opacity: 1.0, dashArray: isBold ? "1 0" : "4 4"
       }});
       if (_synShowTooltips) _rLine.bindTooltip("700 hPa RH=" + Math.round(rh) + "%");
@@ -5111,47 +5156,19 @@ function synRenderUA(fullKey, stepLabel) {{
   }}
 
   
-    // ── UA H/L centres ────────────────────────────────────────────────────
+   // ── UA H/L centres — sizing shared with the MSLP map ────────────────────
   var _uaHL = (_SYN_UA[fullKey] || {{}})["hl_" + _synLevel] || [];
   _uaHL.forEach(function(c) {{
-    var _shadow = "1px 1px 0 white,-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white";
-    var _r = 8 * _zf;
-    var _boxW = 70 * _zf, _boxH = 95 * _zf, _innerW = 60 * _zf;
-    var _cx = _boxW / 2, _cy = (65 * _zf) - _r;
-    var _fontHL  = Math.round(52 * _zf);
-    var _fontVal = Math.round(15 * _zf);
-    var _strokeW = 2.5 * _zf;
-    var _svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + _boxW + '" height="' + _boxH + '" style="overflow:visible;pointer-events:none;">'
-      + '<circle cx="' + _cx + '" cy="' + _cy + '" r="' + _r + '" '
-      + 'fill="none" stroke="#000000" stroke-width="' + _strokeW + '"/>'
-      + '<line x1="' + (_cx - _r * 0.65) + '" y1="' + (_cy - _r * 0.65) + '" '
-      + 'x2="' + (_cx + _r * 0.65) + '" y2="' + (_cy + _r * 0.65) + '" '
-      + 'stroke="#000000" stroke-width="' + _strokeW + '"/>'
-      + '<line x1="' + (_cx + _r * 0.65) + '" y1="' + (_cy - _r * 0.65) + '" '
-      + 'x2="' + (_cx - _r * 0.65) + '" y2="' + (_cy + _r * 0.65) + '" '
-      + 'stroke="#000000" stroke-width="' + _strokeW + '"/>'
-      + '</svg>';
-var _valLabel = Math.round(c.val / 10);  // convert m → dam
-      var _html = '<div style="position:relative;width:' + _innerW + 'px;height:' + _boxH + 'px;pointer-events:none;">'
-        + '<div style="position:absolute;top:' + (-15 * _zf) + 'px;left:0;width:' + _innerW + 'px;text-align:center;'
-        + 'font-size:' + _fontHL + 'px;font-weight:bold;color:#000000;'
-        + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
-        + 'text-shadow:' + _shadow + ';">' + c.type + '</div>'
-        + _svg
-        + '<div style="position:absolute;top:' + (_cy + _r + 2) + 'px;left:0;width:' + _innerW + 'px;'
-        + 'text-align:center;font-size:' + _fontVal + 'px;font-weight:bold;color:#000000;'
-        + 'font-family:Courier New,monospace;line-height:1;">'
-        + _valLabel + '</div>'
-        + '</div>';
+    var _m = _hlMarkerHtml(c, _zf, 10);  // convert m → dam
     var _hlMark = L.marker([c.lat, c.lon], {{
-      icon: L.divIcon({{ html: _html, iconSize: [_boxW, _boxH], iconAnchor: [_cx, _cy], className: "" }}),
+      icon: L.divIcon({{ html: _m.html, iconSize: [_m.boxW, _m.boxH], iconAnchor: [_m.cx, _m.cy], className: "" }}),
       zIndexOffset: 200
     }});
     if (_synShowTooltips) _hlMark.bindTooltip(_synLevel + " hPa " + c.type);
     _hlMark.addTo(_synUALayer);
   }});
 
-  // ── UA W/C centres ────────────────────────────────────────────────────
+  // ── UA W/C centres (20% smaller than before) ────────────────────────────
   var _uaWC = (_SYN_UA[fullKey] || {{}})["wc_" + _synLevel] || [];
   _uaWC.forEach(function(c) {{
     var _isW     = c.type === "W";
@@ -5165,8 +5182,8 @@ var _valLabel = Math.round(c.val / 10);  // convert m → dam
       + ",2px 0 0 "     + _bgColor
       + ",0 -2px 0 "    + _bgColor
       + ",0 2px 0 "     + _bgColor;
-    var _fontWC = Math.round(61 * _zf);
-    var _wcW    = 70 * _zf, _wcH = 65 * _zf;
+    var _fontWC = Math.round(48.8 * _zf);
+    var _wcW    = 56 * _zf, _wcH = 52 * _zf;
     var _html = '<div style="font-size:' + _fontWC + 'px;font-weight:bold;color:' + _fgColor + ';'
       + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
       + 'text-shadow:' + _shadow + ';pointer-events:none;">' + c.type + '</div>';
@@ -6286,7 +6303,7 @@ var _synUALayer      = null;
 var _synStnLayer     = null;
 var _synShowStations = {'true' if SHOW_STATION_SYMBOLS else 'false'};
 var _synShowTooltips = {'true' if SHOW_TOOLTIPS else 'false'};
-var _synBaseZoom     = 5;   // zoom at which H/L and W/C symbols are drawn at base size , LLJ
+var _synBaseZoom     = 5;   // LLJ, zoom at which H/L and W/C symbols are drawn at base size , LLJ
 
 function _synZoomFactor(MAP) {{
   var z = MAP ? MAP.getZoom() : _synBaseZoom;
@@ -6443,7 +6460,7 @@ function synRenderUA(fullKey, stepLabel) {{
     }}) }}).addTo(_synUALayer);
   }});
 
-  // ── UA H/L centres ────────────────────────────────────────────────────
+  // ── UA H/L centres LLJ ────────────────────────────────────────────────────
   var _uaHL = (_SYN_UA[fullKey] || {{}})["hl_" + _synLevel] || [];
   _uaHL.forEach(function(c) {{
     var _shadow = "1px 1px 0 white,-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white";
@@ -7604,6 +7621,57 @@ function _getMap(){{
   return k.length?window[k[0]]:null;
 }}
 
+var _gemBaseZoom = 5;   // zoom at which H/L symbols are drawn at base size
+function _gemZoomFactor(MAP){{
+  var z = MAP ? MAP.getZoom() : _gemBaseZoom;
+  var f = Math.pow(1.3, z - _gemBaseZoom);
+  return Math.max(0.4, Math.min(3.0, f));
+}}
+
+// ── Shared H/L symbol sizing — identical to the UA map's block, so both
+// stay in sync. Change sizes there (and here) together.
+function _hlWcBaseSizes(zf) {{
+  return {{
+    r:       6.4 * zf,
+    boxW:    56  * zf,
+    boxH:    76  * zf,
+    innerW:  48  * zf,
+    cyBase:  52  * zf,
+    fontHL:  Math.round(41.6 * zf),
+    fontVal: Math.round(12   * zf),
+    strokeW: 2.0 * zf
+  }};
+}}
+
+function _hlMarkerHtml(c, zf, valDivisor) {{
+  var s = _hlWcBaseSizes(zf);
+  var _shadow = "1px 1px 0 white,-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white";
+  var _cx = s.boxW / 2, _cy = s.cyBase - s.r;
+  var _svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + s.boxW + '" height="' + s.boxH + '" style="overflow:visible;pointer-events:none;">'
+    + '<circle cx="' + _cx + '" cy="' + _cy + '" r="' + s.r + '" '
+    + 'fill="none" stroke="#000000" stroke-width="' + s.strokeW + '"/>'
+    + '<line x1="' + (_cx - s.r * 0.65) + '" y1="' + (_cy - s.r * 0.65) + '" '
+    + 'x2="' + (_cx + s.r * 0.65) + '" y2="' + (_cy + s.r * 0.65) + '" '
+    + 'stroke="#000000" stroke-width="' + s.strokeW + '"/>'
+    + '<line x1="' + (_cx + s.r * 0.65) + '" y1="' + (_cy - s.r * 0.65) + '" '
+    + 'x2="' + (_cx - s.r * 0.65) + '" y2="' + (_cy + s.r * 0.65) + '" '
+    + 'stroke="#000000" stroke-width="' + s.strokeW + '"/>'
+    + '</svg>';
+  var _valLabel = Math.round(c.val / valDivisor);
+  var _html = '<div style="position:relative;width:' + s.innerW + 'px;height:' + s.boxH + 'px;pointer-events:none;">'
+    + '<div style="position:absolute;top:' + (-15 * zf) + 'px;left:0;width:' + s.innerW + 'px;text-align:center;'
+    + 'font-size:' + s.fontHL + 'px;font-weight:bold;color:#000000;'
+    + 'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
+    + 'text-shadow:' + _shadow + ';">' + c.type + '</div>'
+    + _svg
+    + '<div style="position:absolute;top:' + (_cy + s.r + 2) + 'px;left:0;width:' + s.innerW + 'px;'
+    + 'text-align:center;font-size:' + s.fontVal + 'px;font-weight:bold;color:#000000;'
+    + 'font-family:Courier New,monospace;line-height:1;">'
+    + _valLabel + '</div>'
+    + '</div>';
+  return {{ html: _html, boxW: s.boxW, boxH: s.boxH, cx: _cx, cy: _cy }};
+}}
+
 function gemToggle(which){{
   if(which==="mslp")           {{ _gemShowMslp =!_gemShowMslp;  document.getElementById("btn-mslp" ).classList.toggle("active",_gemShowMslp);  }}
   else if(which==="qpf")       {{ _gemShowQpf  =!_gemShowQpf;   document.getElementById("btn-qpf"  ).classList.toggle("active",_gemShowQpf);   }}
@@ -7807,29 +7875,22 @@ function gemRender(idx){{
       if(!_best) return;
       L.marker([_best[0],_best[1]],{{
         icon:L.divIcon({{
-          html:'<div style="font-size:11px;font-weight:bold;color:#fff;'
+          html:'<div style="font-size:12px;font-weight:bold;color:#fff;'
               +'font-family:Courier New,monospace;background:#000000;'
-              +'padding:0 3px;line-height:1.4;text-align:center;min-width:28px;">'
+              +'padding:0 2px;line-height:1.4;text-align:center;min-width:24px;">'
               +ct.level.toFixed(0)+'</div>',
-          iconSize:[36,14],iconAnchor:[18,7],className:""
+          iconSize:[32,12],iconAnchor:[16,6],className:""
         }}),
         pane:"heightPane"
       }}).addTo(_gemMslpLayer);
     }});
 
-    // ── H/L centres ───────────────────────────────────────────────────
+    // ── H/L centres — same symbol + sizing code as the UA map ──────────
+    var _gemZf = _gemZoomFactor(MAP);
     (fd.hl||[]).forEach(function(c){{
-      var _isH = c.type==="H";
-      var _shadow = "1px 1px 0 white,-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white";
+      var _m = _hlMarkerHtml(c, _gemZf, 1);  // MSLP val already in hPa
       L.marker([c.lat,c.lon],{{
-        icon:L.divIcon({{
-          html:'<div style="font-size:52px;font-weight:bold;'
-              +'color:'+(_isH?'#000000':'#000000')+';'
-              +'font-family:Palatino Linotype,Palatino,serif;line-height:1;'
-              +'text-shadow:'+_shadow+';pointer-events:none;">'
-              +c.type+'</div>',
-          iconSize:[60,70],iconAnchor:[30,35],className:""
-        }}),
+        icon: L.divIcon({{ html: _m.html, iconSize: [_m.boxW, _m.boxH], iconAnchor: [_m.cx, _m.cy], className: "" }}),
         pane:"heightPane"
       }}).addTo(_gemMslpLayer);
     }});
@@ -7862,6 +7923,10 @@ function _gemInit(){{
   if(slider){{
     slider.max=String(Math.max(0,_GEM_STEPS.length-1));
     slider.value="0";
+  }}
+  var MAP=_getMap();
+  if(MAP){{
+    MAP.on('zoomend', function(){{ gemRender(_gemStepIdx); }});
   }}
   gemRender(0);
 }}
