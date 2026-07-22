@@ -3497,8 +3497,8 @@ for (_date_val, _hr) in _synoptic_times:
         'levels':             _hr_data,
         'instab':             _instab_cts,
         'thickness_fill':     _thickness_fills,
-        'thermal_ridge_850':  [_seg_to_dict(s) for s in globals().get(f'ridge_segs_{_key}',        [])],
-        'thermal_trough_850': [_seg_to_dict(s) for s in globals().get(f'trough_segs_{_key}',       [])],
+        'thermal_ridge_850':  [_seg_to_dict(s) for s in globals().get(f'ridge_segs_850_{_key}',    [])],
+        'thermal_trough_850': [_seg_to_dict(s) for s in globals().get(f'trough_segs_850_{_key}',   [])],
         'thermal_ridge_700':  [_seg_to_dict(s) for s in globals().get(f'ridge_segs_700_{_key}',    [])],
         'thermal_trough_700': [_seg_to_dict(s) for s in globals().get(f'trough_segs_700_{_key}',   [])],
         'thermal_ridge_500':  [_seg_to_dict(s) for s in globals().get(f'ridge_segs_500_{_key}',    [])],
@@ -4710,6 +4710,40 @@ function _setExportStatus(msg) {{
   if (el) el.textContent = msg;
 }}
 
+// ── Thermal ridge/trough helpers ───────────────────────────────────────────
+function _synInterpLine(ll, spacingDeg) {{
+  var out = [];
+  if (!ll || ll.length < 2) return out;
+  out.push(ll[0]);
+  var accum = 0;
+  for (var i = 1; i < ll.length; i++) {{
+    var dlat = ll[i][0] - ll[i-1][0];
+    var dlon = ll[i][1] - ll[i-1][1];
+    accum += Math.sqrt(dlat*dlat + dlon*dlon);
+    if (accum >= spacingDeg) {{ out.push(ll[i]); accum = 0; }}
+  }}
+  if (out.length < 2) out.push(ll[ll.length - 1]);
+  return out;
+}}
+function _synTriMarker(lat, lon, color) {{
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14">'
+          + '<polygon points="7,1 13,13 1,13" fill="' + color + '" stroke="#000" stroke-width="1.2"/>'
+          + '</svg>';
+  return L.marker([lat, lon], {{
+    icon: L.divIcon({{ html: svg, iconSize: [14, 14], iconAnchor: [7, 7], className: "" }}),
+    pane: "analysisPane", interactive: false
+  }});
+}}
+function _synDotMarker(lat, lon, color) {{
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10">'
+          + '<circle cx="5" cy="5" r="4" fill="' + color + '" stroke="#000" stroke-width="1.2"/>'
+          + '</svg>';
+  return L.marker([lat, lon], {{
+    icon: L.divIcon({{ html: svg, iconSize: [10, 10], iconAnchor: [5, 5], className: "" }}),
+    pane: "analysisPane", interactive: false
+  }});
+}}
+
 // ── Level selector ────────────────────────────────────────────────────────
 function synSetLevel(lvl) {{
   _synLevel = lvl;
@@ -4779,6 +4813,49 @@ function synRenderAnalysis(fullKey) {{
       L.polyline(ll, {{
         color: job.color, weight: 4.5, opacity: 0.95,
         dashArray: "12 8", lineCap: "round", pane: "analysisPane"
+      }}).addTo(_synAnalysisLayer);
+    }});
+  }});
+
+  // ── Thermal ridge/trough — only the feature for the currently active level ──
+  var _thermalData = _SYN_UA[fullKey] || {{}};
+  var _thermalJobs = [];
+  if (_synLevel === "500") {{
+    _thermalJobs.push({{ segs: _thermalData.thermal_trough_500 || [], mode: "tri",  color: "#1166dd", label: "THERMAL TROUGH" }});
+  }} else if (_synLevel === "700") {{
+    _thermalJobs.push({{ segs: _thermalData.thermal_trough_700 || [], mode: "tri",  color: "#8B4513", label: "THERMAL TROUGH" }});
+  }} else if (_synLevel === "850") {{
+    _thermalJobs.push({{ segs: _thermalData.thermal_ridge_850  || [], mode: "dots", color: "#dd1111", label: "THERMAL RIDGE"  }});
+  }}
+
+  _thermalJobs.forEach(function(job) {{
+    job.segs.forEach(function(seg) {{
+      var ll = (seg.coords || []).map(function(c) {{ return [c[1], c[0]]; }});
+      if (ll.length < 2) return;
+
+      L.polyline(ll, {{
+        color: job.color, weight: 3.0, opacity: 0.85,
+        dashArray: "4 4", pane: "analysisPane"
+      }}).addTo(_synAnalysisLayer);
+
+      var _pts = _synInterpLine(ll, 0.35);
+      _pts.forEach(function(p) {{
+        if (job.mode === "tri") {{
+          _synTriMarker(p[0], p[1], job.color).addTo(_synAnalysisLayer);
+        }} else {{
+          _synDotMarker(p[0], p[1], job.color).addTo(_synAnalysisLayer);
+        }}
+      }});
+
+      var _mid = ll[Math.floor(ll.length / 2)];
+      L.marker(_mid, {{
+        icon: L.divIcon({{
+          html: '<div style="font-size:10px;font-weight:bold;color:' + job.color + ';'
+              + 'font-family:Courier New,monospace;background:rgba(255,255,255,0.85);'
+              + 'padding:1px 4px;border-radius:2px;white-space:nowrap;">' + job.label + '</div>',
+          iconSize: [110, 16], iconAnchor: [-6, 8], className: ""
+        }}),
+        pane: "analysisPane"
       }}).addTo(_synAnalysisLayer);
     }});
   }});
