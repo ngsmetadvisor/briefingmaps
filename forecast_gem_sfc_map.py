@@ -2625,6 +2625,10 @@ sigmaT700500 = 5.0
 # Contour intervals
 _INTERVALS = {'HGHT': 6.0, 'TEMP': 2.0, 'TTDP': 2.0, 'SPED': 5.0}
 
+# LLJ (850 hPa wind-speed) shading thresholds — kt
+LLJ_LEVELS = [25, 35, 45, 55, 999]
+LLJ_COLORS = ['#ffff00', '#ffaa00', '#ff0000', '#8800cc']
+
 
 HL_LEVELS           = [850, 700, 500]
 HL_SMOOTH_N         = 3
@@ -3291,8 +3295,9 @@ def _process_level(_df_hr, _plvl, _bands_850, _bands_500, _hght_levels, _key):
 
     _lvl_data['relh']       = _relh_segs
     _lvl_data['relh_fills'] = _relh_fills
-    # ── Wind speed ────────────────────────────────────────────────────────
+# ── Wind speed ────────────────────────────────────────────────────────
     _sped_segs = []
+    _llj_fills = []
     lons_s, lats_s, vals_s = _pts_for(_col('SPED'))
     if lons_s is not None and len(lons_s) >= 8:
         grid_s, lv_s, ltv_s = _make_grid(lons_s, lats_s, vals_s, N=_n)
@@ -3303,7 +3308,25 @@ def _process_level(_df_hr, _plvl, _bands_850, _bands_500, _hght_levels, _key):
         s_levels = np.arange(vmin, vmax + _INTERVALS['SPED'], _INTERVALS['SPED'])
         if len(s_levels) >= 2:
             _sped_segs = _extract_contours(glon2d, glat2d, grid_s, s_levels)
-    _lvl_data['sped'] = _sped_segs
+        if _plvl == 850 and grid_s.max() >= LLJ_LEVELS[0]:
+            _fig_llj, _ax_llj = plt.subplots(figsize=(1, 1))
+            try:
+                _cs_llj = _ax_llj.contourf(glon2d, glat2d, grid_s, levels=LLJ_LEVELS)
+                for _bi, _col_llj in enumerate(LLJ_COLORS):
+                    if _bi >= len(_cs_llj.allsegs):
+                        continue
+                    for _poly in _cs_llj.allsegs[_bi]:
+                        if len(_poly) < 3:
+                            continue
+                        _llj_fills.append({
+                            'color':  _col_llj,
+                            'coords': [[float(p[1]), float(p[0])] for p in _poly],
+                        })
+            except Exception as _e:
+                print(f'    ⚠ LLJ fill error: {_e}')
+            plt.close(_fig_llj)
+    _lvl_data['sped']      = _sped_segs
+    _lvl_data['llj_fills'] = _llj_fills
 
     # ── H/L detection ─────────────────────────────────────────────────────
     _ua_hl = []
@@ -3364,7 +3387,7 @@ for (_date_val, _hr) in _synoptic_times:
         print(f'  ⚠ Too few stations ({len(_df_hr)}) — skipping.')
         _ts_ua[_key] = {
             'levels': {str(pl): {'hght': [], 'temp': [], 'temp_band_fills': [],
-                                 'ttdp': [], 'sped': []}
+                                 'ttdp': [], 'sped': [], 'llj_fills': []}
                        for pl in [850, 700, 500, 250]},
             'instab': [],
             'thickness_fill': [],
@@ -4653,6 +4676,7 @@ _bar_html = '''
   <div class="bar-section">
     <button class="syn-lvl-btn" id="btn-thickness" onclick="synToggleThickness()"
             style="display:none;">700-500 &Delta;T</button>
+<button class="syn-lvl-btn" id="btn-llj" onclick="synToggleLLJ()" style="display:inline-block;">LLJ</button>
 <button class="syn-lvl-btn" id="btn-analysis" onclick="synToggleAnalysis()" oncontextmenu="synAnalysisContextMenu(event)">Analysis</button>
   </div>
   <div class="bar-section">
@@ -4690,6 +4714,7 @@ var _synShowThermal   = false;   // thermal ridge/trough overlay — default off
 var _synShowStations  = {'true' if SHOW_STATION_SYMBOLS else 'false'};
 var _synShowTooltips  = {'true' if SHOW_TOOLTIPS else 'false'};
 var _synShowThickness = false;   // 700-500 hPa ΔT fill — 500 hPa only, default off
+var _synShowLLJ       = false;   // 850 hPa LLJ wind-speed shading — default off
 var _synBaseZoom     = 5;   // zoom at which H/L and W/C symbols are drawn at base size
 
 function _synZoomFactor(MAP) {{
@@ -4823,6 +4848,15 @@ if (_synLevel === "850" || _synLevel === "500") {{
       .filter(function(b) {{ return b[2].toLowerCase() !== "#ffffff"; }});
     var swatches = sorted.map(function(b) {{ return _synSwatchCol(b[1], b[2]); }}).join('');
     el.innerHTML = _synLegendLabel("Temp (\u00b0C)") + swatches;
+    if (_synLevel === "850" && _synShowLLJ) {{
+      var lljSwatches =
+          _synSwatchCol("25kt", "#ffff00")
+        + _synSwatchCol("35kt", "#ffaa00")
+        + _synSwatchCol("45kt", "#ff0000")
+        + _synSwatchCol("55kt+", "#8800cc");
+      el.innerHTML += '<div style="display:flex;align-items:center;gap:2px;margin-left:8px;border-left:1px solid #ccc;padding-left:8px;">'
+        + _synLegendLabel("LLJ (kt)") + lljSwatches + '</div>';
+    }}
     el.style.display = "flex";
 }} else if (_synLevel === "700") {{
     var rhSwatches = _synSwatchCol("70-90%", "#add8e6") + _synSwatchCol("90%+", "#00008b");
@@ -4848,6 +4882,10 @@ function synSetLevel(lvl) {{
   if (_tBtn) {{
     _tBtn.style.display = (lvl === "500") ? "inline-block" : "none";
   }}
+  var _lljBtn = document.getElementById("btn-llj");
+  if (_lljBtn) {{
+    _lljBtn.style.display = (lvl === "850") ? "inline-block" : "none";
+  }}
   _synBuildLegend();
   synRender();
 }}
@@ -4858,6 +4896,16 @@ function synToggleThickness() {{
   _synShowThickness = !_synShowThickness;
   var _tBtn = document.getElementById("btn-thickness");
   if (_tBtn) _tBtn.classList.toggle("active", _synShowThickness);
+  synRender();
+}}
+
+// ── LLJ (850 hPa wind-speed shading) toggle — 850 hPa only ─────────────────
+function synToggleLLJ() {{
+  if (_synLevel !== "850") return;
+  _synShowLLJ = !_synShowLLJ;
+  var _lljBtn = document.getElementById("btn-llj");
+  if (_lljBtn) _lljBtn.classList.toggle("active", _synShowLLJ);
+  _synBuildLegend();
   synRender();
 }}
 
@@ -5070,6 +5118,26 @@ function synRenderUA(fullKey, stepLabel) {{
           color: "none", weight: 0,
           fillColor: poly.color, fillOpacity: 0.45,
           interactive: false, pane: "thicknessPane"
+        }}).addTo(_synUALayer);
+      }});
+    }}
+  }}
+
+  // ── 850 hPa LLJ wind-speed shading — 850 hPa toggle layer ──────────────
+  if (_synLevel === "850" && _synShowLLJ) {{
+    var _lljFills = uaData.llj_fills || [];
+    if (_lljFills.length) {{
+      if (!MAP.getPane("lljPane")) {{
+        MAP.createPane("lljPane");
+        MAP.getPane("lljPane").style.zIndex        = 472;
+        MAP.getPane("lljPane").style.pointerEvents = "none";
+      }}
+      _lljFills.forEach(function(poly) {{
+        if (!poly.coords || poly.coords.length < 3) return;
+        L.polygon([poly.coords], {{
+          color: "none", weight: 0,
+          fillColor: poly.color, fillOpacity: 0.55,
+          interactive: false, pane: "lljPane"
         }}).addTo(_synUALayer);
       }});
     }}
@@ -5770,7 +5838,7 @@ else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700);
 
 _syn_legend_html = (
     '<div id="syn-legend" style="'
-    'position:fixed;bottom:34px;left:50%;transform:translateX(-50%);z-index:10000;'
+    'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:10000;'
     'background:rgba(255,255,255,0.95);border:1px solid #888;border-radius:5px;'
     'box-shadow:0 2px 8px rgba(0,0,0,0.25);'
     "font-family:'Courier New',monospace;padding:4px 10px 2px;"
@@ -7635,7 +7703,7 @@ _gem_legend_label = (
 
 _gem_mslp_legend_html = (
     '<div id="gem-legend-box" style="'
-    'position:fixed;bottom:34px;left:50%;transform:translateX(-50%);z-index:10000;'
+    'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:10000;'
     'background:rgba(255,255,255,0.95);border:1px solid #888;border-radius:5px;'
     'box-shadow:0 2px 8px rgba(0,0,0,0.25);'
     "font-family:'Courier New',monospace;padding:4px 10px 2px;"
