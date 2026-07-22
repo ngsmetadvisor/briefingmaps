@@ -4800,6 +4800,14 @@ function _synSwatchCol(label, color) {{
     + '</div>';
 }}
 
+function _synLineCol(label, dashArray) {{
+  var dash = dashArray ? ' stroke-dasharray="' + dashArray + '"' : '';
+  return '<div style="display:inline-flex;flex-direction:column;align-items:center;margin:0 2px;">'
+    + '<svg width="20" height="12"><line x1="0" y1="6" x2="20" y2="6" stroke="#008000" stroke-width="2"' + dash + '/></svg>'
+    + '<span style="font-size:8px;color:#2a3a6a;margin-top:1px;">' + label + '</span>'
+    + '</div>';
+}}
+
 function _synLegendLabel(text) {{
   return '<span style="font-size:10px;font-weight:bold;color:#2a3a6a;'
     + 'align-self:center;margin-right:2px;">' + text + '</span>';
@@ -4816,14 +4824,13 @@ if (_synLevel === "850" || _synLevel === "500") {{
     var swatches = sorted.map(function(b) {{ return _synSwatchCol(b[1], b[2]); }}).join('');
     el.innerHTML = _synLegendLabel("Temp (\u00b0C)") + swatches;
     el.style.display = "flex";
-  }} else if (_synLevel === "700") {{
+}} else if (_synLevel === "700") {{
     var rhSwatches = _synSwatchCol("70-90%", "#add8e6") + _synSwatchCol("90%+", "#00008b");
     var lines =
-        '<div style="display:flex;align-items:center;gap:4px;margin-left:8px;border-left:1px solid #ccc;padding-left:8px;">'
-      + '<svg width="26" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#008000" stroke-width="1.5" stroke-dasharray="4,3"/></svg>'
-      + '<span style="font-size:9px;">RH contour</span>'
-      + '<svg width="26" height="10" style="margin-left:6px;"><line x1="0" y1="5" x2="26" y2="5" stroke="#008000" stroke-width="2"/></svg>'
-      + '<span style="font-size:9px;">70% / 90%</span>'
+        '<div style="display:flex;align-items:center;gap:2px;margin-left:8px;border-left:1px solid #ccc;padding-left:8px;">'
+      + _synLineCol("70%", null)
+      + _synLineCol("80%", "4,3")
+      + _synLineCol("90%", null)
       + '</div>';
     el.innerHTML = _synLegendLabel("RH") + rhSwatches + lines;
     el.style.display = "flex";
@@ -5763,10 +5770,10 @@ else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700);
 
 _syn_legend_html = (
     '<div id="syn-legend" style="'
-    'position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:10000;'
+    'position:fixed;bottom:34px;left:50%;transform:translateX(-50%);z-index:10000;'
     'background:rgba(255,255,255,0.95);border:1px solid #888;border-radius:5px;'
     'box-shadow:0 2px 8px rgba(0,0,0,0.25);'
-    "font-family:'Courier New',monospace;padding:5px 10px;"
+    "font-family:'Courier New',monospace;padding:4px 10px 2px;"
     'display:none;align-items:center;gap:6px;pointer-events:none;"></div>'
 )
 m.get_root().html.add_child(Element(_bar_html))
@@ -7628,10 +7635,10 @@ _gem_legend_label = (
 
 _gem_mslp_legend_html = (
     '<div id="gem-legend-box" style="'
-    'position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:10000;'
+    'position:fixed;bottom:34px;left:50%;transform:translateX(-50%);z-index:10000;'
     'background:rgba(255,255,255,0.95);border:1px solid #888;border-radius:5px;'
     'box-shadow:0 2px 8px rgba(0,0,0,0.25);'
-    "font-family:'Courier New',monospace;padding:5px 10px;"
+    "font-family:'Courier New',monospace;padding:4px 10px 2px;"
     'display:flex;align-items:center;gap:6px;pointer-events:none;">'
     f'<div id="gem-legend-qpf" style="display:flex;align-items:center;">'
     + _gem_legend_label.format('Precip (mm)') + _gem_qpf_swatches + '</div>'
