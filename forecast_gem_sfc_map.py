@@ -3489,9 +3489,9 @@ for (_date_val, _hr) in _synoptic_times:
 
     def _seg_to_dict(seg):
       mid = seg[len(seg) // 2]
-      return {'coords':    [[float(p[0]), float(p[1])] for p in seg],
-            'label_lon': float(mid[0]),
-            'label_lat': float(mid[1])}
+      return {'coords':    [[float(p[1]), float(p[0])] for p in seg],
+            'label_lon': float(mid[1]),
+            'label_lat': float(mid[0])}
 
     _ts_ua[_key] = {
         'levels':             _hr_data,
