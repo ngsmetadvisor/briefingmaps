@@ -5114,8 +5114,9 @@ function synRenderUA(fullKey, stepLabel) {{
       : "#00bb00";
     var ll     = ct.coords.map(function(c) {{ return [c[1], c[0]]; }});
     var isBold = (Math.round(t) % 10 === 0);
+    var isZero = (Math.round(t) === 0);
     var _tLine = L.polyline(ll, {{
-      color: col, weight: isBold ? 1.2 : 0.8,
+      color: col, weight: isZero ? 2.4 : (isBold ? 1.2 : 0.8),
       opacity: isBold ? 1.0 : 0.8, dashArray: "6 4"
     }});
     if (_synShowTooltips) _tLine.bindTooltip(_synLevel + " hPa T=" + t.toFixed(1) + "°C");
@@ -6484,8 +6485,9 @@ function synRenderUA(fullKey, stepLabel) {{
       : "#00bb00";
     var ll     = ct.coords.map(function(c) {{ return [c[1], c[0]]; }});
     var isBold = (Math.round(t) % 10 === 0);
+    var isZero = (Math.round(t) === 0);
     var _tLine = L.polyline(ll, {{
-      color: col, weight: isBold ? 1.2 : 0.8,
+      color: col, weight: isZero ? 2.4 : (isBold ? 1.2 : 0.8),
       opacity: isBold ? 1.0 : 0.8, dashArray: "6 4"
     }});
     if (_synShowTooltips) _tLine.bindTooltip(_synLevel + " hPa T=" + t.toFixed(1) + "°C");
