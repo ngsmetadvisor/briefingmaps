@@ -7586,11 +7586,16 @@ _bar_html = '''
 '''
 m.get_root().html.add_child(Element(_bar_html))
 
+def _gem_swatch_col(label, color):
+    return (
+        '<div style="display:inline-flex;flex-direction:column;align-items:center;margin:0 2px;">'
+        f'<span style="background:{color};width:16px;height:12px;display:block;border:1px solid #555;"></span>'
+        f'<span style="font-size:8px;color:#2a3a6a;margin-top:1px;">{label}</span>'
+        '</div>'
+    )
+
 _gem_qpf_swatches = ''.join(
-    f'<span style="display:inline-flex;align-items:center;gap:2px;margin:0 3px;">'
-    f'<span style="background:{c};width:14px;height:11px;display:inline-block;border:1px solid #555;"></span>'
-    f'<span style="font-size:9px;">{l}</span></span>'
-    for l, c in [
+    _gem_swatch_col(l, c) for l, c in [
         ('0.6', '#c8f0a0'), ('1.5', '#78d048'), ('3', '#228b22'), ('5', '#00aaaa'),
         ('10', '#1a78c2'), ('20', '#6a0dad'), ('30', '#cc00cc'), ('40', '#ffff00'),
         ('50', '#ffaa00'), ('60', '#ff4400'), ('80', '#cc0000'), ('100', '#880000'),
@@ -7598,23 +7603,22 @@ _gem_qpf_swatches = ''.join(
     ]
 )
 _gem_cape_swatches = ''.join(
-    f'<span style="display:inline-flex;align-items:center;gap:2px;margin:0 3px;">'
-    f'<span style="background:{c};width:14px;height:11px;display:inline-block;border:1px solid #555;"></span>'
-    f'<span style="font-size:9px;">{l}</span></span>'
-    for l, c in [
+    _gem_swatch_col(l, c) for l, c in [
         ('800', '#888888'), ('1200', '#ffff00'), ('1500', '#ffaa00'),
         ('2000', '#ff0000'), ('3000+', '#8800cc'),
     ]
 )
 
 _gem_mslp_legend_html = (
-    '<div id="gem-legend-mslp" style="'
-    'position:fixed;bottom:18px;left:0;right:0;z-index:10000;'
-    "text-align:center;font-family:'Courier New',monospace;font-size:10px;"
-    'color:#2a3a6a;pointer-events:none;">'
-    '━ MSLP 4 hPa &nbsp;&nbsp;┅ bold 16 hPa'
-    '&nbsp;&nbsp;&nbsp;<b>QPF 12h (mm):</b> ' + _gem_qpf_swatches +
-    '&nbsp;&nbsp;&nbsp;<b>CAPE (J/kg):</b> ' + _gem_cape_swatches +
+    '<div id="gem-legend-box" style="'
+    'position:fixed;bottom:52px;left:50%;transform:translateX(-50%);z-index:10000;'
+    'background:rgba(255,255,255,0.95);border:1px solid #888;border-radius:5px;'
+    'box-shadow:0 2px 8px rgba(0,0,0,0.25);'
+    "font-family:'Courier New',monospace;padding:5px 10px;"
+    'display:flex;align-items:flex-start;gap:10px;pointer-events:none;">'
+    f'<div id="gem-legend-qpf" style="display:flex;align-items:flex-start;">{_gem_qpf_swatches}</div>'
+    f'<div id="gem-legend-cape" style="display:none;align-items:flex-start;'
+    'border-left:1px solid #ccc;padding-left:8px;">' + _gem_cape_swatches + '</div>'
     '</div>'
 )
 m.get_root().html.add_child(Element(_gem_mslp_legend_html))
@@ -7725,7 +7729,12 @@ function gemToggle(which){{
   if(which==="mslp")           {{ _gemShowMslp =!_gemShowMslp;  document.getElementById("btn-mslp" ).classList.toggle("active",_gemShowMslp);  }}
   else if(which==="qpf")       {{ _gemShowQpf  =!_gemShowQpf;   document.getElementById("btn-qpf"  ).classList.toggle("active",_gemShowQpf);   }}
   else if(which==="qpf3h")     {{ _gemShowQpf3h=!_gemShowQpf3h; document.getElementById("btn-qpf3h").classList.toggle("active",_gemShowQpf3h); }}
-  else if(which==="cape")      {{ _gemShowCape =!_gemShowCape;  document.getElementById("btn-cape" ).classList.toggle("active",_gemShowCape);  }}
+  else if(which==="cape")      {{
+    _gemShowCape =!_gemShowCape;
+    document.getElementById("btn-cape" ).classList.toggle("active",_gemShowCape);
+    var _capeLegend = document.getElementById("gem-legend-cape");
+    if (_capeLegend) _capeLegend.style.display = _gemShowCape ? "flex" : "none";
+  }}
   else if(which==="analysis")  {{ _gemShowAnalysis=!_gemShowAnalysis; document.getElementById("btn-analysis").classList.toggle("active",_gemShowAnalysis); }}
   gemRender(_gemStepIdx);
 }}
@@ -7973,6 +7982,8 @@ function _gemInit(){{
     slider.max=String(Math.max(0,_GEM_STEPS.length-1));
     slider.value="0";
   }}
+  var _capeLegend = document.getElementById("gem-legend-cape");
+  if (_capeLegend) _capeLegend.style.display = _gemShowCape ? "flex" : "none";
   var MAP=_getMap();
   if(MAP){{
     MAP.on('zoomend', function(){{ gemRender(_gemStepIdx); }});
