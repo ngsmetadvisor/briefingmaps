@@ -4653,7 +4653,7 @@ _bar_html = '''
   <div class="bar-section">
     <button class="syn-lvl-btn" id="btn-thickness" onclick="synToggleThickness()"
             style="display:none;">700-500 &Delta;T</button>
-    <button class="syn-lvl-btn" id="btn-analysis" onclick="synToggleAnalysis()">Analysis</button>
+<button class="syn-lvl-btn active" id="btn-analysis" onclick="synToggleAnalysis()">Analysis</button>
   </div>
   <div class="bar-section">
     <span class="bar-label">Time</span>
@@ -4683,7 +4683,7 @@ var _synStepIdx      = 0;
 var _synUALayer      = null;
 var _synStnLayer     = null;
 var _synAnalysisLayer = null;
-var _synShowAnalysis  = false;
+var _synShowAnalysis  = true;
 var _synShowStations  = {'true' if SHOW_STATION_SYMBOLS else 'false'};
 var _synShowTooltips  = {'true' if SHOW_TOOLTIPS else 'false'};
 var _synShowThickness = false;   // 700-500 hPa ΔT fill — 500 hPa only, default off
@@ -7389,7 +7389,7 @@ _bar_html = '''
     <button class="gem-layer-btn active" id="btn-qpf"  onclick="gemToggle('qpf')">QPF 12h</button>
     <button class="gem-layer-btn"        id="btn-qpf3h" onclick="gemToggle('qpf3h')">QPF 3h</button>
     <button class="gem-layer-btn"        id="btn-cape" onclick="gemToggle('cape')">CAPE</button>
-    <button class="gem-layer-btn"        id="btn-analysis" onclick="gemToggle('analysis')">Analysis</button>
+<button class="gem-layer-btn active" id="btn-analysis" onclick="gemToggle('analysis')">Analysis</button>
   </div>
   <div class="bar-section">
     <span class="bar-label">Time</span>
@@ -7474,7 +7474,7 @@ var _gemQpfLayer      = null;
 var _gemQpf3hLayer    = null;
 var _gemCapeLayer     = null;
 var _gemAnalysisLayer = null;
-var _gemShowAnalysis  = false;
+var _gemShowAnalysis  = true;
 var _gemExporting     = false;
 
 function _getMap(){{
