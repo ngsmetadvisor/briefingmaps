@@ -3831,11 +3831,18 @@ print(f'\n✅ Cell 1B complete ({time.time() - _t0:.1f}s) — '
       f'{len(_ts_ua_json_str) // 1024} KB  →  ready for Cell 9')
 
 # @title
-# 000---- BLOCK 06 — MOCKED (convergence computation removed)
-# Variables are kept as empty stubs so downstream blocks don't break.
+# ══════════════════════════════════════════════════════════════════════════
+#  BLOCK 06 — Trough Detection (MSLP + 850/700/500 hPa heights)
+#  Convergence computation still stubbed (empty) — trough detection is live.
+# ══════════════════════════════════════════════════════════════════════════
 
 import json as _json_conv
 import pandas as pd
+import numpy as np
+from scipy.interpolate import RBFInterpolator
+from scipy.ndimage import gaussian_filter
+from scipy.signal import find_peaks
+from scipy.spatial import cKDTree
 
 ua_summary_df['_vt']   = pd.to_datetime(ua_summary_df['valid_time'])
 ua_summary_df['_date'] = ua_summary_df['_vt'].dt.date
@@ -3844,26 +3851,172 @@ ua_summary_df['_hour'] = ua_summary_df['_vt'].dt.hour
 _synoptic_times = sorted(ua_summary_df[['_date','_hour']].drop_duplicates()
                           .itertuples(index=False, name=None))
 
-_conv_sfc_by_ts   = {f"{pd.Timestamp(d).strftime('%Y%m%d')}_{int(h):02d}": [] for d, h in _synoptic_times}
-_conv_850_by_hr   = {f"{pd.Timestamp(d).strftime('%Y%m%d')}_{int(h):02d}": [] for d, h in _synoptic_times}
-_sfc_trough_by_ts = {f"{pd.Timestamp(d).strftime('%Y%m%d')}_{int(h):02d}": [] for d, h in _synoptic_times}
-
 CONV_THRESHOLD    = -1e-5
 CONV_COLOR        = '#cc00cc'
 CONV_FILL_COLOR   = '#dd88ff'
 CONV_FILL_OPACITY = 0.30
 CONV_WEIGHT       = 2.5
 
+# ── Trough detection tuning — prominence units match each field ───────────
+TROUGH_PROMINENCE = {'mslp': 0.3, '850': 8.0, '700': 12.0, '500': 20.0}
+TROUGH_SIGMA_PRE  = {'mslp': 2.0, '850': 2.0, '700': 2.0,  '500': 2.0}
+TROUGH_MAX_DIST   = 4.0
+TROUGH_MIN_PTS    = 4
+
+def _build_field_grid(pts, pad=1.5, N=150, sigma=3.0):
+    """pts: list of (lat, lon, val). Returns (grid, lon_vec, lat_vec) or (None,None,None)."""
+    if len(pts) < 8:
+        return None, None, None
+    la = np.array([p[0] for p in pts])
+    lo = np.array([p[1] for p in pts])
+    va = np.array([p[2] for p in pts])
+    lv  = np.linspace(lo.min()-pad, lo.max()+pad, N)
+    ltv = np.linspace(la.min()-pad, la.max()+pad, N)
+    GL, GLA = np.meshgrid(lv, ltv)
+    try:
+        rbf  = RBFInterpolator(np.column_stack([lo, la]), va,
+                               kernel='thin_plate_spline',
+                               smoothing=max(0.3*len(pts), 1e-6))
+        grid = rbf(np.column_stack([GL.ravel(), GLA.ravel()])).reshape(N, N)
+    except Exception:
+        return None, None, None
+    return gaussian_filter(grid, sigma=sigma), lv, ltv
+
+def _pts_to_segs_local(pts, max_dist=TROUGH_MAX_DIST, min_pts=TROUGH_MIN_PTS):
+    if len(pts) < min_pts:
+        return []
+    arr = np.array(pts)
+    dedup = {}
+    for r in arr:
+        k = (round(r[0]*2)/2, round(r[1]*2)/2)
+        if k not in dedup or r[2] > dedup[k][2]:
+            dedup[k] = r
+    arr = np.array(list(dedup.values()))
+    if len(arr) < min_pts:
+        return []
+    tree   = cKDTree(arr[:, :2])
+    pairs  = tree.query_pairs(max_dist)
+    parent = list(range(len(arr)))
+    def _find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]; x = parent[x]
+        return x
+    for a, b in pairs:
+        ra, rb = _find(a), _find(b)
+        if ra != rb:
+            parent[ra] = rb
+    clusters = {}
+    for i in range(len(arr)):
+        clusters.setdefault(_find(i), []).append(i)
+    segs = []
+    for idxs in clusters.values():
+        if len(idxs) < min_pts:
+            continue
+        sp  = sorted([(arr[i][0], arr[i][1]) for i in idxs], key=lambda p: p[0])
+        sub, cur = [], [sp[0]]
+        for k in range(1, len(sp)):
+            if (abs(sp[k][0]-sp[k-1][0]) > max_dist*1.5 or
+                    abs(sp[k][1]-sp[k-1][1]) > max_dist*1.5):
+                if len(cur) >= min_pts:
+                    sub.append(cur)
+                cur = []
+            cur.append(sp[k])
+        if len(cur) >= min_pts:
+            sub.append(cur)
+        segs.extend(sub)
+    return segs
+
+def _detect_trough_from_grid(grid, lv, ltv, prominence, sigma_pre=2.0):
+    """Row-wise minima search (same M5-style method as Block 01) → trough segments."""
+    Ts = gaussian_filter(grid, sigma=sigma_pre)
+    trough_pts = []
+    for j, lat in enumerate(ltv):
+        row = Ts[j, :]
+        tr, tpr = find_peaks(-row, prominence=prominence, width=2)
+        if len(tr):
+            top = np.argsort(tpr['prominences'])[-4:]
+            for idx in tr[top]:
+                prom = tpr['prominences'][np.where(tr == idx)[0][0]]
+                trough_pts.append((lat, lv[idx], float(prom)))
+    segs = _pts_to_segs_local(trough_pts)
+    out = []
+    for seg in segs:
+        mid = seg[len(seg)//2]
+        out.append({
+            'coords':    [[p[1], p[0]] for p in seg],
+            'label_lat': mid[0],
+            'label_lon': mid[1],
+        })
+    return out
+
+
+# ══════════════════════════════════════════════════════════
+#  MSLP TROUGH  (from synthetic metar_records SLP field)
+# ══════════════════════════════════════════════════════════
+print('\n  Computing MSLP trough...')
+_trough_mslp_by_key = {}
+for (date_val, hr) in _synoptic_times:
+    _key  = f"{pd.Timestamp(date_val).strftime('%Y%m%d')}_{int(hr):02d}"
+    _recs = [d for d in metar_records
+             if d.get('time') is not None and d['time'].date() == date_val and d.get('hour') == hr]
+    _pts  = [(d['lat'], d['lon'], d['slp']) for d in _recs if d.get('slp') is not None]
+    grid, lv, ltv = _build_field_grid(_pts)
+    if grid is None:
+        _trough_mslp_by_key[_key] = []
+        print(f'    MSLP {_key}: skipped ({len(_pts)} pts)')
+        continue
+    segs = _detect_trough_from_grid(grid, lv, ltv,
+                                    prominence=TROUGH_PROMINENCE['mslp'],
+                                    sigma_pre=TROUGH_SIGMA_PRE['mslp'])
+    _trough_mslp_by_key[_key] = segs
+    print(f'    MSLP {_key}: {len(segs)} seg(s) from {len(_pts)} pts')
+
+# ══════════════════════════════════════════════════════════
+#  850 / 700 / 500 hPa TROUGH  (from ua_summary_df HGHT_xxx)
+# ══════════════════════════════════════════════════════════
+_trough_ua_by_key = {'850': {}, '700': {}, '500': {}}
+for _lvl in ['850', '700', '500']:
+    print(f'\n  Computing {_lvl} hPa trough...')
+    _col = f'HGHT_{_lvl}'
+    for (date_val, hr) in _synoptic_times:
+        _key = f"{pd.Timestamp(date_val).strftime('%Y%m%d')}_{int(hr):02d}"
+        _df  = ua_summary_df[(ua_summary_df['_date'] == date_val) &
+                             (ua_summary_df['_hour'] == hr)]
+        _pts = [(float(r['lat']), float(r['lon']), float(r[_col]))
+                for _, r in _df.iterrows()
+                if r.get(_col) is not None and not (isinstance(r[_col], float) and np.isnan(r[_col]))]
+        grid, lv, ltv = _build_field_grid(_pts)
+        if grid is None:
+            _trough_ua_by_key[_lvl][_key] = []
+            print(f'    {_lvl} {_key}: skipped ({len(_pts)} pts)')
+            continue
+        segs = _detect_trough_from_grid(grid, lv, ltv,
+                                        prominence=TROUGH_PROMINENCE[_lvl],
+                                        sigma_pre=TROUGH_SIGMA_PRE[_lvl])
+        _trough_ua_by_key[_lvl][_key] = segs
+        print(f'    {_lvl} {_key}: {len(segs)} seg(s) from {len(_pts)} pts')
+
+# ── Backward-compat stubs (convergence not computed here) ─────────────────
+_conv_sfc_by_ts   = {f"{pd.Timestamp(d).strftime('%Y%m%d')}_{int(h):02d}": [] for d, h in _synoptic_times}
+_conv_850_by_hr   = {f"{pd.Timestamp(d).strftime('%Y%m%d')}_{int(h):02d}": [] for d, h in _synoptic_times}
+_sfc_trough_by_ts = _trough_mslp_by_key   # legacy alias
+
 _conv_payload = {
     'sfc':        _conv_sfc_by_ts,
     '850':        _conv_850_by_hr,
     'sfc_trough': _sfc_trough_by_ts,
+    'trough': {
+        'mslp': _trough_mslp_by_key,
+        '850':  _trough_ua_by_key['850'],
+        '700':  _trough_ua_by_key['700'],
+        '500':  _trough_ua_by_key['500'],
+    },
     'threshold':  CONV_THRESHOLD,
 }
 _conv_json_str = _json_conv.dumps(_conv_payload)
 
-print(f'✅ Block 06 mocked — {len(_synoptic_times)} time slot(s), variables ready for downstream blocks.')
-
+print(f'\n✅ Block 06 complete — trough detection at MSLP/850/700/500 hPa, '
+      f'{len(_synoptic_times)} time slot(s). JSON: {len(_conv_json_str)//1024} KB')
 # @title STATION SYMBOL DENSITY, Met symbol , Tooltips
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -4483,6 +4636,7 @@ _bar_html = '''
   <div class="bar-section">
     <button class="syn-lvl-btn" id="btn-thickness" onclick="synToggleThickness()"
             style="display:none;">700-500 &Delta;T</button>
+    <button class="syn-lvl-btn" id="btn-analysis" onclick="synToggleAnalysis()">Analysis</button>
   </div>
   <div class="bar-section">
     <span class="bar-label">Time</span>
@@ -4502,6 +4656,7 @@ _js = f'''
 var _SYN_TIME_STEPS  = {_time_steps_str};
 var _SYN_UA_STNS     = {_ts_ua_stn_json_str};
 var _SYN_UA          = {_ts_ua_json_str};
+var _TROUGH_DATA     = ({_conv_json_str}).trough || {{}};
 var KEY_HGT_DAM      = {{"850":{int(KEY_HGT_850/10)},"700":{int(KEY_HGT_700/10)},"500":{int(KEY_HGT_500/10)},"250":{int(KEY_HGT_250/10)}}};
 var KEY_HGT_M        = {{"850":{int(KEY_HGT_850)},"700":{int(KEY_HGT_700)},"500":{int(KEY_HGT_500)},"250":{int(KEY_HGT_250)}}};
 
@@ -4510,6 +4665,8 @@ var _synLevel        = "850";
 var _synStepIdx      = 0;
 var _synUALayer      = null;
 var _synStnLayer     = null;
+var _synAnalysisLayer = null;
+var _synShowAnalysis  = false;
 var _synShowStations  = {'true' if SHOW_STATION_SYMBOLS else 'false'};
 var _synShowTooltips  = {'true' if SHOW_TOOLTIPS else 'false'};
 var _synShowThickness = false;   // 700-500 hPa ΔT fill — 500 hPa only, default off
@@ -4557,6 +4714,60 @@ function synToggleThickness() {{
   synRender();
 }}
 
+// ── Analysis (trough lines: MSLP + 850/700/500 hPa) toggle ─────────────────
+function synToggleAnalysis() {{
+  _synShowAnalysis = !_synShowAnalysis;
+  var _aBtn = document.getElementById("btn-analysis");
+  if (_aBtn) _aBtn.classList.toggle("active", _synShowAnalysis);
+  synRender();
+}}
+
+// ── Draw a double parallel line to approximate a "══" trough symbol ────────
+function _synDrawDoubleLine(coords, color, pane, group) {{
+  var offDeg = 0.045;
+  var off1 = coords.map(function(c) {{ return [c[0] + offDeg, c[1] + offDeg]; }});
+  var off2 = coords.map(function(c) {{ return [c[0] - offDeg, c[1] - offDeg]; }});
+  L.polyline(off1, {{ color: color, weight: 2.6, opacity: 0.95, pane: pane }}).addTo(group);
+  L.polyline(off2, {{ color: color, weight: 2.6, opacity: 0.95, pane: pane }}).addTo(group);
+}}
+
+// ── Render trough / analysis layer for the current timestep ────────────────
+function synRenderAnalysis(fullKey) {{
+  var MAP = _getMap(); if (!MAP) return;
+  if (_synAnalysisLayer) {{ MAP.removeLayer(_synAnalysisLayer); _synAnalysisLayer = null; }}
+  if (!_synShowAnalysis || !fullKey) return;
+  if (!MAP.getPane("analysisPane")) {{
+    MAP.createPane("analysisPane");
+    MAP.getPane("analysisPane").style.zIndex = "500";
+    MAP.getPane("analysisPane").style.pointerEvents = "none";
+  }}
+  _synAnalysisLayer = L.layerGroup();
+
+  var _jobs = [
+    {{ segs: (_TROUGH_DATA["mslp"] || {{}})[fullKey] || [], color: "#000000", dotted: true  }},
+    {{ segs: (_TROUGH_DATA["500"]  || {{}})[fullKey] || [], color: "#1a4dff", dotted: false }},
+    {{ segs: (_TROUGH_DATA["700"]  || {{}})[fullKey] || [], color: "#8B4513", dotted: false }},
+    {{ segs: (_TROUGH_DATA["850"]  || {{}})[fullKey] || [], color: "#cc0000", dotted: false }},
+  ];
+
+  _jobs.forEach(function(job) {{
+    job.segs.forEach(function(seg) {{
+      if (!seg.coords || seg.coords.length < 2) return;
+      var ll = seg.coords.map(function(c) {{ return [c[1], c[0]]; }});
+      if (job.dotted) {{
+        L.polyline(ll, {{
+          color: job.color, weight: 2.2, opacity: 0.95,
+          dashArray: "2 6", pane: "analysisPane"
+        }}).addTo(_synAnalysisLayer);
+      }} else {{
+        _synDrawDoubleLine(ll, job.color, "analysisPane", _synAnalysisLayer);
+      }}
+    }});
+  }});
+
+  _synAnalysisLayer.addTo(MAP);
+}}
+
 // ── Time slider ───────────────────────────────────────────────────────────
 function synSliderChange(v) {{
   _synStepIdx = parseInt(v);
@@ -4571,6 +4782,7 @@ function synRender() {{
   var lbl  = document.getElementById("syn-ts-label");
   if (lbl) lbl.textContent = step.label;
   synRenderUA(step.key, step.label);
+  synRenderAnalysis(step.key);
 }}
 
 // ── UA render: contours + colouring + station barbs ───────────────────────
