@@ -4793,35 +4793,42 @@ function _synDotMarker(lat, lon, color) {{
 }}
 
 // ── Level selector ────────────────────────────────────────────────────────
+function _synSwatchCol(label, color) {{
+  return '<div style="display:inline-flex;flex-direction:column;align-items:center;margin:0 2px;">'
+    + '<span style="background:' + color + ';width:16px;height:12px;display:block;border:1px solid #555;"></span>'
+    + '<span style="font-size:8px;color:#2a3a6a;margin-top:1px;">' + label + '</span>'
+    + '</div>';
+}}
+
+function _synLegendLabel(text) {{
+  return '<span style="font-size:10px;font-weight:bold;color:#2a3a6a;'
+    + 'align-self:center;margin-right:2px;">' + text + '</span>';
+}}
+
 function _synBuildLegend() {{
   var el = document.getElementById("syn-legend");
   if (!el) return;
+
   if (_synLevel === "850" || _synLevel === "500") {{
     var bands  = (_synLevel === "850") ? _TEMP_BANDS_850 : _TEMP_BANDS_500;
     var sorted = bands.slice().sort(function(a,b) {{ return a[1] - b[1]; }});
-    el.innerHTML = sorted.map(function(b) {{
-      var lo = b[1], color = b[2];
-      return '<span style="display:inline-flex;align-items:center;gap:2px;margin:0 2px;">'
-        + '<span style="background:' + color + ';width:13px;height:11px;display:inline-block;border:1px solid #888;"></span>'
-        + '<span style="font-size:9px;">' + lo + '</span></span>';
-    }}).join('');
+    var swatches = sorted.map(function(b) {{ return _synSwatchCol(b[1], b[2]); }}).join('');
+    el.innerHTML = _synLegendLabel("Temp (\u00b0C)") + swatches;
+    el.style.display = "flex";
   }} else if (_synLevel === "700") {{
-    el.innerHTML =
-        '<span style="font-size:10px;">RH:</span>'
-      + '<span style="display:inline-flex;align-items:center;gap:2px;margin:0 6px;">'
-      + '<span style="background:#add8e6;width:14px;height:11px;display:inline-block;border:1px solid #888;"></span>'
-      + '<span style="font-size:9px;">70-90%</span></span>'
-      + '<span style="display:inline-flex;align-items:center;gap:2px;margin:0 6px;">'
-      + '<span style="background:#00008b;width:14px;height:11px;display:inline-block;border:1px solid #888;"></span>'
-      + '<span style="font-size:9px;">90%+</span></span>'
-      + '<span style="margin:0 6px;display:inline-flex;align-items:center;gap:3px;">'
+    var rhSwatches = _synSwatchCol("70-90%", "#add8e6") + _synSwatchCol("90%+", "#00008b");
+    var lines =
+        '<div style="display:flex;align-items:center;gap:4px;margin-left:8px;border-left:1px solid #ccc;padding-left:8px;">'
       + '<svg width="26" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#008000" stroke-width="1.5" stroke-dasharray="4,3"/></svg>'
-      + '<span style="font-size:9px;">RH contour</span></span>'
-      + '<span style="margin:0 6px;display:inline-flex;align-items:center;gap:3px;">'
-      + '<svg width="26" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#008000" stroke-width="2"/></svg>'
-      + '<span style="font-size:9px;">70% / 90%</span></span>';
+      + '<span style="font-size:9px;">RH contour</span>'
+      + '<svg width="26" height="10" style="margin-left:6px;"><line x1="0" y1="5" x2="26" y2="5" stroke="#008000" stroke-width="2"/></svg>'
+      + '<span style="font-size:9px;">70% / 90%</span>'
+      + '</div>';
+    el.innerHTML = _synLegendLabel("RH") + rhSwatches + lines;
+    el.style.display = "flex";
   }} else {{
     el.innerHTML = '';
+    el.style.display = "none";
   }}
 }}
 
@@ -5754,9 +5761,11 @@ else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700);
 
 _syn_legend_html = (
     '<div id="syn-legend" style="'
-    'position:fixed;bottom:15px;left:0;right:0;z-index:10000;'
-    "text-align:center;font-family:'Courier New',monospace;font-size:10px;"
-    'color:#2a3a6a;pointer-events:none;"></div>'
+    'position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:10000;'
+    'background:rgba(255,255,255,0.95);border:1px solid #888;border-radius:5px;'
+    'box-shadow:0 2px 8px rgba(0,0,0,0.25);'
+    "font-family:'Courier New',monospace;padding:5px 10px;"
+    'display:none;align-items:center;gap:6px;pointer-events:none;"></div>'
 )
 m.get_root().html.add_child(Element(_bar_html))
 m.get_root().html.add_child(Element(_syn_legend_html))
@@ -7609,16 +7618,23 @@ _gem_cape_swatches = ''.join(
     ]
 )
 
+_gem_legend_label = (
+    '<span style="font-size:10px;font-weight:bold;color:#2a3a6a;'
+    'align-self:center;margin-right:2px;">{}</span>'
+)
+
 _gem_mslp_legend_html = (
     '<div id="gem-legend-box" style="'
-    'position:fixed;bottom:52px;left:50%;transform:translateX(-50%);z-index:10000;'
+    'position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:10000;'
     'background:rgba(255,255,255,0.95);border:1px solid #888;border-radius:5px;'
     'box-shadow:0 2px 8px rgba(0,0,0,0.25);'
     "font-family:'Courier New',monospace;padding:5px 10px;"
-    'display:flex;align-items:flex-start;gap:10px;pointer-events:none;">'
-    f'<div id="gem-legend-qpf" style="display:flex;align-items:flex-start;">{_gem_qpf_swatches}</div>'
-    f'<div id="gem-legend-cape" style="display:none;align-items:flex-start;'
-    'border-left:1px solid #ccc;padding-left:8px;">' + _gem_cape_swatches + '</div>'
+    'display:flex;align-items:center;gap:6px;pointer-events:none;">'
+    f'<div id="gem-legend-qpf" style="display:flex;align-items:center;">'
+    + _gem_legend_label.format('Precip (mm)') + _gem_qpf_swatches + '</div>'
+    f'<div id="gem-legend-cape" style="display:none;align-items:center;'
+    'border-left:1px solid #ccc;padding-left:8px;">'
+    + _gem_cape_swatches + _gem_legend_label.format('CAPE') + '</div>'
     '</div>'
 )
 m.get_root().html.add_child(Element(_gem_mslp_legend_html))
