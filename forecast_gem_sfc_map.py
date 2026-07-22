@@ -4921,8 +4921,10 @@ function synRenderAnalysis(fullKey) {{
 
   var _lvlColors = {{ "500": "#1a4dff", "700": "#8B4513", "850": "#cc0000" }};
 
+  // Surface (MSLP) trough belongs on the surface map only — not drawn on
+  // any of this UA map's levels (500/700/850). Only the level's own
+  // upper-air trough is shown here.
   var _jobs = [
-    {{ segs: (_TROUGH_DATA["mslp"]     || {{}})[fullKey] || [], color: "#000000" }},
     {{ segs: (_TROUGH_DATA[_synLevel]  || {{}})[fullKey] || [], color: _lvlColors[_synLevel] || "#1a4dff" }},
   ];
 
