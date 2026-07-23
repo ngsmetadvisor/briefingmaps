@@ -6118,7 +6118,7 @@ else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700);
 
 _syn_legend_html = (
     '<div id="syn-legend" style="'
-    'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:10000;'
+    'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:10000;'
     'background:rgba(255,255,255,0.95);border:1px solid #888;border-radius:5px;'
     'box-shadow:0 2px 8px rgba(0,0,0,0.25);'
     "font-family:'Courier New',monospace;padding:4px 10px 2px;"
@@ -8121,7 +8121,7 @@ _gem_legend_label = (
 
 _gem_mslp_legend_html = (
     '<div id="gem-legend-box" style="'
-    'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:10000;'
+    'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:10000;'
     'background:rgba(255,255,255,0.95);border:1px solid #888;border-radius:5px;'
     'box-shadow:0 2px 8px rgba(0,0,0,0.25);'
     "font-family:'Courier New',monospace;padding:4px 10px 2px;"
