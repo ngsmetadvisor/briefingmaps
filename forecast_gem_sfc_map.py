@@ -2474,6 +2474,9 @@ for (_date, _hr) in _sfc_times:
             _cape_lats_raw = _cape_entry['lats']
             _cape_lons_raw = _cape_entry['lons']
             _cape_data_raw = _cape_entry['data'].astype(float)
+            _cape_data_raw = np.where(
+                (np.abs(_cape_data_raw) > 1e6) | (_cape_data_raw < 0),
+                np.nan, _cape_data_raw)
             _cape_lats_c, _cape_lons_c, _cape_data_c = _crop_grid(
                 _cape_lats_raw, _cape_lons_raw, _cape_data_raw)
             cape_lon_vec, cape_lat_vec, cape_grid = _regrid_mslp(
@@ -7964,7 +7967,6 @@ _bar_html = '''
     <button class="gem-layer-btn"        id="btn-cape" onclick="gemToggle('cape')">CAPE</button>
     <button class="gem-layer-btn"        id="btn-crossover" onclick="gemToggle('crossover')">Crossover</button>
 <button class="gem-layer-btn" id="btn-analysis" onclick="gemToggle('analysis')">Analysis</button>
-  </div>
   </div>
   <div class="bar-section">
     <span class="bar-label">Time</span>
