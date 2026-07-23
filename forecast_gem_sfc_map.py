@@ -3344,11 +3344,11 @@ def _process_level(_df_hr, _plvl, _bands_850, _bands_500, _hght_levels, _key):
         vmax     = np.ceil( grid_s.max() / _INTERVALS['SPED']) * _INTERVALS['SPED']
         s_levels = np.arange(vmin, vmax + _INTERVALS['SPED'], _INTERVALS['SPED'])
         if len(s_levels) >= 2:
-          _sped_segs = _extract_contours(glon2d, glat2d, grid_s, s_levels)
-    # LLJ shading — no smoothing. Sample straight from the griddata-interpolated
-    # field so jet-core wind speeds land in the correct LLJ_LEVELS color band
-    # instead of being blurred down by the sigma=10 smooth used for contour lines.
-    _grid_s_raw = _make_grid(lons_s, lats_s, vals_s, N=_n)[0]
+            _sped_segs = _extract_contours(glon2d, glat2d, grid_s, s_levels)
+        # LLJ shading — no smoothing. Sample straight from the griddata-interpolated
+        # field so jet-core wind speeds land in the correct LLJ_LEVELS color band
+        # instead of being blurred down by the sigma=10 smooth used for contour lines.
+        _grid_s_raw = _make_grid(lons_s, lats_s, vals_s, N=_n)[0]
         if _plvl == 850 and _grid_s_raw.max() >= LLJ_LEVELS[0]:
             _fig_llj, _ax_llj = plt.subplots(figsize=(1, 1))
             try:
