@@ -2732,7 +2732,7 @@ _INTERVALS = {'HGHT': 6.0, 'TEMP': 2.0, 'TTDP': 2.0, 'SPED': 5.0}
 
 # LLJ (850 hPa wind-speed) shading thresholds — kt
 LLJ_LEVELS = [15, 20, 25, 35, 45, 55, 999]
-LLJ_COLORS = ['#888888', '#66ccff', '#0066ff', '#cc99ff', '#9900cc', '#ff00cc']
+LLJ_COLORS = ['#888888', '#C5E7FF', '#6B8BFF', '#cc99ff', '#9900cc', '#ff00cc']
 
 # LLJ value-label grid — Alberta + 500 km buffer, ~100 km spacing
 import math
@@ -5052,8 +5052,8 @@ if (_synLevel === "850" || _synLevel === "500") {{
     if (_synLevel === "850" && _synShowLLJ) {{
       var lljSwatches =
           _synSwatchCol("15kt", "#888888")
-        + _synSwatchCol("20kt", "#66ccff")
-        + _synSwatchCol("25kt", "#0066ff")
+        + _synSwatchCol("20kt", "#C5E7FF")
+        + _synSwatchCol("25kt", "#6B8BFF")
         + _synSwatchCol("35kt", "#cc99ff")
         + _synSwatchCol("45kt", "#9900cc")
         + _synSwatchCol("55kt+", "#ff00cc");
