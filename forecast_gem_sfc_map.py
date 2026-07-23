@@ -2499,33 +2499,48 @@ for (_date, _hr) in _sfc_times:
         _temp2m_entry = _raw_grids.get(('AirTemp', _vt_mslp_str), {})
         _rh2m_entry   = _raw_grids.get(('RelativeHumidity', _vt_mslp_str), {})
         if _temp2m_entry and _rh2m_entry:
+            _t2m_data_raw = np.where(np.abs(_temp2m_entry['data'].astype(float)) > 1e6,
+                                     np.nan, _temp2m_entry['data'].astype(float))
             _t2m_lats_c, _t2m_lons_c, _t2m_data_c = _crop_grid(
-                _temp2m_entry['lats'], _temp2m_entry['lons'],
-                _temp2m_entry['data'].astype(float))
+                _temp2m_entry['lats'], _temp2m_entry['lons'], _t2m_data_raw)
             t2m_lon_vec, t2m_lat_vec, t2m_grid = _regrid_mslp(
                 _t2m_lats_c, _t2m_lons_c, _t2m_data_c)
 
+            _rh2m_data_raw = np.where(
+                (np.abs(_rh2m_entry['data'].astype(float)) > 1e6) | (_rh2m_entry['data'].astype(float) < 0),
+                np.nan, _rh2m_entry['data'].astype(float))
             _rh2m_lats_c, _rh2m_lons_c, _rh2m_data_c = _crop_grid(
-                _rh2m_entry['lats'], _rh2m_entry['lons'],
-                _rh2m_entry['data'].astype(float))
+                _rh2m_entry['lats'], _rh2m_entry['lons'], _rh2m_data_raw)
             rh2m_lon_vec, rh2m_lat_vec, rh2m_grid = _regrid_mslp(
                 _rh2m_lats_c, _rh2m_lons_c, _rh2m_data_c)
 
             crossover_grid    = t2m_grid - rh2m_grid
             crossover_lon_vec = t2m_lon_vec
             crossover_lat_vec = t2m_lat_vec
+            temp_grid, temp_lon_vec, temp_lat_vec = t2m_grid, t2m_lon_vec, t2m_lat_vec
+            rh_grid,   rh_lon_vec,   rh_lat_vec   = rh2m_grid, rh2m_lon_vec, rh2m_lat_vec
             print(f'  ✓ Crossover {crossover_grid.shape} '
                   f'{np.nanmin(crossover_grid):.1f}–{np.nanmax(crossover_grid):.1f}')
         else:
             crossover_grid = crossover_lon_vec = crossover_lat_vec = None
+            temp_grid = temp_lon_vec = temp_lat_vec = None
+            rh_grid   = rh_lon_vec   = rh_lat_vec   = None
             print(f'  ⚠ Crossover inputs not cached for {_vt_mslp_str}')
     except Exception as _e:
         crossover_grid = crossover_lon_vec = crossover_lat_vec = None
+        temp_grid = temp_lon_vec = temp_lat_vec = None
+        rh_grid   = rh_lon_vec   = rh_lat_vec   = None
         print(f'  ✗ Crossover failed: {_e}')
 
     globals()[f'crossover_grid_{_key}']    = crossover_grid
     globals()[f'crossover_lon_vec_{_key}'] = crossover_lon_vec
     globals()[f'crossover_lat_vec_{_key}'] = crossover_lat_vec
+    globals()[f'temp_grid_{_key}']         = temp_grid
+    globals()[f'temp_lon_vec_{_key}']      = temp_lon_vec
+    globals()[f'temp_lat_vec_{_key}']      = temp_lat_vec
+    globals()[f'rh_grid_{_key}']           = rh_grid
+    globals()[f'rh_lon_vec_{_key}']        = rh_lon_vec
+    globals()[f'rh_lat_vec_{_key}']        = rh_lat_vec
 
 # ── QPF from ua_raw_df ────────────────────────────────────────────────────
     _qpf_lats = np.array(sorted(_sub['lat'].dropna().unique()))
@@ -7786,6 +7801,72 @@ def _extract_crossover_bands(grid, lat_vec, lon_vec, n_interp=120):
     return bands
 
 
+# ── Temp (2m) fill bands ──────────────────────────────────────────────────────
+TEMP_LEVELS = [25, 30, 35]
+TEMP_COLORS = {25: '#ff8800', 30: '#cc0000', 35: '#8800cc'}
+TEMP_FILL_OPACITY = 0.45
+
+def _extract_temp_bands(grid, lat_vec, lon_vec, n_interp=120):
+    if grid is None:
+        return []
+    zoom_lat = n_interp / grid.shape[0]
+    zoom_lon = n_interp / grid.shape[1]
+    gq = _zoom(grid, (zoom_lat, zoom_lon), order=1)
+    if np.nanmax(gq) < TEMP_LEVELS[0]:
+        return []
+    latf = np.linspace(lat_vec[0], lat_vec[-1], n_interp)
+    lonf = np.linspace(lon_vec[0], lon_vec[-1], n_interp)
+    glon, glat = np.meshgrid(lonf, latf)
+    fig, ax = plt.subplots(figsize=(1, 1))
+    try:
+        cs = ax.contourf(glon, glat, gq, levels=TEMP_LEVELS, extend='max')
+    except Exception:
+        plt.close(fig)
+        return []
+    plt.close(fig)
+    bands = []
+    for li, (lvl, seg_list) in enumerate(zip(cs.levels, cs.allsegs)):
+        color = TEMP_COLORS.get(lvl, TEMP_COLORS[TEMP_LEVELS[-1]])
+        for poly in _contourf_seglist_to_fill_polys(seg_list):
+            bands.append({'level': float(lvl), 'color': color,
+                          'coords': poly['coords'], 'holes': poly['holes']})
+    return bands
+
+
+# ── RH (2m) fill bands ────────────────────────────────────────────────────────
+RH_LEVELS = [0, 10, 20, 30, 40, 50]
+RH_COLORS = {0: '#3b2412', 10: '#6b4423', 20: '#c8a165', 30: '#a8e6a1', 40: '#4caf50'}
+RH_FILL_OPACITY = 0.45
+
+def _extract_rh_bands(grid, lat_vec, lon_vec, n_interp=120):
+    if grid is None:
+        return []
+    zoom_lat = n_interp / grid.shape[0]
+    zoom_lon = n_interp / grid.shape[1]
+    gq = _zoom(grid, (zoom_lat, zoom_lon), order=1)
+    if np.nanmin(gq) > RH_LEVELS[-1] or np.nanmax(gq) < RH_LEVELS[0]:
+        return []
+    latf = np.linspace(lat_vec[0], lat_vec[-1], n_interp)
+    lonf = np.linspace(lon_vec[0], lon_vec[-1], n_interp)
+    glon, glat = np.meshgrid(lonf, latf)
+    fig, ax = plt.subplots(figsize=(1, 1))
+    try:
+        cs = ax.contourf(glon, glat, gq, levels=RH_LEVELS, extend='neither')
+    except Exception:
+        plt.close(fig)
+        return []
+    plt.close(fig)
+    bands = []
+    for li, (lvl, seg_list) in enumerate(zip(cs.levels, cs.allsegs)):
+        color = RH_COLORS.get(lvl)
+        if color is None:
+            continue
+        for poly in _contourf_seglist_to_fill_polys(seg_list):
+            bands.append({'level': float(lvl), 'color': color,
+                          'coords': poly['coords'], 'holes': poly['holes']})
+    return bands
+
+
 # ── Bake all frames ───────────────────────────────────────────────────────────
 _MSLP_INTERVAL = float(globals().get('MSLP_INTERVAL', 16.0))
 
@@ -7820,6 +7901,16 @@ for _key in _sfc_keys:
     _crossover_latv  = globals().get(f'crossover_lat_vec_{_key}', _latv)
     _crossover_bands = _extract_crossover_bands(_crossover, _crossover_latv, _crossover_lonv) if _crossover is not None else []
 
+    _temp        = globals().get(f'temp_grid_{_key}')
+    _temp_lonv   = globals().get(f'temp_lon_vec_{_key}', _lonv)
+    _temp_latv   = globals().get(f'temp_lat_vec_{_key}', _latv)
+    _temp_bands  = _extract_temp_bands(_temp, _temp_latv, _temp_lonv) if _temp is not None else []
+
+    _rh          = globals().get(f'rh_grid_{_key}')
+    _rh_lonv     = globals().get(f'rh_lon_vec_{_key}', _lonv)
+    _rh_latv     = globals().get(f'rh_lat_vec_{_key}', _latv)
+    _rh_bands    = _extract_rh_bands(_rh, _rh_latv, _rh_lonv) if _rh is not None else []
+
     _frame_data[_key] = {
         'mslp': _mslp_contours,
         'qpf':  _qpf_bands,
@@ -7828,6 +7919,8 @@ for _key in _sfc_keys:
         'qpf3h_available': _qpf3h_available,
         'cape': _cape_bands,
         'crossover': _crossover_bands,
+        'temp': _temp_bands,
+        'rh':   _rh_bands,
         'hl':   hl_centers_by_key.get(_key, []),
         'trough': globals().get('_trough_mslp_by_key', {}).get(_key, []),
         'bbox': [float(_latv[0]), float(_lonv[0]), float(_latv[-1]), float(_lonv[-1])]
@@ -8007,6 +8100,17 @@ _gem_crossover_swatches = ''.join(
         ('>0', '#ff8800'), ('10+', '#ff0000'), ('20+', '#cc00cc'), ('30+', '#4b0082'),
     ]
 )
+_gem_temp_swatches = ''.join(
+    _gem_swatch_col(l, c) for l, c in [
+        ('25-30', '#ff8800'), ('30-35', '#cc0000'), ('35+', '#8800cc'),
+    ]
+)
+_gem_rh_swatches = ''.join(
+    _gem_swatch_col(l, c) for l, c in [
+        ('0-10', '#3b2412'), ('10-20', '#6b4423'), ('20-30', '#c8a165'),
+        ('30-40', '#a8e6a1'), ('40-50', '#4caf50'),
+    ]
+)
 
 _gem_legend_label = (
     '<span style="font-size:10px;font-weight:bold;color:#2a3a6a;'
@@ -8028,6 +8132,12 @@ _gem_mslp_legend_html = (
     f'<div id="gem-legend-crossover" style="display:none;align-items:center;'
     'border-left:1px solid #ccc;padding-left:8px;">'
     + _gem_legend_label.format('Crossover') + _gem_crossover_swatches + '</div>'
+    f'<div id="gem-legend-temp" style="display:none;align-items:center;'
+    'border-left:1px solid #ccc;padding-left:8px;">'
+    + _gem_legend_label.format('Temp (\u00b0C)') + _gem_temp_swatches + '</div>'
+    f'<div id="gem-legend-rh" style="display:none;align-items:center;'
+    'border-left:1px solid #ccc;padding-left:8px;">'
+    + _gem_legend_label.format('RH (%)') + _gem_rh_swatches + '</div>'
     '</div>'
 )
 m.get_root().html.add_child(Element(_gem_mslp_legend_html))
@@ -8070,12 +8180,14 @@ var _gemShowMslp      = true;
 var _gemShowQpf       = true;
 var _gemShowQpf3h     = false;
 var _gemShowCape      = false;
-var _gemShowCrossover = false;
+var _gemCrossoverMode = 0;  // 0=off, 1=crossover, 2=temp, 3=rh
 var _gemMslpLayer      = null;
 var _gemQpfLayer       = null;
 var _gemQpf3hLayer     = null;
 var _gemCapeLayer      = null;
 var _gemCrossoverLayer = null;
+var _gemTempLayer      = null;
+var _gemRhLayer        = null;
 var _gemAnalysisLayer  = null;
 var _gemShowAnalysis   = false;
 var _gemExporting      = false;
@@ -8147,10 +8259,19 @@ function gemToggle(which){{
     if (_capeLegend) _capeLegend.style.display = _gemShowCape ? "flex" : "none";
   }}
   else if(which==="crossover") {{
-    _gemShowCrossover =!_gemShowCrossover;
-    document.getElementById("btn-crossover").classList.toggle("active",_gemShowCrossover);
+    _gemCrossoverMode = (_gemCrossoverMode + 1) % 4;
+    var _btn = document.getElementById("btn-crossover");
+    var _labels = ["Crossover","Crossover","Temp","RH"];
+    if (_btn) {{
+      _btn.textContent = _labels[_gemCrossoverMode];
+      _btn.classList.toggle("active", _gemCrossoverMode !== 0);
+    }}
     var _crossLegend = document.getElementById("gem-legend-crossover");
-    if (_crossLegend) _crossLegend.style.display = _gemShowCrossover ? "flex" : "none";
+    var _tempLegend   = document.getElementById("gem-legend-temp");
+    var _rhLegend     = document.getElementById("gem-legend-rh");
+    if (_crossLegend) _crossLegend.style.display = (_gemCrossoverMode===1) ? "flex" : "none";
+    if (_tempLegend)   _tempLegend.style.display   = (_gemCrossoverMode===2) ? "flex" : "none";
+    if (_rhLegend)     _rhLegend.style.display     = (_gemCrossoverMode===3) ? "flex" : "none";
   }}
   else if(which==="analysis")  {{ _gemShowAnalysis=!_gemShowAnalysis; document.getElementById("btn-analysis").classList.toggle("active",_gemShowAnalysis); }}
   gemRender(_gemStepIdx);
@@ -8204,6 +8325,8 @@ function gemRender(idx){{
   if(_gemMslpLayer)      {{ MAP.removeLayer(_gemMslpLayer);      _gemMslpLayer=null;      }}
   if(_gemCapeLayer)      {{ MAP.removeLayer(_gemCapeLayer);      _gemCapeLayer=null;      }}
   if(_gemCrossoverLayer) {{ MAP.removeLayer(_gemCrossoverLayer); _gemCrossoverLayer=null; }}
+  if(_gemTempLayer)      {{ MAP.removeLayer(_gemTempLayer);      _gemTempLayer=null;      }}
+  if(_gemRhLayer)        {{ MAP.removeLayer(_gemRhLayer);        _gemRhLayer=null;        }}
   if(_gemAnalysisLayer)  {{ MAP.removeLayer(_gemAnalysisLayer);  _gemAnalysisLayer=null;  }}
 
   var fd=_GEM_FRAMES[step.key]; if(!fd) return;
@@ -8251,28 +8374,48 @@ function gemRender(idx){{
     _gemCapeLayer.addTo(MAP);
   }}
 
-  // ── Crossover fill ────────────────────────────────────────────────────
-  if(_gemShowCrossover && fd.crossover && fd.crossover.length){{
+// ── Crossover / Temp / RH fill (single button cycles through the three) ──
+  if(!MAP.getPane("crossoverPane")){{
+    MAP.createPane("crossoverPane");
+    MAP.getPane("crossoverPane").style.zIndex=477;
+    MAP.getPane("crossoverPane").style.pointerEvents="none";
+  }}
+  if(_gemCrossoverMode===1 && fd.crossover && fd.crossover.length){{
     _gemCrossoverLayer=L.layerGroup();
-    if(!MAP.getPane("crossoverPane")){{
-      MAP.createPane("crossoverPane");
-      MAP.getPane("crossoverPane").style.zIndex=477;
-      MAP.getPane("crossoverPane").style.pointerEvents="none";
-    }}
     fd.crossover.slice().sort(function(a,b){{return a.level-b.level;}}).forEach(function(band){{
       if(!band.coords||band.coords.length<3) return;
       var rings=[band.coords].concat(band.holes||[]);
       L.polygon(rings,{{
-        color:"none",
-        weight:0,
-        fillColor:band.color,
-        fillOpacity:0.45,
-        fillRule:"evenodd",
-        interactive:false,
-        pane:"crossoverPane"
+        color:"none", weight:0,
+        fillColor:band.color, fillOpacity:0.45,
+        fillRule:"evenodd", interactive:false, pane:"crossoverPane"
       }}).addTo(_gemCrossoverLayer);
     }});
     _gemCrossoverLayer.addTo(MAP);
+  }} else if(_gemCrossoverMode===2 && fd.temp && fd.temp.length){{
+    _gemTempLayer=L.layerGroup();
+    fd.temp.slice().sort(function(a,b){{return a.level-b.level;}}).forEach(function(band){{
+      if(!band.coords||band.coords.length<3) return;
+      var rings=[band.coords].concat(band.holes||[]);
+      L.polygon(rings,{{
+        color:"none", weight:0,
+        fillColor:band.color, fillOpacity:0.45,
+        fillRule:"evenodd", interactive:false, pane:"crossoverPane"
+      }}).addTo(_gemTempLayer);
+    }});
+    _gemTempLayer.addTo(MAP);
+  }} else if(_gemCrossoverMode===3 && fd.rh && fd.rh.length){{
+    _gemRhLayer=L.layerGroup();
+    fd.rh.slice().sort(function(a,b){{return a.level-b.level;}}).forEach(function(band){{
+      if(!band.coords||band.coords.length<3) return;
+      var rings=[band.coords].concat(band.holes||[]);
+      L.polygon(rings,{{
+        color:"none", weight:0,
+        fillColor:band.color, fillOpacity:0.45,
+        fillRule:"evenodd", interactive:false, pane:"crossoverPane"
+      }}).addTo(_gemRhLayer);
+    }});
+    _gemRhLayer.addTo(MAP);
   }}
 
   // ── QPF dots ──────────────────────────────────────────────────────────
@@ -8426,8 +8569,6 @@ function _gemInit(){{
   }}
   var _capeLegend = document.getElementById("gem-legend-cape");
   if (_capeLegend) _capeLegend.style.display = _gemShowCape ? "flex" : "none";
-  var _crossLegend = document.getElementById("gem-legend-crossover");
-  if (_crossLegend) _crossLegend.style.display = _gemShowCrossover ? "flex" : "none";
   var MAP=_getMap();
   if(MAP){{
     MAP.on('zoomend', function(){{ gemRender(_gemStepIdx); }});
