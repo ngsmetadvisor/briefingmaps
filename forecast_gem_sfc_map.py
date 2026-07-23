@@ -5392,8 +5392,8 @@ function synRenderUA(fullKey, stepLabel) {{
     }}
   }}
 
-// ── 850 hPa LLJ wind barbs — right-click toggle ─────────────────────────
-  if (_synLevel === "850" && _synShowLLJBarbs) {{
+// ── 850 hPa LLJ wind barbs — right-click toggle (only shows when LLJ is also on) ──
+  if (_synLevel === "850" && _synShowLLJ && _synShowLLJBarbs) {{
     var _lljBarbs = uaData.llj_barb_pts || [];
     if (_lljBarbs.length) {{
       if (!MAP.getPane("lljBarbPane")) {{
