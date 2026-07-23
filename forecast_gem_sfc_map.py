@@ -8051,8 +8051,7 @@ _bar_html = '''
   <div class="bar-section">
     <span class="bar-label">Layers</span>
     <button class="gem-layer-btn active" id="btn-mslp" onclick="gemToggle('mslp')">MSLP</button>
-    <button class="gem-layer-btn active" id="btn-qpf"  onclick="gemToggle('qpf')">QPF 12h</button>
-    <button class="gem-layer-btn"        id="btn-qpf3h" onclick="gemToggle('qpf3h')">QPF 3h</button>
+    <button class="gem-layer-btn active" id="btn-qpf" onclick="gemToggle('qpf')">QPF 12h</button>
     <button class="gem-layer-btn"        id="btn-cape" onclick="gemToggle('cape')">CAPE</button>
     <button class="gem-layer-btn"        id="btn-crossover" onclick="gemToggle('crossover')">Crossover</button>
 <button class="gem-layer-btn" id="btn-analysis" onclick="gemToggle('analysis')">Analysis</button>
@@ -8173,8 +8172,7 @@ function _utcKeyToLocalStr(key) {{
 
 var _gemStepIdx       = 0;
 var _gemShowMslp      = true;
-var _gemShowQpf       = true;
-var _gemShowQpf3h     = false;
+var _gemQpfMode       = 0;  // 0=QPF12h, 1=QPF3h, 2=off
 var _gemShowCape      = false;
 var _gemCrossoverMode = 0;  // 0=off, 1=crossover, 2=temp, 3=rh
 var _gemMslpLayer      = null;
@@ -8246,8 +8244,15 @@ function _hlMarkerHtml(c, zf, valDivisor) {{
 
 function gemToggle(which){{
   if(which==="mslp")           {{ _gemShowMslp =!_gemShowMslp;  document.getElementById("btn-mslp" ).classList.toggle("active",_gemShowMslp);  }}
-  else if(which==="qpf")       {{ _gemShowQpf  =!_gemShowQpf;   document.getElementById("btn-qpf"  ).classList.toggle("active",_gemShowQpf);   }}
-  else if(which==="qpf3h")     {{ _gemShowQpf3h=!_gemShowQpf3h; document.getElementById("btn-qpf3h").classList.toggle("active",_gemShowQpf3h); }}
+  else if(which==="qpf")       {{
+    _gemQpfMode = (_gemQpfMode + 1) % 3;
+    var _qpfBtn = document.getElementById("btn-qpf");
+    var _qpfLabels = ["QPF 12h","QPF 3h","QPF Off"];
+    if (_qpfBtn) {{
+      _qpfBtn.textContent = _qpfLabels[_gemQpfMode];
+      _qpfBtn.classList.toggle("active", _gemQpfMode !== 2);
+    }}
+  }}
   else if(which==="cape")      {{
     _gemShowCape =!_gemShowCape;
     document.getElementById("btn-cape" ).classList.toggle("active",_gemShowCape);
@@ -8328,21 +8333,25 @@ function gemRender(idx){{
   var fd=_GEM_FRAMES[step.key]; if(!fd) return;
 
   var _noQpfEl=_gemEnsureNoQpfLabel();
-  _noQpfEl.style.display=(fd.qpf_available===false)?"block":"none";
+  _noQpfEl.style.display=(_gemQpfMode===0 && fd.qpf_available===false)?"block":"none";
 
   var _noQpf3hEl=_gemEnsureNoQpf3hLabel();
-  _noQpf3hEl.style.display=(fd.qpf3h_available===false)?"block":"none";
+  _noQpf3hEl.style.display=(_gemQpfMode===1 && fd.qpf3h_available===false)?"block":"none";
 
-  var _qpf3hBtn=document.getElementById("btn-qpf3h");
-  if(_qpf3hBtn){{
-    if(fd.qpf3h_available===false){{
-      _qpf3hBtn.style.background="#cc0000";
-      _qpf3hBtn.style.borderColor="#ff4444";
-      _qpf3hBtn.style.color="#ffffff";
+  var _qpfBtn=document.getElementById("btn-qpf");
+  if(_qpfBtn){{
+    if(_gemQpfMode===1 && fd.qpf3h_available===false){{
+      _qpfBtn.style.background="#cc0000";
+      _qpfBtn.style.borderColor="#ff4444";
+      _qpfBtn.style.color="#ffffff";
+    }} else if(_gemQpfMode===0 && fd.qpf_available===false){{
+      _qpfBtn.style.background="#cc0000";
+      _qpfBtn.style.borderColor="#ff4444";
+      _qpfBtn.style.color="#ffffff";
     }} else {{
-      _qpf3hBtn.style.background="";
-      _qpf3hBtn.style.borderColor="";
-      _qpf3hBtn.style.color="";
+      _qpfBtn.style.background="";
+      _qpfBtn.style.borderColor="";
+      _qpfBtn.style.color="";
     }}
   }}
 
@@ -8414,8 +8423,8 @@ function gemRender(idx){{
     _gemRhLayer.addTo(MAP);
   }}
 
-  // ── QPF dots ──────────────────────────────────────────────────────────
-  if(_gemShowQpf && fd.qpf && fd.qpf.length){{
+// ── QPF dots ──────────────────────────────────────────────────────────
+  if(_gemQpfMode===0 && fd.qpf && fd.qpf.length){{
     _gemQpfLayer=L.layerGroup();
     if(!MAP.getPane("qpfPane")){{
       MAP.createPane("qpfPane");
@@ -8438,8 +8447,8 @@ function gemRender(idx){{
     _gemQpfLayer.addTo(MAP);
   }}
 
-  // ── QPF 3h fill ───────────────────────────────────────────────────────
-  if(_gemShowQpf3h && fd.qpf3h && fd.qpf3h.length){{
+// ── QPF 3h fill ───────────────────────────────────────────────────────
+  if(_gemQpfMode===1 && fd.qpf3h && fd.qpf3h.length){{
     _gemQpf3hLayer=L.layerGroup();
     if(!MAP.getPane("qpf3hPane")){{
       MAP.createPane("qpf3hPane");
