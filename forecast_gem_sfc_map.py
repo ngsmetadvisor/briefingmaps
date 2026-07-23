@@ -2505,6 +2505,8 @@ for (_date, _hr) in _sfc_times:
                 _temp2m_entry['lats'], _temp2m_entry['lons'], _t2m_data_raw)
             t2m_lon_vec, t2m_lat_vec, t2m_grid = _regrid_mslp(
                 _t2m_lats_c, _t2m_lons_c, _t2m_data_c)
+            if np.nanmax(t2m_grid) > 100:
+                t2m_grid = t2m_grid - 273.15
 
             _rh2m_data_raw = np.where(
                 (np.abs(_rh2m_entry['data'].astype(float)) > 1e6) | (_rh2m_entry['data'].astype(float) < 0),
