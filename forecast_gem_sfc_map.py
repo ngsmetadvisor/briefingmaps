@@ -5142,7 +5142,7 @@ function synLLJValuesContextMenu(ev) {{
   item.onmouseleave = function() {{ item.style.background = ""; }};
   item.innerHTML = '<input type="checkbox" id="syn-llj-barb-checkbox" style="margin:0;cursor:pointer;"'
     + (_synShowLLJBarbs ? " checked" : "") + '>'
-    + '<span>Show LLJ wind barbs (AB + 500km, 250km spacing)</span>';
+    + '<span>Wind barbs</span>';
   item.onclick = function(e) {{
     e.stopPropagation();
     synToggleLLJBarbs();
