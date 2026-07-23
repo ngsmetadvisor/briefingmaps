@@ -3362,7 +3362,7 @@ def _process_level(_df_hr, _plvl, _bands_850, _bands_500, _hght_levels, _key):
             except Exception as _e:
                 print(f'    ⚠ LLJ fill error: {_e}')
             plt.close(_fig_llj)
-if _plvl == 850:
+        if _plvl == 850:
             try:
                 _dcol = _col('DRCT')
                 _mask_uv = _df_hr[_col('SPED')].notna() & _df_hr[_dcol].notna()
@@ -3388,13 +3388,11 @@ if _plvl == 850:
                     _vgrid, _, _         = _make_grid(_lons_uv, _lats_uv, _v_uv, N=_n)
                     _ugrid = _smooth(_ugrid, _SIGMA['SPED'])
                     _vgrid = _smooth(_vgrid, _SIGMA['SPED'])
-
                     from scipy.interpolate import RegularGridInterpolator
                     _interp_u = RegularGridInterpolator(
                         (_ltv_u, _lv_u), _ugrid, bounds_error=False, fill_value=np.nan)
                     _interp_v = RegularGridInterpolator(
                         (_ltv_u, _lv_u), _vgrid, bounds_error=False, fill_value=np.nan)
-
                     def _add_llj_barb_pt(_plat, _plon, _out_list, _size=26):
                         _uv = _interp_u([[_plat, _plon]])[0]
                         _vv = _interp_v([[_plat, _plon]])[0]
@@ -3411,7 +3409,6 @@ if _plvl == 850:
                             'svg': _bsvg, 'w': int(_bw), 'h': int(_bh),
                             'cx': int(_bcx), 'cy': int(_bcy),
                         })
-
                     # ── Inner grid: AB + 500km buffer, 100km spacing ────────
                     _lat_pts = np.arange(LLJ_VAL_LAT_MIN, LLJ_VAL_LAT_MAX + 0.01, LLJ_VAL_SPACING_DEG_LAT)
                     for _plat in _lat_pts:
@@ -3419,7 +3416,6 @@ if _plvl == 850:
                         _lon_pts = np.arange(LLJ_VAL_LON_MIN, LLJ_VAL_LON_MAX + 0.01, _lon_spacing)
                         for _plon in _lon_pts:
                             _add_llj_barb_pt(_plat, _plon, _llj_value_pts, _size=26)
-
                     # ── Outer grid: rest of GEM domain, 500km spacing ───────
                     _outer_lat_pts = np.arange(GEM_LAT_MIN, GEM_LAT_MAX + 0.01, LLJ_VAL_OUTER_SPACING_DEG_LAT)
                     for _plat in _outer_lat_pts:
