@@ -4915,6 +4915,7 @@ var _synShowTooltips  = {'true' if SHOW_TOOLTIPS else 'false'};
 var _synShowThickness = false;   // 700-500 hPa ΔT fill — 500 hPa only, default off
 var _synShowLLJ       = false;   // 850 hPa LLJ wind-speed shading — default off
 var _synShowLLJBarbs  = false;   // 850 hPa LLJ wind barbs (right-click toggle) — default off
+var _LLJ_FILL_OPACITY = 0.55;    // 850 hPa LLJ shading opacity (0.0–1.0)
 var _synBaseZoom     = 5;   // zoom at which H/L and W/C symbols are drawn at base size
 
 function _synZoomFactor(MAP) {{
@@ -5384,7 +5385,7 @@ function synRenderUA(fullKey, stepLabel) {{
         if (!poly.coords || poly.coords.length < 3) return;
         L.polygon([poly.coords], {{
           color: "none", weight: 0,
-          fillColor: poly.color, fillOpacity: 0.55,
+          fillColor: poly.color, fillOpacity: _LLJ_FILL_OPACITY,
           interactive: false, pane: "lljPane"
         }}).addTo(_synUALayer);
       }});
