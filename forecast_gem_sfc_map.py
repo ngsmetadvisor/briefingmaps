@@ -3344,11 +3344,15 @@ def _process_level(_df_hr, _plvl, _bands_850, _bands_500, _hght_levels, _key):
         vmax     = np.ceil( grid_s.max() / _INTERVALS['SPED']) * _INTERVALS['SPED']
         s_levels = np.arange(vmin, vmax + _INTERVALS['SPED'], _INTERVALS['SPED'])
         if len(s_levels) >= 2:
-            _sped_segs = _extract_contours(glon2d, glat2d, grid_s, s_levels)
-        if _plvl == 850 and grid_s.max() >= LLJ_LEVELS[0]:
+          _sped_segs = _extract_contours(glon2d, glat2d, grid_s, s_levels)
+    # LLJ shading — no smoothing. Sample straight from the griddata-interpolated
+    # field so jet-core wind speeds land in the correct LLJ_LEVELS color band
+    # instead of being blurred down by the sigma=10 smooth used for contour lines.
+    _grid_s_raw = _make_grid(lons_s, lats_s, vals_s, N=_n)[0]
+        if _plvl == 850 and _grid_s_raw.max() >= LLJ_LEVELS[0]:
             _fig_llj, _ax_llj = plt.subplots(figsize=(1, 1))
             try:
-                _cs_llj = _ax_llj.contourf(glon2d, glat2d, grid_s, levels=LLJ_LEVELS)
+                _cs_llj = _ax_llj.contourf(glon2d, glat2d, _grid_s_raw, levels=LLJ_LEVELS)
                 for _bi, _col_llj in enumerate(LLJ_COLORS):
                     if _bi >= len(_cs_llj.allsegs):
                         continue
@@ -3386,8 +3390,9 @@ def _process_level(_df_hr, _plvl, _bands_850, _bands_500, _hght_levels, _key):
                             _lons_uv[_first], _lats_uv[_first], _u_uv[_first], _v_uv[_first])
                     _ugrid, _lv_u, _ltv_u = _make_grid(_lons_uv, _lats_uv, _u_uv, N=_n)
                     _vgrid, _, _         = _make_grid(_lons_uv, _lats_uv, _v_uv, N=_n)
-                    _ugrid = _smooth(_ugrid, _SIGMA['SPED'])
-                    _vgrid = _smooth(_vgrid, _SIGMA['SPED'])
+                    # LLJ barb values: no smoothing — sample the raw griddata-interpolated
+                    # field directly so narrow jet cores aren't blurred (sigma=10 was
+                    # crushing peak wind speeds before this fix)
                     from scipy.interpolate import RegularGridInterpolator
                     _interp_u = RegularGridInterpolator(
                         (_ltv_u, _lv_u), _ugrid, bounds_error=False, fill_value=np.nan)
