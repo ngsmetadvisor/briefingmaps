@@ -596,10 +596,12 @@ _PROBE_ISOB_VAR = 'AirTemp'   # representative for all isobaric vars at a given 
 
 # ── Surface variable map ──────────────────────────────────────────────────────
 _SFC_VAR_MAP = {
-    'Pressure_MSL':    'MSLP',
-    'Precip-Accum':    '_PACC',
-    'Precip-Accum3h':  '_PACC3H',
-    'CAPE':            '_CAPE',
+    'Pressure_MSL':      'MSLP',
+    'Precip-Accum':      '_PACC',
+    'Precip-Accum3h':    '_PACC3H',
+    'CAPE':              '_CAPE',
+    'AirTemp':           '_TEMP2M',
+    'RelativeHumidity':  '_RH2M',
 }
 _SFC_VARS = list(_SFC_VAR_MAP.keys())
 
@@ -701,6 +703,18 @@ def _gdps_sfc_url(run_dt, fxx, var_name):
         fn = f'{d}T{hh}Z_MSC_GDPS_{var_name}_LatLon0.15_PT{fxx:03d}H.grib2'
     else:
         fn = f'{d}T{hh}Z_MSC_GDPS_{var_name}_Sfc_LatLon0.15_PT{fxx:03d}H.grib2'
+    return f'{_DD_BASE}/{d}/WXO-DD/model_gdps/15km/{hh}/{fxx:03d}/{fn}'
+
+def _rdps_agl_url(run_dt, fxx, var_name):
+    d  = run_dt.strftime('%Y%m%d')
+    hh = run_dt.strftime('%H')
+    fn = f'{d}T{hh}Z_MSC_RDPS_{var_name}_AGL-2m_RLatLon0.09_PT{fxx:03d}H.grib2'
+    return f'{_DD_BASE}/{d}/WXO-DD/model_rdps/10km/{hh}/{fxx:03d}/{fn}'
+
+def _gdps_agl_url(run_dt, fxx, var_name):
+    d  = run_dt.strftime('%Y%m%d')
+    hh = run_dt.strftime('%H')
+    fn = f'{d}T{hh}Z_MSC_GDPS_{var_name}_AGL-2m_LatLon0.15_PT{fxx:03d}H.grib2'
     return f'{_DD_BASE}/{d}/WXO-DD/model_gdps/15km/{hh}/{fxx:03d}/{fn}'
 
 def _fxx(run_dt, valid_dt):
@@ -1092,11 +1106,12 @@ for vt in _target_vts:
 _sfc_tasks = []
 
 for vt in _sfc_target_vts:
-    use_rdps  = _NOW_UTC < vt < _RDPS_CUTOFF
-    run_dt    = _rdps_run_dt if use_rdps else _gdps_run_dt
-    url_fn    = _rdps_sfc_url if use_rdps else _gdps_sfc_url
-    max_fxx   = 84 if use_rdps else 240
-    model_lbl = 'RDPS' if use_rdps else 'GDPS'
+    use_rdps   = _NOW_UTC < vt < _RDPS_CUTOFF
+    run_dt     = _rdps_run_dt if use_rdps else _gdps_run_dt
+    url_fn     = _rdps_sfc_url if use_rdps else _gdps_sfc_url
+    agl_url_fn = _rdps_agl_url if use_rdps else _gdps_agl_url
+    max_fxx    = 84 if use_rdps else 240
+    model_lbl  = 'RDPS' if use_rdps else 'GDPS'
 
     # 06Z endpoint → MSLP at 00Z, QPF window 18Z(-1)→06Z, label 00Z
     # 18Z endpoint → MSLP at 12Z, QPF window 06Z→18Z, label 12Z
@@ -1123,6 +1138,15 @@ for vt in _sfc_target_vts:
         _sfc_tasks.append((model_lbl,
                            url_fn(run_dt, fxx_mslp, 'CAPE'),
                            'CAPE', vt_mslp, ''))
+
+    # AGL-2m AirTemp + RelativeHumidity at 00Z (same fxx/valid time as MSLP) — for Crossover
+    if 0 <= fxx_mslp <= max_fxx:
+        _sfc_tasks.append((model_lbl,
+                           agl_url_fn(run_dt, fxx_mslp, 'AirTemp'),
+                           'AirTemp', vt_mslp, ''))
+        _sfc_tasks.append((model_lbl,
+                           agl_url_fn(run_dt, fxx_mslp, 'RelativeHumidity'),
+                           'RelativeHumidity', vt_mslp, ''))
 
 # Precip target at 06Z
     _sfc_tasks.append((model_lbl,
@@ -1287,7 +1311,7 @@ async def _fetch_and_extract_all():
             continue
         for var_name in _SFC_VARS:
             for suffix, label in [('', '@Sfc'), ('_PRIOR', '@Sfc-Prior')]:
-                if var_name in ('Pressure_MSL', 'CAPE', 'Precip-Accum3h') and suffix == '_PRIOR':
+                if var_name in ('Pressure_MSL', 'CAPE', 'Precip-Accum3h', 'AirTemp', 'RelativeHumidity') and suffix == '_PRIOR':
                     continue
                 col     = _SFC_VAR_MAP[var_name] + suffix
                 field   = f'{var_name}{label}'
@@ -1455,7 +1479,8 @@ if _n_err:
 
 _COLS = ['icao','wmo','stn_name','lat','lon','valid_time','hour',
          'PRES','HGHT','TEMP','DWPT','RELH','MIXR','DRCT','SPED',
-         'THTA','THTE','THTV','MSLP','QPF12H','QPF3H','CAPE']
+         'THTA','THTE','THTV','MSLP','QPF12H','QPF3H','CAPE',
+         'TEMP2M','RH2M','CROSSOVER']
 
 rows = []
 
@@ -1503,6 +1528,9 @@ for (lat, lon, vt_str, pres), fields in _point_data.items():
         'QPF12H':     None,
         'QPF3H':      None,
         'CAPE':       None,
+        'TEMP2M':     None,
+        'RH2M':       None,
+        'CROSSOVER':  None,
         '_model':     prefix,
     })
 
@@ -1537,6 +1565,20 @@ for (lat, lon, vt_str), fields in _sfc_merged.items():
     cape = (round(float(cape_raw), 1)
             if cape_raw is not None and not _math.isnan(float(cape_raw))
             else None)
+
+    temp2m_raw = fields.get('_TEMP2M')
+    temp2m = (round(float(temp2m_raw), 1)
+              if temp2m_raw is not None and not _math.isnan(float(temp2m_raw))
+              else None)
+
+    rh2m_raw = fields.get('_RH2M')
+    rh2m = (round(float(rh2m_raw), 1)
+            if rh2m_raw is not None and not _math.isnan(float(rh2m_raw))
+            else None)
+
+    crossover = (round(temp2m - rh2m, 1)
+                 if temp2m is not None and rh2m is not None
+                 else None)
 
     pacc       = fields.get('_PACC')
     pacc_prior = fields.get('_PACC_PRIOR', 0.0)
@@ -1574,6 +1616,9 @@ for (lat, lon, vt_str), fields in _sfc_merged.items():
         'QPF12H':     qpf12h,
         'QPF3H':      qpf3h,
         'CAPE':       cape,
+        'TEMP2M':     temp2m,
+        'RH2M':       rh2m,
+        'CROSSOVER':  crossover,
         '_model':     prefix,
     })
 
@@ -2445,6 +2490,39 @@ for (_date, _hr) in _sfc_times:
     globals()[f'cape_grid_{_key}']    = cape_grid
     globals()[f'cape_lon_vec_{_key}'] = cape_lon_vec
     globals()[f'cape_lat_vec_{_key}'] = cape_lat_vec
+
+    # ── Crossover (Temp2m - RH2m) — from raw AGL-2m grids cached in UA-2b ──────
+    try:
+        _temp2m_entry = _raw_grids.get(('AirTemp', _vt_mslp_str), {})
+        _rh2m_entry   = _raw_grids.get(('RelativeHumidity', _vt_mslp_str), {})
+        if _temp2m_entry and _rh2m_entry:
+            _t2m_lats_c, _t2m_lons_c, _t2m_data_c = _crop_grid(
+                _temp2m_entry['lats'], _temp2m_entry['lons'],
+                _temp2m_entry['data'].astype(float))
+            t2m_lon_vec, t2m_lat_vec, t2m_grid = _regrid_mslp(
+                _t2m_lats_c, _t2m_lons_c, _t2m_data_c)
+
+            _rh2m_lats_c, _rh2m_lons_c, _rh2m_data_c = _crop_grid(
+                _rh2m_entry['lats'], _rh2m_entry['lons'],
+                _rh2m_entry['data'].astype(float))
+            rh2m_lon_vec, rh2m_lat_vec, rh2m_grid = _regrid_mslp(
+                _rh2m_lats_c, _rh2m_lons_c, _rh2m_data_c)
+
+            crossover_grid    = t2m_grid - rh2m_grid
+            crossover_lon_vec = t2m_lon_vec
+            crossover_lat_vec = t2m_lat_vec
+            print(f'  ✓ Crossover {crossover_grid.shape} '
+                  f'{np.nanmin(crossover_grid):.1f}–{np.nanmax(crossover_grid):.1f}')
+        else:
+            crossover_grid = crossover_lon_vec = crossover_lat_vec = None
+            print(f'  ⚠ Crossover inputs not cached for {_vt_mslp_str}')
+    except Exception as _e:
+        crossover_grid = crossover_lon_vec = crossover_lat_vec = None
+        print(f'  ✗ Crossover failed: {_e}')
+
+    globals()[f'crossover_grid_{_key}']    = crossover_grid
+    globals()[f'crossover_lon_vec_{_key}'] = crossover_lon_vec
+    globals()[f'crossover_lat_vec_{_key}'] = crossover_lat_vec
 
 # ── QPF from ua_raw_df ────────────────────────────────────────────────────
     _qpf_lats = np.array(sorted(_sub['lat'].dropna().unique()))
@@ -7668,6 +7746,43 @@ def _extract_cape_bands(grid, lat_vec, lon_vec, n_interp=120):
     return bands
 
 
+# ── Crossover (Temp2m - RH2m) fill bands — vectorised ──────────────────────────
+CROSSOVER_LEVELS = [0, 10, 20, 30, 999]
+CROSSOVER_COLORS = {
+    0:  '#ff8800',   # orange  — >0
+    10: '#ff0000',   # red     — >=10
+    20: '#cc00cc',   # magenta — >=20
+    30: '#4b0082',   # dark purple — >=30
+}
+CROSSOVER_FILL_OPACITY = 0.45
+
+def _extract_crossover_bands(grid, lat_vec, lon_vec, n_interp=120):
+    if grid is None:
+        return []
+    zoom_lat = n_interp / grid.shape[0]
+    zoom_lon = n_interp / grid.shape[1]
+    gq = _zoom(grid, (zoom_lat, zoom_lon), order=1)
+    if np.nanmax(gq) < CROSSOVER_LEVELS[0]:
+        return []   # nowhere above 0 — no fill
+    latf = np.linspace(lat_vec[0], lat_vec[-1], n_interp)
+    lonf = np.linspace(lon_vec[0], lon_vec[-1], n_interp)
+    glon, glat = np.meshgrid(lonf, latf)
+    fig, ax = plt.subplots(figsize=(1, 1))
+    try:
+        cs = ax.contourf(glon, glat, gq, levels=CROSSOVER_LEVELS, extend='max')
+    except Exception:
+        plt.close(fig)
+        return []
+    plt.close(fig)
+    bands = []
+    for li, (lvl, seg_list) in enumerate(zip(cs.levels, cs.allsegs)):
+        color = CROSSOVER_COLORS.get(lvl, CROSSOVER_COLORS[CROSSOVER_LEVELS[-2]])
+        for poly in _contourf_seglist_to_fill_polys(seg_list):
+            bands.append({'level': float(lvl), 'color': color,
+                          'coords': poly['coords'], 'holes': poly['holes']})
+    return bands
+
+
 # ── Bake all frames ───────────────────────────────────────────────────────────
 _MSLP_INTERVAL = float(globals().get('MSLP_INTERVAL', 16.0))
 
@@ -7697,6 +7812,11 @@ for _key in _sfc_keys:
     _cape_latv  = globals().get(f'cape_lat_vec_{_key}', _latv)
     _cape_bands = _extract_cape_bands(_cape, _cape_latv, _cape_lonv) if _cape is not None else []
 
+    _crossover       = globals().get(f'crossover_grid_{_key}')
+    _crossover_lonv  = globals().get(f'crossover_lon_vec_{_key}', _lonv)
+    _crossover_latv  = globals().get(f'crossover_lat_vec_{_key}', _latv)
+    _crossover_bands = _extract_crossover_bands(_crossover, _crossover_latv, _crossover_lonv) if _crossover is not None else []
+
     _frame_data[_key] = {
         'mslp': _mslp_contours,
         'qpf':  _qpf_bands,
@@ -7704,11 +7824,12 @@ for _key in _sfc_keys:
         'qpf3h': _qpf3h_bands,
         'qpf3h_available': _qpf3h_available,
         'cape': _cape_bands,
+        'crossover': _crossover_bands,
         'hl':   hl_centers_by_key.get(_key, []),
         'trough': globals().get('_trough_mslp_by_key', {}).get(_key, []),
         'bbox': [float(_latv[0]), float(_lonv[0]), float(_latv[-1]), float(_lonv[-1])]
     }
-    print(f'  {_key}: {len(_mslp_contours)} MSLP segs, {len(_qpf_bands)} QPF bands, {len(_cape_bands)} CAPE bands')
+    print(f'  {_key}: {len(_mslp_contours)} MSLP segs, {len(_qpf_bands)} QPF bands, {len(_cape_bands)} CAPE bands, {len(_crossover_bands)} Crossover bands')
     if _qpf_bands:
         print(f'    QPF levels present: {sorted(set(b["level"] for b in _qpf_bands))}')
     elif _qpf is not None:
@@ -7841,7 +7962,9 @@ _bar_html = '''
     <button class="gem-layer-btn active" id="btn-qpf"  onclick="gemToggle('qpf')">QPF 12h</button>
     <button class="gem-layer-btn"        id="btn-qpf3h" onclick="gemToggle('qpf3h')">QPF 3h</button>
     <button class="gem-layer-btn"        id="btn-cape" onclick="gemToggle('cape')">CAPE</button>
+    <button class="gem-layer-btn"        id="btn-crossover" onclick="gemToggle('crossover')">Crossover</button>
 <button class="gem-layer-btn" id="btn-analysis" onclick="gemToggle('analysis')">Analysis</button>
+  </div>
   </div>
   <div class="bar-section">
     <span class="bar-label">Time</span>
@@ -7877,6 +8000,11 @@ _gem_cape_swatches = ''.join(
         ('2000', '#ff0000'), ('3000+', '#8800cc'),
     ]
 )
+_gem_crossover_swatches = ''.join(
+    _gem_swatch_col(l, c) for l, c in [
+        ('>0', '#ff8800'), ('10+', '#ff0000'), ('20+', '#cc00cc'), ('30+', '#4b0082'),
+    ]
+)
 
 _gem_legend_label = (
     '<span style="font-size:10px;font-weight:bold;color:#2a3a6a;'
@@ -7895,6 +8023,9 @@ _gem_mslp_legend_html = (
     f'<div id="gem-legend-cape" style="display:none;align-items:center;'
     'border-left:1px solid #ccc;padding-left:8px;">'
     + _gem_cape_swatches + _gem_legend_label.format('CAPE') + '</div>'
+    f'<div id="gem-legend-crossover" style="display:none;align-items:center;'
+    'border-left:1px solid #ccc;padding-left:8px;">'
+    + _gem_legend_label.format('Crossover') + _gem_crossover_swatches + '</div>'
     '</div>'
 )
 m.get_root().html.add_child(Element(_gem_mslp_legend_html))
@@ -7932,18 +8063,20 @@ function _utcKeyToLocalStr(key) {{
        + " \u2014 " + h12 + " " + ampm + " " + tz;
 }}
 
-var _gemStepIdx   = 0;
-var _gemShowMslp  = true;
-var _gemShowQpf   = true;
-var _gemShowQpf3h = false;
-var _gemShowCape  = false;
-var _gemMslpLayer     = null;
-var _gemQpfLayer      = null;
-var _gemQpf3hLayer    = null;
-var _gemCapeLayer     = null;
-var _gemAnalysisLayer = null;
-var _gemShowAnalysis  = false;
-var _gemExporting     = false;
+var _gemStepIdx       = 0;
+var _gemShowMslp      = true;
+var _gemShowQpf       = true;
+var _gemShowQpf3h     = false;
+var _gemShowCape      = false;
+var _gemShowCrossover = false;
+var _gemMslpLayer      = null;
+var _gemQpfLayer       = null;
+var _gemQpf3hLayer     = null;
+var _gemCapeLayer      = null;
+var _gemCrossoverLayer = null;
+var _gemAnalysisLayer  = null;
+var _gemShowAnalysis   = false;
+var _gemExporting      = false;
 
 function _getMap(){{
   var k=Object.keys(window).filter(function(k){{return k.startsWith("map_");}});
@@ -8011,6 +8144,12 @@ function gemToggle(which){{
     var _capeLegend = document.getElementById("gem-legend-cape");
     if (_capeLegend) _capeLegend.style.display = _gemShowCape ? "flex" : "none";
   }}
+  else if(which==="crossover") {{
+    _gemShowCrossover =!_gemShowCrossover;
+    document.getElementById("btn-crossover").classList.toggle("active",_gemShowCrossover);
+    var _crossLegend = document.getElementById("gem-legend-crossover");
+    if (_crossLegend) _crossLegend.style.display = _gemShowCrossover ? "flex" : "none";
+  }}
   else if(which==="analysis")  {{ _gemShowAnalysis=!_gemShowAnalysis; document.getElementById("btn-analysis").classList.toggle("active",_gemShowAnalysis); }}
   gemRender(_gemStepIdx);
 }}
@@ -8058,11 +8197,12 @@ function gemRender(idx){{
   var bannerEl=document.getElementById("gem-banner-time");
   if(bannerEl) bannerEl.textContent=_utcKeyToLocalStr(step.key);
 
-  if(_gemQpfLayer)      {{ MAP.removeLayer(_gemQpfLayer);      _gemQpfLayer=null;      }}
-  if(_gemQpf3hLayer)    {{ MAP.removeLayer(_gemQpf3hLayer);    _gemQpf3hLayer=null;    }}
-  if(_gemMslpLayer)     {{ MAP.removeLayer(_gemMslpLayer);     _gemMslpLayer=null;     }}
-  if(_gemCapeLayer)     {{ MAP.removeLayer(_gemCapeLayer);     _gemCapeLayer=null;     }}
-  if(_gemAnalysisLayer) {{ MAP.removeLayer(_gemAnalysisLayer); _gemAnalysisLayer=null; }}
+  if(_gemQpfLayer)       {{ MAP.removeLayer(_gemQpfLayer);       _gemQpfLayer=null;       }}
+  if(_gemQpf3hLayer)     {{ MAP.removeLayer(_gemQpf3hLayer);     _gemQpf3hLayer=null;     }}
+  if(_gemMslpLayer)      {{ MAP.removeLayer(_gemMslpLayer);      _gemMslpLayer=null;      }}
+  if(_gemCapeLayer)      {{ MAP.removeLayer(_gemCapeLayer);      _gemCapeLayer=null;      }}
+  if(_gemCrossoverLayer) {{ MAP.removeLayer(_gemCrossoverLayer); _gemCrossoverLayer=null; }}
+  if(_gemAnalysisLayer)  {{ MAP.removeLayer(_gemAnalysisLayer);  _gemAnalysisLayer=null;  }}
 
   var fd=_GEM_FRAMES[step.key]; if(!fd) return;
 
@@ -8085,7 +8225,7 @@ function gemRender(idx){{
     }}
   }}
 
-  // ── CAPE fill ─────────────────────────────────────────────────────────
+// ── CAPE fill ─────────────────────────────────────────────────────────
   if(_gemShowCape && fd.cape && fd.cape.length){{
     _gemCapeLayer=L.layerGroup();
     if(!MAP.getPane("capePane")){{
@@ -8107,6 +8247,30 @@ function gemRender(idx){{
       }}).addTo(_gemCapeLayer);
     }});
     _gemCapeLayer.addTo(MAP);
+  }}
+
+  // ── Crossover fill ────────────────────────────────────────────────────
+  if(_gemShowCrossover && fd.crossover && fd.crossover.length){{
+    _gemCrossoverLayer=L.layerGroup();
+    if(!MAP.getPane("crossoverPane")){{
+      MAP.createPane("crossoverPane");
+      MAP.getPane("crossoverPane").style.zIndex=477;
+      MAP.getPane("crossoverPane").style.pointerEvents="none";
+    }}
+    fd.crossover.slice().sort(function(a,b){{return a.level-b.level;}}).forEach(function(band){{
+      if(!band.coords||band.coords.length<3) return;
+      var rings=[band.coords].concat(band.holes||[]);
+      L.polygon(rings,{{
+        color:"none",
+        weight:0,
+        fillColor:band.color,
+        fillOpacity:0.45,
+        fillRule:"evenodd",
+        interactive:false,
+        pane:"crossoverPane"
+      }}).addTo(_gemCrossoverLayer);
+    }});
+    _gemCrossoverLayer.addTo(MAP);
   }}
 
   // ── QPF dots ──────────────────────────────────────────────────────────
@@ -8260,6 +8424,8 @@ function _gemInit(){{
   }}
   var _capeLegend = document.getElementById("gem-legend-cape");
   if (_capeLegend) _capeLegend.style.display = _gemShowCape ? "flex" : "none";
+  var _crossLegend = document.getElementById("gem-legend-crossover");
+  if (_crossLegend) _crossLegend.style.display = _gemShowCrossover ? "flex" : "none";
   var MAP=_getMap();
   if(MAP){{
     MAP.on('zoomend', function(){{ gemRender(_gemStepIdx); }});
