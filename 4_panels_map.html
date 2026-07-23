@@ -579,7 +579,23 @@ function frameLoaded(id) {
   var el = document.getElementById('load-' + id);
   if (el) el.classList.add('hidden');
   _ready[id] = true;
+  injectCrosshairCursor(id);
   if (_ready.p1 && _ready.p2 && _ready.p3 && _ready.p4) setTimeout(patchAll, 400);
+}
+
+function injectCrosshairCursor(id) {
+  try {
+    var win = document.getElementById('frame-' + id).contentWindow;
+    var doc = win.document;
+    var style = doc.createElement('style');
+    style.textContent =
+      '.leaflet-container, .leaflet-container.leaflet-grab, ' +
+      '.leaflet-container.leaflet-touch-drag, .leaflet-dragging .leaflet-container ' +
+      '{ cursor: crosshair !important; }';
+    doc.head.appendChild(style);
+  } catch(e) {
+    console.warn('[AWCC] injectCrosshairCursor error', id, e);
+  }
 }
 
 // ── Patch every frame ──────────────────────────────────────────────────────
