@@ -5048,7 +5048,7 @@ if (_synLevel === "850" || _synLevel === "500") {{
     var sorted = bands.slice().sort(function(a,b) {{ return a[1] - b[1]; }})
       .filter(function(b) {{ return b[2].toLowerCase() !== "#ffffff"; }});
     var swatches = sorted.map(function(b) {{ return _synSwatchCol(b[1], b[2]); }}).join('');
-    el.innerHTML = _synLegendLabel("Temp (\u00b0C)") + '<div style="display:flex;border:1px solid #555;">' + swatches + '</div>';
+    el.innerHTML = _synLegendLabel("Temp (\u00b0C)") + '<div style="display:flex;">' + swatches + '</div>';
     if (_synLevel === "850" && _synShowLLJ) {{
       var lljSwatches =
           _synSwatchCol("15kt", "#888888")
@@ -5058,7 +5058,7 @@ if (_synLevel === "850" || _synLevel === "500") {{
         + _synSwatchCol("45kt", "#9900cc")
         + _synSwatchCol("55kt+", "#ff00cc");
       el.innerHTML += '<div style="display:flex;align-items:center;gap:6px;margin-left:8px;border-left:1px solid #ccc;padding-left:8px;">'
-        + _synLegendLabel("LLJ (kt)") + '<div style="display:flex;border:1px solid #555;">' + lljSwatches + '</div>' + '</div>';
+        + _synLegendLabel("LLJ (kt)") + '<div style="display:flex;">' + lljSwatches + '</div>' + '</div>';
     }}
     el.style.display = "flex";
 }} else if (_synLevel === "700") {{
@@ -5069,7 +5069,7 @@ if (_synLevel === "850" || _synLevel === "500") {{
       + _synLineCol("80%", "4,3")
       + _synLineCol("90%", null)
       + '</div>';
-    el.innerHTML = _synLegendLabel("RH") + '<div style="display:flex;border:1px solid #555;">' + rhSwatches + '</div>' + lines;
+    el.innerHTML = _synLegendLabel("RH") + '<div style="display:flex;">' + rhSwatches + '</div>' + lines;
     el.style.display = "flex";
   }} else {{
     el.innerHTML = '';
@@ -8076,7 +8076,7 @@ def _gem_swatch_col(label, color):
         '</div>'
     )
 
-_gem_qpf_swatches = '<div style="display:flex;border:1px solid #555;">' + ''.join(
+_gem_qpf_swatches = '<div style="display:flex;">' + ''.join(
     _gem_swatch_col(l, c) for l, c in [
         ('0.6', '#c8f0a0'), ('1.5', '#78d048'), ('3', '#228b22'), ('5', '#00aaaa'),
         ('10', '#1a78c2'), ('20', '#6a0dad'), ('30', '#cc00cc'), ('40', '#ffff00'),
@@ -8084,23 +8084,23 @@ _gem_qpf_swatches = '<div style="display:flex;border:1px solid #555;">' + ''.joi
         ('120+', '#111111'),
     ]
 ) + '</div>'
-_gem_cape_swatches = '<div style="display:flex;border:1px solid #555;">' + ''.join(
+_gem_cape_swatches = '<div style="display:flex;">' + ''.join(
     _gem_swatch_col(l, c) for l, c in [
         ('800', '#888888'), ('1200', '#ffff00'), ('1500', '#ffaa00'),
         ('2000', '#ff0000'), ('3000+', '#8800cc'),
     ]
 ) + '</div>'
-_gem_crossover_swatches = '<div style="display:flex;border:1px solid #555;">' + ''.join(
+_gem_crossover_swatches = '<div style="display:flex;">' + ''.join(
     _gem_swatch_col(l, c) for l, c in [
         ('>0', '#ff8800'), ('10+', '#ff0000'), ('20+', '#cc00cc'), ('30+', '#4b0082'),
     ]
 ) + '</div>'
-_gem_temp_swatches = '<div style="display:flex;border:1px solid #555;">' + ''.join(
+_gem_temp_swatches = '<div style="display:flex;">' + ''.join(
     _gem_swatch_col(l, c) for l, c in [
         ('25-30', '#ff8800'), ('30-35', '#cc0000'), ('35+', '#8800cc'),
     ]
 ) + '</div>'
-_gem_rh_swatches = '<div style="display:flex;border:1px solid #555;">' + ''.join(
+_gem_rh_swatches = '<div style="display:flex;">' + ''.join(
     _gem_swatch_col(l, c) for l, c in [
         ('0-10', '#3b2412'), ('10-20', '#6b4423'), ('20-30', '#c8a165'),
         ('30-40', '#a8e6a1'), ('40-50', '#4caf50'),
@@ -8123,7 +8123,7 @@ _gem_mslp_legend_html = (
     + _gem_legend_label.format('Precip (mm)') + _gem_qpf_swatches + '</div>'
     f'<div id="gem-legend-cape" style="display:none;align-items:center;'
     'border-left:1px solid #ccc;padding-left:8px;">'
-    + _gem_cape_swatches + _gem_legend_label.format('CAPE') + '</div>'
+    + _gem_legend_label.format('CAPE') + _gem_cape_swatches + '</div>'
     f'<div id="gem-legend-crossover" style="display:none;align-items:center;'
     'border-left:1px solid #ccc;padding-left:8px;">'
     + _gem_legend_label.format('Crossover') + _gem_crossover_swatches + '</div>'
