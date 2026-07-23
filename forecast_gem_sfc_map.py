@@ -2731,13 +2731,13 @@ sigmaT700500 = 5.0
 _INTERVALS = {'HGHT': 6.0, 'TEMP': 2.0, 'TTDP': 2.0, 'SPED': 5.0}
 
 # LLJ (850 hPa wind-speed) shading thresholds — kt
-LLJ_LEVELS = [25, 35, 45, 55, 999]
-LLJ_COLORS = ['#ffff00', '#ffaa00', '#ff0000', '#8800cc']
+LLJ_LEVELS = [15, 25, 35, 45, 55, 999]
+LLJ_COLORS = ['#66ccff', '#0066ff', '#cc99ff', '#9900cc', '#ff00cc']
 
 # LLJ value-label grid — Alberta + 500 km buffer, ~100 km spacing
 import math
 LLJ_VAL_SPACING_KM = 100.0
-LLJ_VAL_BUFFER_KM  = 500.0
+LLJ_VAL_BUFFER_KM  = 250.0
 _AB_LAT_MIN, _AB_LAT_MAX = 49.0, 60.0
 _AB_LON_MIN, _AB_LON_MAX = -120.0, -110.0
 _llj_buf_deg_lat = LLJ_VAL_BUFFER_KM / 111.0
@@ -5050,10 +5050,11 @@ if (_synLevel === "850" || _synLevel === "500") {{
     el.innerHTML = _synLegendLabel("Temp (\u00b0C)") + swatches;
     if (_synLevel === "850" && _synShowLLJ) {{
       var lljSwatches =
-          _synSwatchCol("25kt", "#ffff00")
-        + _synSwatchCol("35kt", "#ffaa00")
-        + _synSwatchCol("45kt", "#ff0000")
-        + _synSwatchCol("55kt+", "#8800cc");
+          _synSwatchCol("15kt", "#66ccff")
+        + _synSwatchCol("25kt", "#0066ff")
+        + _synSwatchCol("35kt", "#cc99ff")
+        + _synSwatchCol("45kt", "#9900cc")
+        + _synSwatchCol("55kt+", "#ff00cc");
       el.innerHTML += '<div style="display:flex;align-items:center;gap:2px;margin-left:8px;border-left:1px solid #ccc;padding-left:8px;">'
         + _synLegendLabel("LLJ (kt)") + lljSwatches + '</div>';
     }}
@@ -5137,9 +5138,9 @@ function synLLJValuesContextMenu(ev) {{
     + "align-items:center;gap:6px;";
   item.onmouseenter = function() {{ item.style.background = "#2a3a5a"; }};
   item.onmouseleave = function() {{ item.style.background = ""; }};
-  item.innerHTML = '<span style="width:12px;display:inline-block;">'
-    + (_synShowLLJBarbs ? "\u2713" : "") + '</span>'
-    + '<span>Show LLJ wind barbs (AB + 500km, 100km spacing)</span>';
+  item.innerHTML = '<input type="checkbox" id="syn-llj-barb-checkbox" style="margin:0;cursor:pointer;"'
+    + (_synShowLLJBarbs ? " checked" : "") + '>'
+    + '<span>Show LLJ wind barbs (AB + 500km, 250km spacing)</span>';
   item.onclick = function(e) {{
     e.stopPropagation();
     synToggleLLJBarbs();
