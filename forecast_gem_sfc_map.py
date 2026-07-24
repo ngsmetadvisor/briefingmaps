@@ -5378,7 +5378,7 @@ function synRenderUA(fullKey, stepLabel) {{
     if (_lljFills.length) {{
       if (!MAP.getPane("lljPane")) {{
         MAP.createPane("lljPane");
-        MAP.getPane("lljPane").style.zIndex        = 472;
+        MAP.getPane("lljPane").style.zIndex        = 485;
         MAP.getPane("lljPane").style.pointerEvents = "none";
       }}
       _lljFills.forEach(function(poly) {{
