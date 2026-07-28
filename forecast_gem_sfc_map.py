@@ -4108,12 +4108,18 @@ print(f'\n✅ Cell 1B complete ({time.time() - _t0:.1f}s) — '
 # ══════════════════════════════════════════════════════════════════════════
 
 import json as _json_conv
+import gc
+import resource
 import pandas as pd
 import numpy as np
 from scipy.interpolate import RBFInterpolator
 from scipy.ndimage import gaussian_filter
 from scipy.signal import find_peaks
 from scipy.spatial import cKDTree
+
+def _mem_mb():
+    # ru_maxrss is KB on Linux runners (GitHub Actions), bytes on macOS
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
 
 ua_summary_df['_vt']   = pd.to_datetime(ua_summary_df['valid_time'])
 ua_summary_df['_date'] = ua_summary_df['_vt'].dt.date
@@ -4251,13 +4257,15 @@ for (date_val, hr) in _synoptic_times:
     grid, lv, ltv = _build_field_grid(_pts)
     if grid is None:
         _trough_mslp_by_key[_key] = []
-        print(f'    MSLP {_key}: skipped ({len(_pts)} pts)')
+        print(f'    MSLP {_key}: skipped ({len(_pts)} pts)  mem={_mem_mb():.0f}MB')
         continue
     segs = _detect_trough_from_grid(grid, lv, ltv,
                                     prominence=TROUGH_PROMINENCE['mslp'],
                                     sigma_pre=TROUGH_SIGMA_PRE['mslp'])
     _trough_mslp_by_key[_key] = segs
-    print(f'    MSLP {_key}: {len(segs)} seg(s) from {len(_pts)} pts')
+    print(f'    MSLP {_key}: {len(segs)} seg(s) from {len(_pts)} pts  mem={_mem_mb():.0f}MB')
+    del grid, lv, ltv, _pts, _recs
+    gc.collect()    print(f'    MSLP {_key}: {len(segs)} seg(s) from {len(_pts)} pts')
 
 # ══════════════════════════════════════════════════════════
 #  850 / 700 / 500 hPa TROUGH  (from ua_summary_df HGHT_xxx)
@@ -4276,13 +4284,15 @@ for _lvl in ['850', '700', '500']:
         grid, lv, ltv = _build_field_grid(_pts)
         if grid is None:
             _trough_ua_by_key[_lvl][_key] = []
-            print(f'    {_lvl} {_key}: skipped ({len(_pts)} pts)')
+            print(f'    {_lvl} {_key}: skipped ({len(_pts)} pts)  mem={_mem_mb():.0f}MB')
             continue
         segs = _detect_trough_from_grid(grid, lv, ltv,
                                         prominence=TROUGH_PROMINENCE[_lvl],
                                         sigma_pre=TROUGH_SIGMA_PRE[_lvl])
         _trough_ua_by_key[_lvl][_key] = segs
-        print(f'    {_lvl} {_key}: {len(segs)} seg(s) from {len(_pts)} pts')
+        print(f'    {_lvl} {_key}: {len(segs)} seg(s) from {len(_pts)} pts  mem={_mem_mb():.0f}MB')
+        del grid, lv, ltv, _pts
+        gc.collect()
 
 # ── Backward-compat stubs (convergence not computed here) ─────────────────
 _conv_sfc_by_ts   = {f"{pd.Timestamp(d).strftime('%Y%m%d')}_{int(h):02d}": [] for d, h in _synoptic_times}
