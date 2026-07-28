@@ -5414,7 +5414,7 @@ function synRenderUA(fullKey, stepLabel) {{
     if (_lljBarbs.length) {{
       if (!MAP.getPane("lljBarbPane")) {{
         MAP.createPane("lljBarbPane");
-        MAP.getPane("lljBarbPane").style.zIndex        = 476;
+        MAP.getPane("lljBarbPane").style.zIndex        = 486;
         MAP.getPane("lljBarbPane").style.pointerEvents = "none";
       }}
       _lljBarbs.forEach(function(p) {{
@@ -7879,63 +7879,6 @@ def _extract_rh_bands(grid, lat_vec, lon_vec, n_interp=120):
     return bands
 
 
-# ── Wind (10m) shading + barb helper — same colour scale as 850 LLJ ────────
-WIND_LEVELS = [15, 20, 25, 35, 45, 55, 999]
-WIND_COLORS = ['#888888', '#C5E7FF', '#6B8BFF', '#cc99ff', '#9900cc', '#ff00cc']
-
-def _extract_wind_layer(u_grid, v_grid, lat_vec, lon_vec, n_interp=120, spacing_km=100.0):
-    if u_grid is None or v_grid is None:
-        return [], []
-    spd_grid = np.sqrt(u_grid**2 + v_grid**2)
-    fills = []
-    if np.nanmax(spd_grid) >= WIND_LEVELS[0]:
-        latf = np.linspace(lat_vec[0], lat_vec[-1], n_interp)
-        lonf = np.linspace(lon_vec[0], lon_vec[-1], n_interp)
-        glon, glat = np.meshgrid(lonf, latf)
-        zoom_lat = n_interp / spd_grid.shape[0]
-        zoom_lon = n_interp / spd_grid.shape[1]
-        sq = _zoom(spd_grid, (zoom_lat, zoom_lon), order=1)
-        fig, ax = plt.subplots(figsize=(1, 1))
-        try:
-            cs = ax.contourf(glon, glat, sq, levels=WIND_LEVELS)
-            for bi, color in enumerate(WIND_COLORS):
-                if bi >= len(cs.allsegs):
-                    continue
-                for poly in cs.allsegs[bi]:
-                    if len(poly) < 3:
-                        continue
-                    fills.append({'color': color,
-                                  'coords': [[float(p[1]), float(p[0])] for p in poly]})
-        except Exception:
-            pass
-        plt.close(fig)
-
-    barbs = []
-    try:
-        lat_spacing_deg = spacing_km / 111.0
-        lat_pts = np.arange(lat_vec[0], lat_vec[-1] + 0.01, lat_spacing_deg)
-        for plat in lat_pts:
-            lon_spacing = spacing_km / (111.0 * max(0.15, math.cos(math.radians(plat))))
-            lon_pts = np.arange(lon_vec[0], lon_vec[-1] + 0.01, lon_spacing)
-            for plon in lon_pts:
-                iy = int(np.clip(np.round((plat - lat_vec[0]) / (lat_vec[-1] - lat_vec[0]) * (len(lat_vec) - 1)), 0, len(lat_vec) - 1))
-                ix = int(np.clip(np.round((plon - lon_vec[0]) / (lon_vec[-1] - lon_vec[0]) * (len(lon_vec) - 1)), 0, len(lon_vec) - 1))
-                uv = u_grid[iy, ix]
-                vv = v_grid[iy, ix]
-                if np.isnan(uv) or np.isnan(vv):
-                    continue
-                spd = float(np.sqrt(uv**2 + vv**2))
-                drc = float((math.degrees(math.atan2(-uv, -vv)) + 360) % 360)
-                svg, w, h, cx, cy = _llj_barb_svg(drc, spd, S=24)
-                barbs.append({'lat': round(float(plat), 2), 'lon': round(float(plon), 2),
-                              'val': round(spd, 1), 'dir': round(drc, 1),
-                              'svg': svg, 'w': int(w), 'h': int(h), 'cx': int(cx), 'cy': int(cy)})
-    except Exception:
-        pass
-
-    return fills, barbs
-
-
 # ── Bake all frames ───────────────────────────────────────────────────────────
 _MSLP_INTERVAL = float(globals().get('MSLP_INTERVAL', 16.0))
 
@@ -7980,18 +7923,8 @@ for _key in _sfc_keys:
     _rh_latv     = globals().get(f'rh_lat_vec_{_key}', _latv)
     _rh_bands    = _extract_rh_bands(_rh, _rh_latv, _rh_lonv) if _rh is not None else []
 
-    _wind_10m_lonv = globals().get(f'wind10m_lon_vec_{_key}', _lonv)
-    _wind_10m_latv = globals().get(f'wind10m_lat_vec_{_key}', _latv)
-    _wind_grid_u = globals().get(f'wind10m_u_grid_{_key}')
-    _wind_grid_v = globals().get(f'wind10m_v_grid_{_key}')
-    _wind_fills, _wind_barbs = _extract_wind_layer(
-        _wind_grid_u, _wind_grid_v, _wind_10m_latv, _wind_10m_lonv
-    ) if (_wind_grid_u is not None and _wind_grid_v is not None) else ([], [])
-
     _frame_data[_key] = {
         'mslp': _mslp_contours,
-        'wind_fills': _wind_fills,
-        'wind_barbs': _wind_barbs,
         'qpf':  _qpf_bands,
         'qpf_available': _qpf_available,
         'qpf3h': _qpf3h_bands,
@@ -8137,7 +8070,6 @@ _bar_html = '''
     <button class="gem-layer-btn active" id="btn-qpf" onclick="gemToggle('qpf')">QPF 12h</button>
     <button class="gem-layer-btn"        id="btn-cape" onclick="gemToggle('cape')">CAPE</button>
     <button class="gem-layer-btn"        id="btn-crossover" onclick="gemToggle('crossover')">Crossover</button>
-    <button class="gem-layer-btn"        id="btn-wind" onclick="gemToggle('wind')" oncontextmenu="gemWindContextMenu(event)" title="Right-click to link rotation to CAPE">Wind</button>
 <button class="gem-layer-btn" id="btn-analysis" onclick="gemToggle('analysis')">Analysis</button>
   </div>
   <div class="bar-section">
@@ -8259,8 +8191,7 @@ var _gemShowMslp      = true;
 var _gemQpfMode       = 0;  // 0=QPF12h, 1=QPF3h, 2=off
 var _gemShowCape      = false;
 var _gemCrossoverMode = 0;  // 0=off, 1=crossover, 2=temp, 3=rh
-var _gemShowWind       = false;  // MSLP-level wind speed shading + barbs
-var _gemWindRotateCAPE = false;  // right-click toggle: rotate wind layer with CAPEvar _gemMslpLayer      = null;
+var _gemMslpLayer      = null;
 var _gemQpfLayer       = null;
 var _gemQpf3hLayer     = null;
 var _gemCapeLayer      = null;
@@ -8268,7 +8199,6 @@ var _gemCrossoverLayer = null;
 var _gemTempLayer      = null;
 var _gemRhLayer        = null;
 var _gemAnalysisLayer  = null;
-var _gemWindLayer      = null;
 var _gemShowAnalysis   = false;
 var _gemExporting      = false;
 
@@ -8360,58 +8290,8 @@ function gemToggle(which){{
     if (_tempLegend)   _tempLegend.style.display   = (_gemCrossoverMode===2) ? "flex" : "none";
     if (_rhLegend)     _rhLegend.style.display     = (_gemCrossoverMode===3) ? "flex" : "none";
   }}
- else if(which==="analysis")  {{ _gemShowAnalysis=!_gemShowAnalysis; document.getElementById("btn-analysis").classList.toggle("active",_gemShowAnalysis); }}
-  else if(which==="wind")      {{
-    _gemShowWind =!_gemShowWind;
-    document.getElementById("btn-wind").classList.toggle("active",_gemShowWind);
-    if (_gemShowWind && _gemWindRotateCAPE && !_gemShowCape) {{
-      _gemShowCape = true;
-      document.getElementById("btn-cape").classList.add("active");
-      var _capeLegend = document.getElementById("gem-legend-cape");
-      if (_capeLegend) _capeLegend.style.display = "flex";
-    }}
-  }}
+  else if(which==="analysis")  {{ _gemShowAnalysis=!_gemShowAnalysis; document.getElementById("btn-analysis").classList.toggle("active",_gemShowAnalysis); }}
   gemRender(_gemStepIdx);
-}}
-
-function _gemCloseWindCtx(){{
-  var m=document.getElementById("gem-wind-ctx");
-  if(m) m.remove();
-  document.removeEventListener("click",_gemCloseWindCtx);
-}}
-function gemWindContextMenu(ev){{
-  ev.preventDefault();
-  _gemCloseWindCtx();
-  var menu=document.createElement("div");
-  menu.id="gem-wind-ctx";
-  menu.style.cssText="position:fixed;z-index:20000;background:#1c2333;"
-    +"border:1px solid #4a7fc1;border-radius:4px;padding:4px 0;"
-    +"font-family:Courier New,monospace;font-size:11px;color:#e0e0e0;"
-    +"box-shadow:0 4px 12px rgba(0,0,0,0.5);min-width:220px;";
-  menu.style.left=ev.clientX+"px";
-  menu.style.top=ev.clientY+"px";
-  var item=document.createElement("div");
-  item.style.cssText="padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:6px;";
-  item.onmouseenter=function(){{item.style.background="#2a3a5a";}};
-  item.onmouseleave=function(){{item.style.background="";}};
-  item.innerHTML='<input type="checkbox" id="gem-wind-cape-checkbox" style="margin:0;cursor:pointer;"'
-    +(_gemWindRotateCAPE?" checked":"")+'>'
-    +'<span>Link rotation with CAPE</span>';
-  item.onclick=function(e){{
-    e.stopPropagation();
-    _gemWindRotateCAPE=!_gemWindRotateCAPE;
-    if (_gemWindRotateCAPE && _gemShowWind && !_gemShowCape) {{
-      _gemShowCape=true;
-      document.getElementById("btn-cape").classList.add("active");
-      var _capeLegend=document.getElementById("gem-legend-cape");
-      if(_capeLegend) _capeLegend.style.display="flex";
-    }}
-    gemRender(_gemStepIdx);
-    _gemCloseWindCtx();
-  }};
-  menu.appendChild(item);
-  document.body.appendChild(menu);
-  setTimeout(function(){{document.addEventListener("click",_gemCloseWindCtx);}},0);
 }}
 
 function gemSliderChange(v){{
@@ -8459,7 +8339,6 @@ function gemRender(idx){{
 
   if(_gemQpfLayer)       {{ MAP.removeLayer(_gemQpfLayer);       _gemQpfLayer=null;       }}
   if(_gemQpf3hLayer)     {{ MAP.removeLayer(_gemQpf3hLayer);     _gemQpf3hLayer=null;     }}
-  if(_gemWindLayer)      {{ MAP.removeLayer(_gemWindLayer);      _gemWindLayer=null;      }}
   if(_gemMslpLayer)      {{ MAP.removeLayer(_gemMslpLayer);      _gemMslpLayer=null;      }}
   if(_gemCapeLayer)      {{ MAP.removeLayer(_gemCapeLayer);      _gemCapeLayer=null;      }}
   if(_gemCrossoverLayer) {{ MAP.removeLayer(_gemCrossoverLayer); _gemCrossoverLayer=null; }}
@@ -8628,38 +8507,6 @@ function gemRender(idx){{
       pane:"qpfPane"
     }}).addTo(_gemQpfLayer);
   }});
-
-  // ── Wind shading + barbs (MSLP level) ──────────────────────────────────
-  if(_gemShowWind && fd.wind_fills && fd.wind_fills.length){{
-    _gemWindLayer=L.layerGroup();
-    if(!MAP.getPane("windPane")){{
-      MAP.createPane("windPane");
-      MAP.getPane("windPane").style.zIndex=476;
-      MAP.getPane("windPane").style.pointerEvents="none";
-    }}
-    if(!MAP.getPane("windBarbPane")){{
-      MAP.createPane("windBarbPane");
-      MAP.getPane("windBarbPane").style.zIndex=486;
-      MAP.getPane("windBarbPane").style.pointerEvents="none";
-    }}
-    fd.wind_fills.forEach(function(poly){{
-      if(!poly.coords||poly.coords.length<3) return;
-      L.polygon([poly.coords],{{
-        color:"none", weight:0,
-        fillColor:poly.color, fillOpacity:0.65,
-        interactive:false, pane:"windPane"
-      }}).addTo(_gemWindLayer);
-    }});
-    (fd.wind_barbs||[]).forEach(function(p){{
-      L.marker([p.lat,p.lon],{{
-        icon:L.divIcon({{
-          html:p.svg, iconSize:[p.w,p.h], iconAnchor:[p.cx,p.cy], className:""
-        }}),
-        pane:"windBarbPane"
-      }}).addTo(_gemWindLayer);
-    }});
-    _gemWindLayer.addTo(MAP);
-  }}
 
   // ── MSLP contours ─────────────────────────────────────────────────────
   if(_gemShowMslp && fd.mslp && fd.mslp.length){{
@@ -9042,4 +8889,4 @@ os.makedirs('outputs', exist_ok=True)
 _out_path = 'outputs/gem_surface_map.html'
 m.save(_out_path)
 
-print(f'\n✅ Cell UA-2d complete — map saved → {_out_path}')
+print(f'\n✅ DONE!!! Cell UA-2d complete — map saved → {_out_path}')
