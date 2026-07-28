@@ -4265,7 +4265,7 @@ for (date_val, hr) in _synoptic_times:
     _trough_mslp_by_key[_key] = segs
     print(f'    MSLP {_key}: {len(segs)} seg(s) from {len(_pts)} pts  mem={_mem_mb():.0f}MB')
     del grid, lv, ltv, _pts, _recs
-    gc.collect()    print(f'    MSLP {_key}: {len(segs)} seg(s) from {len(_pts)} pts')
+    gc.collect()
 
 # ══════════════════════════════════════════════════════════
 #  850 / 700 / 500 hPa TROUGH  (from ua_summary_df HGHT_xxx)
