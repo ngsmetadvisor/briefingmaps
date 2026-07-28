@@ -4876,6 +4876,7 @@ _bar_html = '''
     <button class="syn-lvl-btn" id="btn-thickness" onclick="synToggleThickness()"
             style="display:none;">700-500 &Delta;T</button>
 <button class="syn-lvl-btn" id="btn-llj" onclick="synToggleLLJ()" oncontextmenu="synLLJValuesContextMenu(event)" title="Right-click for value labels" style="display:inline-block;">LLJ</button>
+<button class="syn-lvl-btn" id="btn-rh700" onclick="synToggleRH700()" style="display:none;">RH</button>
 <button class="syn-lvl-btn" id="btn-analysis" onclick="synToggleAnalysis()" oncontextmenu="synAnalysisContextMenu(event)">Analysis</button>
   </div>
   <div class="bar-section">
@@ -4915,6 +4916,7 @@ var _synShowTooltips  = {'true' if SHOW_TOOLTIPS else 'false'};
 var _synShowThickness = false;   // 700-500 hPa ΔT fill — 500 hPa only, default off
 var _synShowLLJ       = false;   // 850 hPa LLJ wind-speed shading — default off
 var _synShowLLJBarbs  = false;   // 850 hPa LLJ wind barbs (right-click toggle) — default off
+var _synShowRH700     = true;    // 700 hPa RH fills/contours — default on, toggle via button
 var _LLJ_FILL_OPACITY = 0.80;    // 850 hPa LLJ shading opacity (0.0–1.0)
 var _synBaseZoom     = 5;   // zoom at which H/L and W/C symbols are drawn at base size
 
@@ -5061,7 +5063,7 @@ if (_synLevel === "850" || _synLevel === "500") {{
         + _synLegendLabel("LLJ (kt)") + '<div style="display:flex;">' + lljSwatches + '</div>' + '</div>';
     }}
     el.style.display = "flex";
-}} else if (_synLevel === "700") {{
+}} else if (_synLevel === "700" && _synShowRH700) {{
     var rhSwatches = _synSwatchCol("70-90%", "#add8e6") + _synSwatchCol("90%+", "#00008b");
     var lines =
         '<div style="display:flex;align-items:center;gap:2px;margin-left:8px;border-left:1px solid #ccc;padding-left:8px;">'
@@ -5089,6 +5091,11 @@ function synSetLevel(lvl) {{
   if (_lljBtn) {{
     _lljBtn.style.display = (lvl === "850") ? "inline-block" : "none";
   }}
+  var _rhBtn = document.getElementById("btn-rh700");
+  if (_rhBtn) {{
+    _rhBtn.style.display = (lvl === "700") ? "inline-block" : "none";
+    _rhBtn.classList.toggle("active", _synShowRH700);
+  }}
   _synBuildLegend();
   synRender();
 }}
@@ -5114,6 +5121,15 @@ function synToggleLLJ() {{
 
 function synToggleLLJBarbs() {{
   _synShowLLJBarbs = !_synShowLLJBarbs;
+  synRender();
+}}
+
+function synToggleRH700() {{
+  if (_synLevel !== "700") return;
+  _synShowRH700 = !_synShowRH700;
+  var _rhBtn = document.getElementById("btn-rh700");
+  if (_rhBtn) _rhBtn.classList.toggle("active", _synShowRH700);
+  _synBuildLegend();
   synRender();
 }}
 
@@ -5494,7 +5510,7 @@ function synRenderUA(fullKey, stepLabel) {{
     }}) }}).addTo(_synUALayer);
   }});
   // ── Relative humidity fills + contours (700 hPa only) ─────────────────
-  if (_synLevel === "700") {{
+  if (_synLevel === "700" && _synShowRH700) {{
     if (!MAP.getPane("relhPane")) {{
       MAP.createPane("relhPane");
       MAP.getPane("relhPane").style.zIndex        = 475;
