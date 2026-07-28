@@ -7,7 +7,7 @@ GitHub Actions version — all packages pre-installed via requirements.txt
 import csv, io, json, math, os, re, sys, time, warnings
 import concurrent.futures
 from collections import defaultdict
-  
+
 # ── Third-party: core ─────────────────────────────────────────
 import numpy as np
 import pandas as pd
@@ -593,11 +593,6 @@ _SFC_VAR_MAP = {
     'CAPE':              '_CAPE',
     'AirTemp':           '_TEMP2M',
     'RelativeHumidity':  '_RH2M',
-    'WindSpeed10':       '_WSPD10',
-    'WindDir10':         '_WDIR10',
-    'WindGust10':        '_WGUST10',
-    'WindSpeed40':       '_WSPD40',
-    'WindDir40':         '_WDIR40',
 }
 _SFC_VARS = list(_SFC_VAR_MAP.keys())
 
@@ -711,18 +706,6 @@ def _gdps_agl_url(run_dt, fxx, var_name):
     d  = run_dt.strftime('%Y%m%d')
     hh = run_dt.strftime('%H')
     fn = f'{d}T{hh}Z_MSC_GDPS_{var_name}_AGL-2m_LatLon0.15_PT{fxx:03d}H.grib2'
-    return f'{_DD_BASE}/{d}/WXO-DD/model_gdps/15km/{hh}/{fxx:03d}/{fn}'
-
-def _rdps_wind_url(run_dt, fxx, var_name, height_m):
-    d  = run_dt.strftime('%Y%m%d')
-    hh = run_dt.strftime('%H')
-    fn = f'{d}T{hh}Z_MSC_RDPS_{var_name}_AGL-{height_m}m_RLatLon0.09_PT{fxx:03d}H.grib2'
-    return f'{_DD_BASE}/{d}/WXO-DD/model_rdps/10km/{hh}/{fxx:03d}/{fn}'
-
-def _gdps_wind_url(run_dt, fxx, var_name, height_m):
-    d  = run_dt.strftime('%Y%m%d')
-    hh = run_dt.strftime('%H')
-    fn = f'{d}T{hh}Z_MSC_GDPS_{var_name}_AGL-{height_m}m_LatLon0.15_PT{fxx:03d}H.grib2'
     return f'{_DD_BASE}/{d}/WXO-DD/model_gdps/15km/{hh}/{fxx:03d}/{fn}'
 
 def _fxx(run_dt, valid_dt):
@@ -1115,10 +1098,9 @@ _sfc_tasks = []
 
 for vt in _sfc_target_vts:
     use_rdps   = _NOW_UTC < vt < _RDPS_CUTOFF
-    run_dt      = _rdps_run_dt if use_rdps else _gdps_run_dt
-    url_fn      = _rdps_sfc_url if use_rdps else _gdps_sfc_url
-    agl_url_fn  = _rdps_agl_url if use_rdps else _gdps_agl_url
-    wind_url_fn = _rdps_wind_url if use_rdps else _gdps_wind_url
+    run_dt     = _rdps_run_dt if use_rdps else _gdps_run_dt
+    url_fn     = _rdps_sfc_url if use_rdps else _gdps_sfc_url
+    agl_url_fn = _rdps_agl_url if use_rdps else _gdps_agl_url
     max_fxx    = 84 if use_rdps else 240
     model_lbl  = 'RDPS' if use_rdps else 'GDPS'
 
@@ -1148,7 +1130,7 @@ for vt in _sfc_target_vts:
                            url_fn(run_dt, fxx_mslp, 'CAPE'),
                            'CAPE', vt_mslp, ''))
 
-# AGL-2m AirTemp + RelativeHumidity at 00Z (same fxx/valid time as MSLP) — for Crossover
+    # AGL-2m AirTemp + RelativeHumidity at 00Z (same fxx/valid time as MSLP) — for Crossover
     if 0 <= fxx_mslp <= max_fxx:
         _sfc_tasks.append((model_lbl,
                            agl_url_fn(run_dt, fxx_mslp, 'AirTemp'),
@@ -1156,14 +1138,6 @@ for vt in _sfc_target_vts:
         _sfc_tasks.append((model_lbl,
                            agl_url_fn(run_dt, fxx_mslp, 'RelativeHumidity'),
                            'RelativeHumidity', vt_mslp, ''))
-
-    # AGL-10m/40m WindSpeed + WindDir, and AGL-10m WindGust, at 00Z — surface wind layer
-    if 0 <= fxx_mslp <= max_fxx:
-        _sfc_tasks.append((model_lbl, wind_url_fn(run_dt, fxx_mslp, 'WindSpeed', 10), 'WindSpeed10', vt_mslp, ''))
-        _sfc_tasks.append((model_lbl, wind_url_fn(run_dt, fxx_mslp, 'WindDir',   10), 'WindDir10',   vt_mslp, ''))
-        _sfc_tasks.append((model_lbl, wind_url_fn(run_dt, fxx_mslp, 'WindGust',  10), 'WindGust10',  vt_mslp, ''))
-        _sfc_tasks.append((model_lbl, wind_url_fn(run_dt, fxx_mslp, 'WindSpeed', 40), 'WindSpeed40', vt_mslp, ''))
-        _sfc_tasks.append((model_lbl, wind_url_fn(run_dt, fxx_mslp, 'WindDir',   40), 'WindDir40',   vt_mslp, ''))
 
 # Precip target at 06Z
     _sfc_tasks.append((model_lbl,
@@ -1328,8 +1302,7 @@ async def _fetch_and_extract_all():
             continue
         for var_name in _SFC_VARS:
             for suffix, label in [('', '@Sfc'), ('_PRIOR', '@Sfc-Prior')]:
-                if var_name in ('Pressure_MSL', 'CAPE', 'Precip-Accum3h', 'AirTemp', 'RelativeHumidity',
-                                'WindSpeed10', 'WindDir10', 'WindGust10', 'WindSpeed40', 'WindDir40') and suffix == '_PRIOR':
+                if var_name in ('Pressure_MSL', 'CAPE', 'Precip-Accum3h', 'AirTemp', 'RelativeHumidity') and suffix == '_PRIOR':
                     continue
                 col     = _SFC_VAR_MAP[var_name] + suffix
                 field   = f'{var_name}{label}'
@@ -1498,7 +1471,7 @@ if _n_err:
 _COLS = ['icao','wmo','stn_name','lat','lon','valid_time','hour',
          'PRES','HGHT','TEMP','DWPT','RELH','MIXR','DRCT','SPED',
          'THTA','THTE','THTV','MSLP','QPF12H','QPF3H','CAPE',
-         'TEMP2M','RH2M','CROSSOVER','WSPD10','WDIR10','WGUST10','WSPD40','WDIR40']
+         'TEMP2M','RH2M','CROSSOVER']
 
 rows = []
 
@@ -1549,15 +1522,8 @@ for (lat, lon, vt_str, pres), fields in _point_data.items():
         'TEMP2M':     None,
         'RH2M':       None,
         'CROSSOVER':  None,
-        'WSPD10':     None,
-        'WDIR10':     None,
-        'WGUST10':    None,
-        'WSPD40':     None,
-        'WDIR40':     None,
         '_model':     prefix,
     })
-
-# ── Surface rows ──────────────────────────────────────────────────────────────
 
 # ── Surface rows ──────────────────────────────────────────────────────────────
 # MSLP keyed at 00Z; Precip keyed at 06Z → remap to 00Z label
@@ -1605,16 +1571,6 @@ for (lat, lon, vt_str), fields in _sfc_merged.items():
                  if temp2m is not None and rh2m is not None
                  else None)
 
-    def _clean_wind(v, dec=1):
-        return (round(float(v), dec)
-                if v is not None and not (isinstance(v, float) and _math.isnan(v))
-                else None)
-    wspd10  = _clean_wind(fields.get('_WSPD10'))
-    wdir10  = _clean_wind(fields.get('_WDIR10'), 0)
-    wgust10 = _clean_wind(fields.get('_WGUST10'))
-    wspd40  = _clean_wind(fields.get('_WSPD40'))
-    wdir40  = _clean_wind(fields.get('_WDIR40'), 0)
-
     pacc       = fields.get('_PACC')
     pacc_prior = fields.get('_PACC_PRIOR', 0.0)
     if pacc_prior is None:
@@ -1654,11 +1610,6 @@ for (lat, lon, vt_str), fields in _sfc_merged.items():
         'TEMP2M':     temp2m,
         'RH2M':       rh2m,
         'CROSSOVER':  crossover,
-        'WSPD10':     wspd10,
-        'WDIR10':     wdir10,
-        'WGUST10':    wgust10,
-        'WSPD40':     wspd40,
-        'WDIR40':     wdir40,
         '_model':     prefix,
     })
 
@@ -4108,18 +4059,12 @@ print(f'\n✅ Cell 1B complete ({time.time() - _t0:.1f}s) — '
 # ══════════════════════════════════════════════════════════════════════════
 
 import json as _json_conv
-import gc
-import resource
 import pandas as pd
 import numpy as np
 from scipy.interpolate import RBFInterpolator
 from scipy.ndimage import gaussian_filter
 from scipy.signal import find_peaks
 from scipy.spatial import cKDTree
-
-def _mem_mb():
-    # ru_maxrss is KB on Linux runners (GitHub Actions), bytes on macOS
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
 
 ua_summary_df['_vt']   = pd.to_datetime(ua_summary_df['valid_time'])
 ua_summary_df['_date'] = ua_summary_df['_vt'].dt.date
@@ -4257,15 +4202,13 @@ for (date_val, hr) in _synoptic_times:
     grid, lv, ltv = _build_field_grid(_pts)
     if grid is None:
         _trough_mslp_by_key[_key] = []
-        print(f'    MSLP {_key}: skipped ({len(_pts)} pts)  mem={_mem_mb():.0f}MB')
+        print(f'    MSLP {_key}: skipped ({len(_pts)} pts)')
         continue
     segs = _detect_trough_from_grid(grid, lv, ltv,
                                     prominence=TROUGH_PROMINENCE['mslp'],
                                     sigma_pre=TROUGH_SIGMA_PRE['mslp'])
     _trough_mslp_by_key[_key] = segs
-    print(f'    MSLP {_key}: {len(segs)} seg(s) from {len(_pts)} pts  mem={_mem_mb():.0f}MB')
-    del grid, lv, ltv, _pts, _recs
-    gc.collect()
+    print(f'    MSLP {_key}: {len(segs)} seg(s) from {len(_pts)} pts')
 
 # ══════════════════════════════════════════════════════════
 #  850 / 700 / 500 hPa TROUGH  (from ua_summary_df HGHT_xxx)
@@ -4284,15 +4227,13 @@ for _lvl in ['850', '700', '500']:
         grid, lv, ltv = _build_field_grid(_pts)
         if grid is None:
             _trough_ua_by_key[_lvl][_key] = []
-            print(f'    {_lvl} {_key}: skipped ({len(_pts)} pts)  mem={_mem_mb():.0f}MB')
+            print(f'    {_lvl} {_key}: skipped ({len(_pts)} pts)')
             continue
         segs = _detect_trough_from_grid(grid, lv, ltv,
                                         prominence=TROUGH_PROMINENCE[_lvl],
                                         sigma_pre=TROUGH_SIGMA_PRE[_lvl])
         _trough_ua_by_key[_lvl][_key] = segs
-        print(f'    {_lvl} {_key}: {len(segs)} seg(s) from {len(_pts)} pts  mem={_mem_mb():.0f}MB')
-        del grid, lv, ltv, _pts
-        gc.collect()
+        print(f'    {_lvl} {_key}: {len(segs)} seg(s) from {len(_pts)} pts')
 
 # ── Backward-compat stubs (convergence not computed here) ─────────────────
 _conv_sfc_by_ts   = {f"{pd.Timestamp(d).strftime('%Y%m%d')}_{int(h):02d}": [] for d, h in _synoptic_times}
@@ -7835,52 +7776,6 @@ def _extract_cape_bands(grid, lat_vec, lon_vec, n_interp=120):
     return bands
 
 
-# ── Surface Wind — color-shaded speed bands (reuses LLJ color scheme) + barbs ──
-def _extract_wind_bands(grid, lat_vec, lon_vec, n_interp=120):
-    if grid is None:
-        return []
-    zoom_lat = n_interp / grid.shape[0]
-    zoom_lon = n_interp / grid.shape[1]
-    gq = _zoom(grid, (zoom_lat, zoom_lon), order=1)
-    gq = np.clip(gq, 0, None)
-    if gq.max() < LLJ_LEVELS[0]:
-        return []
-    latf = np.linspace(lat_vec[0], lat_vec[-1], n_interp)
-    lonf = np.linspace(lon_vec[0], lon_vec[-1], n_interp)
-    glon, glat = np.meshgrid(lonf, latf)
-    fig, ax = plt.subplots(figsize=(1, 1))
-    try:
-        cs = ax.contourf(glon, glat, gq, levels=LLJ_LEVELS)
-    except Exception:
-        plt.close(fig)
-        return []
-    plt.close(fig)
-    bands = []
-    for li, lvl in enumerate(cs.levels[:-1]):
-        if li >= len(cs.allsegs):
-            continue
-        color = LLJ_COLORS[li] if li < len(LLJ_COLORS) else LLJ_COLORS[-1]
-        for poly in _contourf_seglist_to_fill_polys(cs.allsegs[li]):
-            bands.append({'level': float(lvl), 'color': color,
-                          'coords': poly['coords'], 'holes': poly['holes']})
-    return bands
-
-def _extract_wind_barb_pts(sub_df, spd_col, dir_col, size=24):
-    pts = []
-    _wsub = sub_df.dropna(subset=[spd_col, dir_col])
-    for _, r in _wsub.iterrows():
-        try:
-            _bsvg, _bw, _bh, _bcx, _bcy = _llj_barb_svg(float(r[dir_col]), float(r[spd_col]), S=size)
-        except Exception:
-            continue
-        pts.append({
-            'lat': round(float(r['lat']), 3), 'lon': round(float(r['lon']), 3),
-            'val': round(float(r[spd_col]), 1), 'dir': round(float(r[dir_col]), 1),
-            'svg': _bsvg, 'w': int(_bw), 'h': int(_bh), 'cx': int(_bcx), 'cy': int(_bcy),
-        })
-    return pts
-
-
 # ── Crossover (Temp2m - RH2m) fill bands — vectorised ──────────────────────────
 CROSSOVER_LEVELS = [0, 10, 20, 30, 999]
 CROSSOVER_COLORS = {
@@ -8028,30 +7923,6 @@ for _key in _sfc_keys:
     _rh_latv     = globals().get(f'rh_lat_vec_{_key}', _latv)
     _rh_bands    = _extract_rh_bands(_rh, _rh_latv, _rh_lonv) if _rh is not None else []
 
-    # ── Surface wind — 10m + 40m speed/dir, and 10m gust ────────────────────
-    _valid_str_key = f"{_key[:4]}-{_key[4:6]}-{_key[6:8]} {int(_key[9:]):02d}Z"
-    _wind_base = ua_raw_df[
-        (ua_raw_df['PRES'] == 0.0) &
-        (ua_raw_df['valid_time'] == _valid_str_key)
-    ]
-    _wind_data = {}
-    for _h_m, _spd_col, _dir_col in [(10, 'WSPD10', 'WDIR10'), (40, 'WSPD40', 'WDIR40')]:
-        _wsub = _wind_base.dropna(subset=[_spd_col, _dir_col])[['lat', 'lon', _spd_col, _dir_col]]
-        _wgrid = None
-        if len(_wsub) >= 8:
-            _wgrid = _qpf_build_grid(_wsub.rename(columns={_spd_col: 'WSPD'}), sigma=0.5,
-                                     lon_vec=np.array(sorted(_wsub['lon'].unique())),
-                                     lat_vec=np.array(sorted(_wsub['lat'].unique())),
-                                     col='WSPD')
-        _wbands = (_extract_wind_bands(_wgrid,
-                                       np.array(sorted(_wsub['lat'].unique())),
-                                       np.array(sorted(_wsub['lon'].unique())))
-                  if _wgrid is not None else [])
-        _wbarbs = _extract_wind_barb_pts(_wsub, _spd_col, _dir_col, size=24)
-        _wind_data[str(_h_m)] = {'bands': _wbands, 'barbs': _wbarbs}
-    _gust_sub = _wind_base.dropna(subset=['WGUST10', 'WDIR10'])[['lat', 'lon', 'WGUST10', 'WDIR10']]
-    _gust_barbs = _extract_wind_barb_pts(_gust_sub, 'WGUST10', 'WDIR10', size=24)
-
     _frame_data[_key] = {
         'mslp': _mslp_contours,
         'qpf':  _qpf_bands,
@@ -8062,8 +7933,6 @@ for _key in _sfc_keys:
         'crossover': _crossover_bands,
         'temp': _temp_bands,
         'rh':   _rh_bands,
-        'wind': _wind_data,
-        'wind_gust_barbs': _gust_barbs,
         'hl':   hl_centers_by_key.get(_key, []),
         'trough': globals().get('_trough_mslp_by_key', {}).get(_key, []),
         'bbox': [float(_latv[0]), float(_lonv[0]), float(_latv[-1]), float(_lonv[-1])]
@@ -8201,7 +8070,6 @@ _bar_html = '''
     <button class="gem-layer-btn active" id="btn-qpf" onclick="gemToggle('qpf')">QPF 12h</button>
     <button class="gem-layer-btn"        id="btn-cape" onclick="gemToggle('cape')">CAPE</button>
     <button class="gem-layer-btn"        id="btn-crossover" onclick="gemToggle('crossover')">Crossover</button>
-<button class="gem-layer-btn" id="btn-wind" onclick="gemToggle('wind')" oncontextmenu="gemWindContextMenu(event)" title="Right-click for gust barbs">Wind</button>
 <button class="gem-layer-btn" id="btn-analysis" onclick="gemToggle('analysis')">Analysis</button>
   </div>
   <div class="bar-section">
@@ -8254,12 +8122,6 @@ _gem_rh_swatches = '<div style="display:flex;">' + ''.join(
         ('30-40', '#a8e6a1'), ('40-50', '#4caf50'),
     ]
 ) + '</div>'
-_gem_wind_swatches = '<div style="display:flex;">' + ''.join(
-    _gem_swatch_col(l, c) for l, c in [
-        ('15kt', '#888888'), ('20kt', '#C5E7FF'), ('25kt', '#6B8BFF'),
-        ('35kt', '#cc99ff'), ('45kt', '#9900cc'), ('55kt+', '#ff00cc'),
-    ]
-) + '</div>'
 
 _gem_legend_label = (
     '<span style="font-size:10px;font-weight:bold;color:#2a3a6a;'
@@ -8287,9 +8149,6 @@ _gem_mslp_legend_html = (
     f'<div id="gem-legend-rh" style="display:none;align-items:center;'
     'border-left:1px solid #ccc;padding-left:8px;">'
     + _gem_legend_label.format('RH (%)') + _gem_rh_swatches + '</div>'
-    f'<div id="gem-legend-wind" style="display:none;align-items:center;'
-    'border-left:1px solid #ccc;padding-left:8px;">'
-    + _gem_legend_label.format('Wind (kt)') + _gem_wind_swatches + '</div>'
     '</div>'
 )
 m.get_root().html.add_child(Element(_gem_mslp_legend_html))
@@ -8332,9 +8191,6 @@ var _gemShowMslp      = true;
 var _gemQpfMode       = 0;  // 0=QPF12h, 1=QPF3h, 2=off
 var _gemShowCape      = false;
 var _gemCrossoverMode = 0;  // 0=off, 1=crossover, 2=temp, 3=rh
-var _gemWindMode       = 0;  // 0=off, 1=10m, 2=40m
-var _gemShowWindGust   = false;  // right-click toggle, 10m mode only
-var _gemWindLayer      = null;
 var _gemMslpLayer      = null;
 var _gemQpfLayer       = null;
 var _gemQpf3hLayer     = null;
@@ -8434,61 +8290,8 @@ function gemToggle(which){{
     if (_tempLegend)   _tempLegend.style.display   = (_gemCrossoverMode===2) ? "flex" : "none";
     if (_rhLegend)     _rhLegend.style.display     = (_gemCrossoverMode===3) ? "flex" : "none";
   }}
-  else if(which==="wind")      {{
-    _gemWindMode = (_gemWindMode + 1) % 3;
-    var _windBtn = document.getElementById("btn-wind");
-    var _windLabels = ["Wind","Wind 10m","Wind 40m"];
-    if (_windBtn) {{
-      _windBtn.textContent = _windLabels[_gemWindMode];
-      _windBtn.classList.toggle("active", _gemWindMode !== 0);
-    }}
-    var _windLegend = document.getElementById("gem-legend-wind");
-    if (_windLegend) _windLegend.style.display = (_gemWindMode !== 0) ? "flex" : "none";
-  }}
   else if(which==="analysis")  {{ _gemShowAnalysis=!_gemShowAnalysis; document.getElementById("btn-analysis").classList.toggle("active",_gemShowAnalysis); }}
   gemRender(_gemStepIdx);
-}}
-
-function _gemCloseWindCtxMenu(){{
-  var m=document.getElementById("gem-wind-ctx");
-  if(m) m.remove();
-  document.removeEventListener("click", _gemCloseWindCtxMenu);
-}}
-
-function gemWindContextMenu(ev){{
-  ev.preventDefault();
-  _gemCloseWindCtxMenu();
-  var menu=document.createElement("div");
-  menu.id="gem-wind-ctx";
-  menu.style.cssText="position:fixed;z-index:20000;background:#1c2333;"
-    +"border:1px solid #4a7fc1;border-radius:4px;padding:4px 0;"
-    +"font-family:Courier New,monospace;font-size:11px;color:#e0e0e0;"
-    +"box-shadow:0 4px 12px rgba(0,0,0,0.5);min-width:200px;";
-  menu.style.left=ev.clientX+"px";
-  menu.style.top=ev.clientY+"px";
-
-  var item=document.createElement("div");
-  item.style.cssText="padding:6px 12px;cursor:pointer;display:flex;"
-    +"align-items:center;gap:6px;";
-  item.onmouseenter=function(){{item.style.background="#2a3a5a";}};
-  item.onmouseleave=function(){{item.style.background="";}};
-  item.innerHTML='<input type="checkbox" id="gem-wind-gust-checkbox" style="margin:0;cursor:pointer;"'
-    +(_gemShowWindGust?" checked":"")+'>'
-    +'<span>Show 10m gust barbs</span>';
-  item.onclick=function(e){{
-    e.stopPropagation();
-    _gemShowWindGust=!_gemShowWindGust;
-    gemRender(_gemStepIdx);
-    _gemCloseWindCtxMenu();
-  }};
-  menu.appendChild(item);
-
-  document.body.appendChild(menu);
-  var rect=menu.getBoundingClientRect();
-  if(ev.clientY+rect.height>window.innerHeight){{
-    menu.style.top=(ev.clientY-rect.height)+"px";
-  }}
-  setTimeout(function(){{document.addEventListener("click", _gemCloseWindCtxMenu);}},0);
 }}
 
 function gemSliderChange(v){{
@@ -8542,7 +8345,6 @@ function gemRender(idx){{
   if(_gemTempLayer)      {{ MAP.removeLayer(_gemTempLayer);      _gemTempLayer=null;      }}
   if(_gemRhLayer)        {{ MAP.removeLayer(_gemRhLayer);        _gemRhLayer=null;        }}
   if(_gemAnalysisLayer)  {{ MAP.removeLayer(_gemAnalysisLayer);  _gemAnalysisLayer=null;  }}
-  if(_gemWindLayer)      {{ MAP.removeLayer(_gemWindLayer);      _gemWindLayer=null;      }}
 
   var fd=_GEM_FRAMES[step.key]; if(!fd) return;
 
@@ -8705,57 +8507,6 @@ function gemRender(idx){{
       pane:"qpfPane"
     }}).addTo(_gemQpfLayer);
   }});
-
-// ── Surface Wind — color-shaded speed fill + barbs (10m/40m + gust) ────
-  if(_gemWindMode!==0){{
-    var _wKey = (_gemWindMode===1) ? "10" : "40";
-    var _wLvl = (fd.wind||{{}})[_wKey] || {{bands:[],barbs:[]}};
-    var _gustBarbs = (_gemWindMode===1 && _gemShowWindGust) ? (fd.wind_gust_barbs||[]) : [];
-    if(_wLvl.bands.length || _wLvl.barbs.length || _gustBarbs.length){{
-      _gemWindLayer=L.layerGroup();
-      if(!MAP.getPane("windFillPane")){{
-        MAP.createPane("windFillPane");
-        MAP.getPane("windFillPane").style.zIndex=482;
-        MAP.getPane("windFillPane").style.pointerEvents="none";
-      }}
-      if(!MAP.getPane("windBarbPane")){{
-        MAP.createPane("windBarbPane");
-        MAP.getPane("windBarbPane").style.zIndex=488;
-        MAP.getPane("windBarbPane").style.pointerEvents="none";
-      }}
-      if(!MAP.getPane("windGustBarbPane")){{
-        MAP.createPane("windGustBarbPane");
-        MAP.getPane("windGustBarbPane").style.zIndex=489;
-        MAP.getPane("windGustBarbPane").style.pointerEvents="none";
-      }}
-      _wLvl.bands.forEach(function(band){{
-        if(!band.coords||band.coords.length<3) return;
-        var rings=[band.coords].concat(band.holes||[]);
-        L.polygon(rings,{{
-          color:"none", weight:0,
-          fillColor:band.color, fillOpacity:0.55,
-          fillRule:"evenodd", interactive:false, pane:"windFillPane"
-        }}).addTo(_gemWindLayer);
-      }});
-      _wLvl.barbs.forEach(function(p){{
-        var _mk=L.marker([p.lat,p.lon],{{
-          icon:L.divIcon({{ html:p.svg, iconSize:[p.w,p.h], iconAnchor:[p.cx,p.cy], className:"" }}),
-          pane:"windBarbPane"
-        }});
-        _mk.bindTooltip((_gemWindMode===1?"10m: ":"40m: ")+Math.round(p.val)+" kt / "+Math.round(p.dir)+"\u00b0");
-        _mk.addTo(_gemWindLayer);
-      }});
-      _gustBarbs.forEach(function(p){{
-        var _mk=L.marker([p.lat,p.lon],{{
-          icon:L.divIcon({{ html:p.svg, iconSize:[p.w,p.h], iconAnchor:[p.cx,p.cy], className:"" }}),
-          pane:"windGustBarbPane"
-        }});
-        _mk.bindTooltip("Gust: "+Math.round(p.val)+" kt / "+Math.round(p.dir)+"\u00b0");
-        _mk.addTo(_gemWindLayer);
-      }});
-      _gemWindLayer.addTo(MAP);
-    }}
-  }}
 
   // ── MSLP contours ─────────────────────────────────────────────────────
   if(_gemShowMslp && fd.mslp && fd.mslp.length){{
