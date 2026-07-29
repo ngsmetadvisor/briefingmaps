@@ -424,11 +424,42 @@
     cursor: pointer;
     margin: 0;
   }
-  .wind-checkbox-item {
+.wind-checkbox-item {
     margin-top: 3px;
     padding-top: 3px;
     border-top: 1px solid var(--border);
   }
+  .wind-gust-legend-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    margin-top: 2px;
+    padding-top: 3px;
+    border-top: 1px solid var(--border);
+  }
+  .wind-gust-legend-wrap img {
+    max-width: 140px;
+    background: rgba(255,255,255,0.92);
+    border-radius: 3px;
+    padding: 2px;
+  }
+  .wind-value-tooltip {
+    position: absolute;
+    z-index: 700;
+    background: rgba(13,17,23,0.9);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 7px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #c8d8ff;
+    pointer-events: none;
+    white-space: nowrap;
+    display: none;
+    transform: translate(8px, -50%);
+  }
+  .wind-value-tooltip.visible { display: block; }
 
   #export-overlay {
     position: fixed; inset: 0;
@@ -578,6 +609,9 @@
         <label class="wind-radio-item"><input type="radio" name="wind-radio" value="hrdps10" checked onchange="selectP3WindLayer('hrdps10')"> HRDPS Wind 10m</label>
         <label class="wind-radio-item"><input type="radio" name="wind-radio" value="rdps10" onchange="selectP3WindLayer('rdps10')"> RDPS Wind 10m</label>
         <label class="wind-radio-item"><input type="radio" name="wind-radio" value="rdps40" onchange="selectP3WindLayer('rdps40')"> RDPS Wind 40m</label>
+        <div id="wind-gust-legend-wrap" class="wind-gust-legend-wrap" style="display:none;">
+          <img id="wind-gust-legend-img" alt="Wind gust legend" />
+        </div>
         <label class="wind-radio-item wind-checkbox-item"><input type="checkbox" id="wind-gust-checkbox" onchange="toggleP3WindGust(this.checked)"> RDPS Wind Gust</label>
       </div>
     </div>
@@ -594,6 +628,7 @@
       <div class="crosshair-line-h"></div>
       <div class="crosshair-dot"></div>
     </div>
+    <div id="wind-value-tooltip" class="wind-value-tooltip"></div>
   </div>
 
 </div>
@@ -1646,6 +1681,12 @@ function _initP3WindLayers(lmap) {
     transparent: true, version: '1.3.0', opacity: 0.75, pane: gustPane
   });
   _fetchWindWmsCapabilities(P3_WIND_GUST_LAYER.layerName, _p3WindGustLayerObj);
+
+  var gustLegendImg = document.getElementById('wind-gust-legend-img');
+  if (gustLegendImg) {
+    gustLegendImg.src = P3_WMS_BASE + '?service=WMS&version=1.3.0&request=GetLegendGraphic'
+      + '&layer=' + P3_WIND_GUST_LAYER.layerName + '&format=image/png&sld_version=1.1.0';
+  }
 }
 
 function _syncP3WindLayers() {
@@ -1727,6 +1768,8 @@ function selectP3WindLayer(id) {
 
 function toggleP3WindGust(checked) {
   _p3WindGustOn = checked;
+  var legendWrap = document.getElementById('wind-gust-legend-wrap');
+  if (legendWrap) legendWrap.style.display = checked ? 'flex' : 'none';
   if (!_p3WindOn || !_p3LeafletMap || !_p3WindGustLayerObj.layer) return;
 
   if (_p3WindGustOn) {
@@ -1852,10 +1895,12 @@ function attachCrosshairListeners(p, lmap, win) {
           srcId: p.id,
           lat: latlng.lat, lng: latlng.lng
         }, '*');
+        if (p.id === 'p3') _p3HandleWindHover(ev, lmap, win, containerPoint);
       } catch(e) {}
     });
     target.addEventListener('mouseleave', function() {
       window.postMessage({ type: 'CROSSHAIR_CLEAR', srcId: p.id }, '*');
+      if (p.id === 'p3') _p3HideWindTooltip();
     });
     console.log('[AWCC] Crosshair listeners attached for', p.id);
   } catch(e) {
@@ -1883,6 +1928,65 @@ function hideCrosshair(paneId) {
 
 function hideAllCrosshairs() {
   PANES.forEach(function(p) { hideCrosshair(p.id); });
+}
+
+// ── Wind hover: query GetFeatureInfo for the active wind barb layer ────────
+var _p3WindHoverPending = false;
+var _p3WindHoverLastAt  = 0;
+var P3_WIND_HOVER_THROTTLE_MS = 250;
+
+function _p3HideWindTooltip() {
+  var tip = document.getElementById('wind-value-tooltip');
+  if (tip) tip.classList.remove('visible');
+}
+
+function _p3BuildFeatureInfoUrl(layerName, lmap, containerPoint) {
+  var size = lmap.getSize();
+  var bounds = lmap.getBounds();
+  var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+  var xMin = _p1Lon2Merc(sw.lng), xMax = _p1Lon2Merc(ne.lng);
+  var yMin = _p1Lat2Merc(sw.lat), yMax = _p1Lat2Merc(ne.lat);
+  var i = Math.round(containerPoint.x);
+  var j = Math.round(containerPoint.y);
+  return P3_WMS_BASE + '?service=WMS&version=1.3.0&request=GetFeatureInfo'
+    + '&layers=' + layerName + '&query_layers=' + layerName
+    + '&crs=EPSG:3857&bbox=' + xMin + ',' + yMin + ',' + xMax + ',' + yMax
+    + '&width=' + size.x + '&height=' + size.y
+    + '&i=' + i + '&j=' + j + '&info_format=text/plain&feature_count=1';
+}
+
+function _p3ParseFeatureInfoValue(text) {
+  if (!text) return null;
+  var m = text.match(/value[^0-9\-]*([0-9]+(\.[0-9]+)?)/i)
+       || text.match(/GRAY_INDEX['"]?\s*[:=]\s*['"]?(-?[0-9]+(\.[0-9]+)?)/i)
+       || text.match(/(-?[0-9]+(\.[0-9]+)?)/);
+  return m ? m[1] : null;
+}
+
+function _p3HandleWindHover(ev, lmap, win, containerPoint) {
+  if (!_p3WindOn) { _p3HideWindTooltip(); return; }
+  var now = Date.now();
+  if (now - _p3WindHoverLastAt < P3_WIND_HOVER_THROTTLE_MS || _p3WindHoverPending) return;
+  _p3WindHoverLastAt = now;
+  _p3WindHoverPending = true;
+
+  var barbCfg = P3_WIND_BARB_LAYERS[_p3WindRadioId];
+  var layerName = barbCfg ? barbCfg.layerName : null;
+  if (!layerName) { _p3WindHoverPending = false; return; }
+
+  var pageX = ev.clientX, pageY = ev.clientY;
+  var url = _p3BuildFeatureInfoUrl(layerName, lmap, containerPoint);
+  fetch(url).then(function(r) { return r.ok ? r.text() : null; }).then(function(text) {
+    _p3WindHoverPending = false;
+    var val = _p3ParseFeatureInfoValue(text);
+    var tip = document.getElementById('wind-value-tooltip');
+    if (!tip) return;
+    if (val === null) { tip.classList.remove('visible'); return; }
+    tip.textContent = val + ' kt';
+    tip.style.left = pageX + 'px';
+    tip.style.top  = pageY + 'px';
+    tip.classList.add('visible');
+  }).catch(function() { _p3WindHoverPending = false; });
 }
 
 // ── Listen: broadcast any step change OR map view to all OTHER panes ───────
