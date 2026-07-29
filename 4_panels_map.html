@@ -1988,18 +1988,34 @@ function _p3HandleWindHover(ev, lmap, win, containerPoint) {
   _p3WindHoverPending = true;
 
   var barbCfg = P3_WIND_BARB_LAYERS[_p3WindRadioId];
-  var layerName = barbCfg ? barbCfg.layerName : null;
-  if (!layerName) { _p3WindHoverPending = false; return; }
-
   var pageX = ev.clientX, pageY = ev.clientY;
-  var url = _p3BuildFeatureInfoUrl(layerName, barbCfg.styles, lmap, containerPoint);
-  fetch(url).then(function(r) { return r.text(); }).then(function(text) {
+  var jobs = [];
+
+  if (barbCfg) {
+    var windUrl = _p3BuildFeatureInfoUrl(barbCfg.layerName, barbCfg.styles, lmap, containerPoint);
+    jobs.push(fetch(windUrl).then(function(r) { return r.text(); }).then(function(text) {
+      return { label: 'Wind', val: _p3ParseFeatureInfoValue(text) };
+    }).catch(function() { return { label: 'Wind', val: null }; }));
+  } else {
+    jobs.push(Promise.resolve({ label: 'Wind', val: null }));
+  }
+
+  if (_p3WindGustOn) {
+    var gustUrl = _p3BuildFeatureInfoUrl(P3_WIND_GUST_LAYER.layerName, P3_WIND_GUST_LAYER.styles, lmap, containerPoint);
+    jobs.push(fetch(gustUrl).then(function(r) { return r.text(); }).then(function(text) {
+      return { label: 'Gust', val: _p3ParseFeatureInfoValue(text) };
+    }).catch(function() { return { label: 'Gust', val: null }; }));
+  }
+
+  Promise.all(jobs).then(function(results) {
     _p3WindHoverPending = false;
-    var val = _p3ParseFeatureInfoValue(text);
     var tip = document.getElementById('wind-value-tooltip');
     if (!tip) return;
-    if (val === null) { tip.classList.remove('visible'); return; }
-    tip.textContent = val + ' kt';
+    var parts = results
+      .filter(function(r) { return r.val !== null; })
+      .map(function(r) { return r.label + ' ' + r.val + ' kt'; });
+    if (!parts.length) { tip.classList.remove('visible'); return; }
+    tip.textContent = parts.join('  |  ');
     tip.style.left = pageX + 'px';
     tip.style.top  = pageY + 'px';
     tip.classList.add('visible');
