@@ -374,7 +374,7 @@
     letter-spacing: 0.5px;
     text-transform: uppercase;
     white-space: nowrap;
-    min-width: 108px;
+    min-width: 60px;
   }
   #thickness-toggle-btn, .pane-toggle-btn {
     width: 32px; height: 16px;
@@ -399,6 +399,35 @@
   }
   #thickness-toggle-btn.on .knob, .pane-toggle-btn.on .knob {
     left: 18px;
+  }
+  .wind-options-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding-left: 10px;
+    border-left: 1px solid var(--border);
+    margin-left: 3px;
+  }
+  .wind-radio-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 9px;
+    color: var(--muted);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .wind-radio-item input[type="radio"],
+  .wind-radio-item input[type="checkbox"] {
+    accent-color: var(--accent3);
+    width: 11px; height: 11px;
+    cursor: pointer;
+    margin: 0;
+  }
+  .wind-checkbox-item {
+    margin-top: 3px;
+    padding-top: 3px;
+    border-top: 1px solid var(--border);
   }
 
   #export-overlay {
@@ -542,20 +571,14 @@
         <button id="thickness-toggle-btn" onclick="toggleP3ThicknessDis()"><span class="knob"></span></button>
       </div>
       <div class="pane-toggle-row">
-        <span class="pane-toggle-label">HRDPS Wind Barbs</span>
-        <button id="wind-hrdps-toggle-btn" class="pane-toggle-btn" onclick="toggleP3Layer('hrdps_wb')"><span class="knob"></span></button>
+        <span class="pane-toggle-label">Wind</span>
+        <button id="wind-toggle-btn" class="pane-toggle-btn" onclick="toggleP3Wind()"><span class="knob"></span></button>
       </div>
-      <div class="pane-toggle-row">
-        <span class="pane-toggle-label">RDPS Wind Barbs 40m</span>
-        <button id="wind-rdps40-toggle-btn" class="pane-toggle-btn" onclick="toggleP3Layer('rdps_wb40')"><span class="knob"></span></button>
-      </div>
-      <div class="pane-toggle-row">
-        <span class="pane-toggle-label">RDPS Wind Gust</span>
-        <button id="wind-gust-toggle-btn" class="pane-toggle-btn" onclick="toggleP3Layer('rdps_gust')"><span class="knob"></span></button>
-      </div>
-      <div class="pane-toggle-row">
-        <span class="pane-toggle-label">RDPS Wind Barbs 10m</span>
-        <button id="wind-rdps10-toggle-btn" class="pane-toggle-btn" onclick="toggleP3Layer('rdps_wb10')"><span class="knob"></span></button>
+      <div id="wind-options-row" class="wind-options-row" style="display:none;">
+        <label class="wind-radio-item"><input type="radio" name="wind-radio" value="hrdps10" checked onchange="selectP3WindLayer('hrdps10')"> HRDPS Wind 10m</label>
+        <label class="wind-radio-item"><input type="radio" name="wind-radio" value="rdps10" onchange="selectP3WindLayer('rdps10')"> RDPS Wind 10m</label>
+        <label class="wind-radio-item"><input type="radio" name="wind-radio" value="rdps40" onchange="selectP3WindLayer('rdps40')"> RDPS Wind 40m</label>
+        <label class="wind-radio-item wind-checkbox-item"><input type="checkbox" id="wind-gust-checkbox" onchange="toggleP3WindGust(this.checked)"> RDPS Wind Gust</label>
       </div>
     </div>
     <div class="pane-blank" id="blank-p3">
@@ -1237,20 +1260,23 @@ var _p3DisWmsValidTimes   = null;
 var _p3DisWmsCapPromise   = null;
 var _p3ThicknessDisOn     = false;
 
-// ── p3 additional toggle overlays — wind barbs / wind gust, GeoMet ────────
-// Config-driven so each toggle shares one capabilities/sync/toggle
-// implementation instead of duplicating the thickness-layer boilerplate.
-var P3_TOGGLE_LAYERS = [
-  { id: 'hrdps_wb',  label: 'HRDPS Wind Barbs',    layerName: 'HRDPS.CONTINENTAL_UU_40m', styles: 'WindBarbs_Sfc', opacity: 0.75, zIndex: 636, btnId: 'wind-hrdps-toggle-btn' },
-  { id: 'rdps_wb40', label: 'RDPS Wind Barbs 40m', layerName: 'RDPS_10km_Winds_40m',       styles: 'WindBarbs_Sfc', opacity: 0.75, zIndex: 635, btnId: 'wind-rdps40-toggle-btn' },
-  { id: 'rdps_gust', label: 'RDPS Wind Gust',      layerName: 'RDPS_10km_WindGust_10m',    styles: '',              opacity: 0.75, zIndex: 634, btnId: 'wind-gust-toggle-btn' },
-  { id: 'rdps_wb10', label: 'RDPS Wind Barbs 10m', layerName: 'RDPS_10km_Winds_10m',       styles: 'WindBarbs_Sfc', opacity: 0.75, zIndex: 633, btnId: 'wind-rdps10-toggle-btn' }
-];
-// Runtime state keyed by cfg.id: { layer, validTimes, capPromise, on }
-var _p3ToggleState = {};
-P3_TOGGLE_LAYERS.forEach(function(cfg) {
-  _p3ToggleState[cfg.id] = { layer: null, validTimes: null, capPromise: null, on: false };
-});
+// ── p3 Wind overlay — one radio-selected barb layer + independent gust checkbox ──
+var P3_WIND_BARB_LAYERS = {
+  hrdps10: { layerName: 'HRDPS.CONTINENTAL_UU_40m', styles: 'WindBarbs_Sfc', zIndex: 636 },
+  rdps10:  { layerName: 'RDPS_10km_Winds_10m',       styles: 'WindBarbs_Sfc', zIndex: 636 },
+  rdps40:  { layerName: 'RDPS_10km_Winds_40m',       styles: 'WindBarbs_Sfc', zIndex: 636 }
+};
+var P3_WIND_GUST_LAYER = { layerName: 'RDPS_10km_WindGust_10m', styles: '', zIndex: 635 };
+
+var _p3WindOn      = false;          // master Wind toggle
+var _p3WindRadioId = 'hrdps10';      // currently selected barb layer id
+var _p3WindGustOn  = false;          // gust checkbox
+
+// Runtime objects: { layer, validTimes, capPromise }, keyed by barb id, plus one for gust
+var _p3WindLayerObjs     = { hrdps10: {layer:null, validTimes:null, capPromise:null},
+                              rdps10:  {layer:null, validTimes:null, capPromise:null},
+                              rdps40:  {layer:null, validTimes:null, capPromise:null} };
+var _p3WindGustLayerObj  = { layer: null, validTimes: null, capPromise: null };
 
 function _fetchP3WmsCapabilities() {
   if (_p3WmsCapPromise) return _p3WmsCapPromise;
@@ -1404,11 +1430,9 @@ function initP3WmsLayer(lmap) {
       _syncP3DisWms();
     });
 
-    // Wind barb / wind gust toggle overlays — layer objects are created now
-    // but NOT added to the map (default off) until the user flips a toggle.
-    P3_TOGGLE_LAYERS.forEach(function(cfg) {
-      _initP3ToggleLayer(cfg, lmap);
-    });
+// Wind barb (radio) + gust (checkbox) overlays — created now but not
+    // added to the map until the Wind toggle / radio / checkbox are used.
+    _initP3WindLayers(lmap);
   } catch(e) {
     console.error('[AWCC] initP3WmsLayer THREW:', e);
   }
@@ -1542,11 +1566,10 @@ function _syncP3DisWms() {
   }
 }
 
-function _fetchP3ToggleCapabilities(cfg) {
-  var state = _p3ToggleState[cfg.id];
-  if (state.capPromise) return state.capPromise;
-  var url = P3_WMS_BASE + '?service=WMS&version=1.3.0&request=GetCapabilities&LAYERS=' + cfg.layerName + '&_=' + Date.now();
-  state.capPromise = fetch(url, { cache: 'no-store' })
+function _fetchWindWmsCapabilities(layerName, stateObj) {
+  if (stateObj.capPromise) return stateObj.capPromise;
+  var url = P3_WMS_BASE + '?service=WMS&version=1.3.0&request=GetCapabilities&LAYERS=' + layerName + '&_=' + Date.now();
+  stateObj.capPromise = fetch(url, { cache: 'no-store' })
     .then(function(r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.text();
@@ -1569,56 +1592,64 @@ function _fetchP3ToggleCapabilities(cfg) {
                     .filter(function(t) { return !isNaN(t); });
       }
       times.sort(function(a, b) { return a - b; });
-      state.validTimes = times;
-      console.log('[AWCC] p3 toggle', cfg.id, 'capabilities parsed —', times.length, 'valid times');
+      stateObj.validTimes = times;
+      console.log('[AWCC] wind layer', layerName, 'capabilities parsed —', times.length, 'valid times');
       return times;
     })
     .catch(function(e) {
-      console.error('[AWCC] p3 toggle', cfg.id, 'capabilities fetch failed:', e);
-      state.validTimes = null;
+      console.error('[AWCC] wind layer', layerName, 'capabilities fetch failed:', e);
+      stateObj.validTimes = null;
       return null;
     });
-  return state.capPromise;
+  return stateObj.capPromise;
 }
 
-function _nearestValidWmsTimeToggle(cfg, targetMs) {
-  var state = _p3ToggleState[cfg.id];
-  if (!state.validTimes || !state.validTimes.length) return targetMs;
-  var best = state.validTimes[0], bestDiff = Math.abs(targetMs - best);
-  for (var i = 1; i < state.validTimes.length; i++) {
-    var diff = Math.abs(targetMs - state.validTimes[i]);
-    if (diff < bestDiff) { bestDiff = diff; best = state.validTimes[i]; }
+function _nearestValidWindTime(stateObj, targetMs) {
+  if (!stateObj.validTimes || !stateObj.validTimes.length) return targetMs;
+  var best = stateObj.validTimes[0], bestDiff = Math.abs(targetMs - best);
+  for (var i = 1; i < stateObj.validTimes.length; i++) {
+    var diff = Math.abs(targetMs - stateObj.validTimes[i]);
+    if (diff < bestDiff) { bestDiff = diff; best = stateObj.validTimes[i]; }
   }
   return best;
 }
 
-function _initP3ToggleLayer(cfg, lmap) {
-  var state = _p3ToggleState[cfg.id];
-  if (state.layer) return;
+function _initP3WindLayers(lmap) {
   var p3win = document.getElementById('frame-p3').contentWindow;
   var _L = p3win.L;
   if (!_L) return;
-  var paneName = 'p3TogglePane_' + cfg.id;
-  if (!lmap.getPane(paneName)) {
-    lmap.createPane(paneName);
-    lmap.getPane(paneName).style.zIndex = cfg.zIndex;
-    lmap.getPane(paneName).style.pointerEvents = 'none';
-  }
-  state.layer = _L.tileLayer.wms(P3_WMS_BASE, {
-    layers: cfg.layerName,
-    styles: cfg.styles,
-    format: 'image/png',
-    transparent: true,
-    version: '1.3.0',
-    opacity: cfg.opacity,
-    pane: paneName
+
+  Object.keys(P3_WIND_BARB_LAYERS).forEach(function(id) {
+    var cfg = P3_WIND_BARB_LAYERS[id];
+    var stateObj = _p3WindLayerObjs[id];
+    var paneName = 'p3WindPane_' + id;
+    if (!lmap.getPane(paneName)) {
+      lmap.createPane(paneName);
+      lmap.getPane(paneName).style.zIndex = cfg.zIndex;
+      lmap.getPane(paneName).style.pointerEvents = 'none';
+    }
+    stateObj.layer = _L.tileLayer.wms(P3_WMS_BASE, {
+      layers: cfg.layerName, styles: cfg.styles, format: 'image/png',
+      transparent: true, version: '1.3.0', opacity: 0.75, pane: paneName
+    });
+    _fetchWindWmsCapabilities(cfg.layerName, stateObj);
   });
-  _fetchP3ToggleCapabilities(cfg);
+
+  var gustPane = 'p3WindGustPane';
+  if (!lmap.getPane(gustPane)) {
+    lmap.createPane(gustPane);
+    lmap.getPane(gustPane).style.zIndex = P3_WIND_GUST_LAYER.zIndex;
+    lmap.getPane(gustPane).style.pointerEvents = 'none';
+  }
+  _p3WindGustLayerObj.layer = _L.tileLayer.wms(P3_WMS_BASE, {
+    layers: P3_WIND_GUST_LAYER.layerName, styles: P3_WIND_GUST_LAYER.styles, format: 'image/png',
+    transparent: true, version: '1.3.0', opacity: 0.75, pane: gustPane
+  });
+  _fetchWindWmsCapabilities(P3_WIND_GUST_LAYER.layerName, _p3WindGustLayerObj);
 }
 
-function _syncP3ToggleLayer(cfg) {
-  var state = _p3ToggleState[cfg.id];
-  if (!state.layer || !state.on) return Promise.resolve();
+function _syncP3WindLayers() {
+  if (!_p3WindOn) return Promise.resolve();
   try {
     var win    = document.getElementById('frame-p3').contentWindow;
     var steps  = win['_GEM_STEPS'];
@@ -1629,38 +1660,80 @@ function _syncP3ToggleLayer(cfg) {
     if (!step) return Promise.resolve();
     var targetMs = _p1KeyToMs(step.key);
     if (targetMs === null) return Promise.resolve();
-    var snapped    = _nearestValidWmsTimeToggle(cfg, targetMs);
-    var isoSnapped = _msToISO(snapped);
-    state.layer.setParams({ TIME: isoSnapped });
-    return _waitForWmsLayerLoad(state.layer, 4000);
+
+    var jobs = [];
+    var activeStateObj = _p3WindLayerObjs[_p3WindRadioId];
+    if (activeStateObj && activeStateObj.layer) {
+      var snapped1 = _nearestValidWindTime(activeStateObj, targetMs);
+      activeStateObj.layer.setParams({ TIME: _msToISO(snapped1) });
+      jobs.push(_waitForWmsLayerLoad(activeStateObj.layer, 4000));
+    }
+    if (_p3WindGustOn && _p3WindGustLayerObj.layer) {
+      var snapped2 = _nearestValidWindTime(_p3WindGustLayerObj, targetMs);
+      _p3WindGustLayerObj.layer.setParams({ TIME: _msToISO(snapped2) });
+      jobs.push(_waitForWmsLayerLoad(_p3WindGustLayerObj.layer, 4000));
+    }
+    return Promise.all(jobs);
   } catch(e) {
-    console.error('[AWCC] _syncP3ToggleLayer THREW:', cfg.id, e);
+    console.error('[AWCC] _syncP3WindLayers THREW:', e);
     return Promise.resolve();
   }
 }
 
-function _syncAllP3ToggleLayers() {
-  return Promise.all(P3_TOGGLE_LAYERS.map(function(cfg) { return _syncP3ToggleLayer(cfg); }));
+function toggleP3Wind() {
+  _p3WindOn = !_p3WindOn;
+  var btn = document.getElementById('wind-toggle-btn');
+  if (btn) btn.classList.toggle('on', _p3WindOn);
+  var optionsRow = document.getElementById('wind-options-row');
+  if (optionsRow) optionsRow.style.display = _p3WindOn ? 'flex' : 'none';
+
+  if (!_p3LeafletMap) return;
+
+  var activeStateObj = _p3WindLayerObjs[_p3WindRadioId];
+  if (_p3WindOn) {
+    if (activeStateObj && activeStateObj.layer && !_p3LeafletMap.hasLayer(activeStateObj.layer)) {
+      activeStateObj.layer.addTo(_p3LeafletMap);
+    }
+    if (_p3WindGustOn && _p3WindGustLayerObj.layer && !_p3LeafletMap.hasLayer(_p3WindGustLayerObj.layer)) {
+      _p3WindGustLayerObj.layer.addTo(_p3LeafletMap);
+    }
+    _syncP3WindLayers();
+  } else {
+    Object.keys(_p3WindLayerObjs).forEach(function(id) {
+      var l = _p3WindLayerObjs[id].layer;
+      if (l && _p3LeafletMap.hasLayer(l)) _p3LeafletMap.removeLayer(l);
+    });
+    if (_p3WindGustLayerObj.layer && _p3LeafletMap.hasLayer(_p3WindGustLayerObj.layer)) {
+      _p3LeafletMap.removeLayer(_p3WindGustLayerObj.layer);
+    }
+  }
 }
 
-function toggleP3Layer(id) {
-  var cfg = null;
-  for (var i = 0; i < P3_TOGGLE_LAYERS.length; i++) {
-    if (P3_TOGGLE_LAYERS[i].id === id) { cfg = P3_TOGGLE_LAYERS[i]; break; }
+function selectP3WindLayer(id) {
+  if (!P3_WIND_BARB_LAYERS[id] || id === _p3WindRadioId) { _p3WindRadioId = id; return; }
+  var prevStateObj = _p3WindLayerObjs[_p3WindRadioId];
+  _p3WindRadioId = id;
+  if (!_p3WindOn || !_p3LeafletMap) return;
+
+  if (prevStateObj && prevStateObj.layer && _p3LeafletMap.hasLayer(prevStateObj.layer)) {
+    _p3LeafletMap.removeLayer(prevStateObj.layer);
   }
-  if (!cfg) return;
-  var state = _p3ToggleState[id];
-  state.on = !state.on;
-  var btn = document.getElementById(cfg.btnId);
-  if (btn) btn.classList.toggle('on', state.on);
+  var newStateObj = _p3WindLayerObjs[_p3WindRadioId];
+  if (newStateObj && newStateObj.layer && !_p3LeafletMap.hasLayer(newStateObj.layer)) {
+    newStateObj.layer.addTo(_p3LeafletMap);
+  }
+  _syncP3WindLayers();
+}
 
-  if (!state.layer || !_p3LeafletMap) return;
+function toggleP3WindGust(checked) {
+  _p3WindGustOn = checked;
+  if (!_p3WindOn || !_p3LeafletMap || !_p3WindGustLayerObj.layer) return;
 
-  if (state.on) {
-    if (!_p3LeafletMap.hasLayer(state.layer)) state.layer.addTo(_p3LeafletMap);
-    _syncP3ToggleLayer(cfg);
+  if (_p3WindGustOn) {
+    if (!_p3LeafletMap.hasLayer(_p3WindGustLayerObj.layer)) _p3WindGustLayerObj.layer.addTo(_p3LeafletMap);
+    _syncP3WindLayers();
   } else {
-    if (_p3LeafletMap.hasLayer(state.layer)) _p3LeafletMap.removeLayer(state.layer);
+    if (_p3LeafletMap.hasLayer(_p3WindGustLayerObj.layer)) _p3LeafletMap.removeLayer(_p3WindGustLayerObj.layer);
   }
 }
 
@@ -1903,7 +1976,7 @@ window.addEventListener('message', function(e) {
   if (src.id === 'p3') {
     _syncP3Wms();
     _syncP3DisWms();
-    _syncAllP3ToggleLayers();
+    _syncP3WindLayers();
   }
 
   // First step from any pane → safe to attach map sync (Leaflet is fully ready)
@@ -2081,9 +2154,8 @@ setPaneBlank(p.id, false, '');
   _syncP1Wms();
   _syncP3Wms();
   _syncP3DisWms();
-  _syncAllP3ToggleLayers();
+  _syncP3WindLayers();
   _masterBusy = false;
-}
 // Keep master slider thumb in sync when panes are driven individually
 function syncMasterSliderFromIdx(srcIdx) {
   if (_masterBusy || !_masterSteps) return;
@@ -2149,7 +2221,7 @@ function mirrorStep(src, tgt, srcIdx) {
 tgtWin[tgt.fnName](targetIdx);
     tgtWin.__awcc_syncing = false;
 if (tgt.id === 'p1') _syncP1Wms();
-    if (tgt.id === 'p3') { _syncP3Wms(); _syncP3DisWms(); _syncAllP3ToggleLayers(); }
+    if (tgt.id === 'p3') { _syncP3Wms(); _syncP3DisWms(); _syncP3WindLayers(); }
   } catch(e) {
     console.warn('[AWCC] mirrorStep error', tgt.id, e);
   }
