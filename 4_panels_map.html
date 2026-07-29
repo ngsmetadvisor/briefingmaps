@@ -439,7 +439,7 @@
     border-top: 1px solid var(--border);
   }
   .wind-gust-legend-wrap img {
-    max-width: 140px;
+    max-width: 70px;
     background: rgba(255,255,255,0.92);
     border-radius: 3px;
     padding: 2px;
@@ -1940,7 +1940,7 @@ function _p3HideWindTooltip() {
   if (tip) tip.classList.remove('visible');
 }
 
-function _p3BuildFeatureInfoUrl(layerName, lmap, containerPoint) {
+function _p3BuildFeatureInfoUrl(layerName, stylesName, lmap, containerPoint) {
   var size = lmap.getSize();
   var bounds = lmap.getBounds();
   var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
@@ -1950,17 +1950,34 @@ function _p3BuildFeatureInfoUrl(layerName, lmap, containerPoint) {
   var j = Math.round(containerPoint.y);
   return P3_WMS_BASE + '?service=WMS&version=1.3.0&request=GetFeatureInfo'
     + '&layers=' + layerName + '&query_layers=' + layerName
+    + '&styles=' + (stylesName || '')
     + '&crs=EPSG:3857&bbox=' + xMin + ',' + yMin + ',' + xMax + ',' + yMax
     + '&width=' + size.x + '&height=' + size.y
-    + '&i=' + i + '&j=' + j + '&info_format=text/plain&feature_count=1';
+    + '&i=' + i + '&j=' + j + '&info_format=application/json&feature_count=1';
 }
 
+// Only returns a value from a real feature payload. An OGC
+// ServiceExceptionReport (the server's way of rejecting the request) is
+// detected and rejected outright — the old fallback regex could pull a
+// stray digit (e.g. the "1.3.0" in that boilerplate) out of the exception
+// body, which is why the tooltip kept showing one fixed value everywhere.
 function _p3ParseFeatureInfoValue(text) {
   if (!text) return null;
-  var m = text.match(/value[^0-9\-]*([0-9]+(\.[0-9]+)?)/i)
-       || text.match(/GRAY_INDEX['"]?\s*[:=]\s*['"]?(-?[0-9]+(\.[0-9]+)?)/i)
-       || text.match(/(-?[0-9]+(\.[0-9]+)?)/);
-  return m ? m[1] : null;
+  if (text.indexOf('ExceptionReport') !== -1 || text.indexOf('ServiceException') !== -1) return null;
+  try {
+    var json = JSON.parse(text);
+    var feats = json.features;
+    if (!feats || !feats.length || !feats[0].properties) return null;
+    var props = feats[0].properties;
+    var keys = Object.keys(props);
+    var key = keys.find(function(k) { return /value|gray_index/i.test(k); }) || keys[0];
+    if (key === undefined || props[key] === null || props[key] === undefined || props[key] === '') return null;
+    return props[key];
+  } catch(e) {
+    var m = text.match(/value\s*[:=]\s*'?(-?[0-9]+(\.[0-9]+)?)/i)
+         || text.match(/GRAY_INDEX\s*[:=]\s*'?(-?[0-9]+(\.[0-9]+)?)/i);
+    return m ? m[1] : null;
+  }
 }
 
 function _p3HandleWindHover(ev, lmap, win, containerPoint) {
@@ -1975,8 +1992,8 @@ function _p3HandleWindHover(ev, lmap, win, containerPoint) {
   if (!layerName) { _p3WindHoverPending = false; return; }
 
   var pageX = ev.clientX, pageY = ev.clientY;
-  var url = _p3BuildFeatureInfoUrl(layerName, lmap, containerPoint);
-  fetch(url).then(function(r) { return r.ok ? r.text() : null; }).then(function(text) {
+  var url = _p3BuildFeatureInfoUrl(layerName, barbCfg.styles, lmap, containerPoint);
+  fetch(url).then(function(r) { return r.text(); }).then(function(text) {
     _p3WindHoverPending = false;
     var val = _p3ParseFeatureInfoValue(text);
     var tip = document.getElementById('wind-value-tooltip');
