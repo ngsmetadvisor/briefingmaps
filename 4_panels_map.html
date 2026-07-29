@@ -349,27 +349,34 @@
     text-align: right;
   }
 
-  #thickness-toggle-wrap {
+#thickness-toggle-wrap {
     position: absolute;
     bottom: 8px; left: 8px;
     z-index: 500;
     display: flex;
-    align-items: center;
-    gap: 6px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
     background: rgba(13,17,23,0.82);
     border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 4px 8px;
+    padding: 6px 8px;
     backdrop-filter: blur(4px);
   }
-  #thickness-toggle-label {
+  .pane-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #thickness-toggle-label, .pane-toggle-label {
     font-size: 9px;
     color: var(--muted);
     letter-spacing: 0.5px;
     text-transform: uppercase;
     white-space: nowrap;
+    min-width: 108px;
   }
-  #thickness-toggle-btn {
+  #thickness-toggle-btn, .pane-toggle-btn {
     width: 32px; height: 16px;
     border-radius: 8px;
     background: #444c56;
@@ -379,10 +386,10 @@
     transition: background 0.15s;
     flex-shrink: 0;
   }
-  #thickness-toggle-btn.on {
+  #thickness-toggle-btn.on, .pane-toggle-btn.on {
     background: var(--accent3);
   }
-  #thickness-toggle-btn .knob {
+  #thickness-toggle-btn .knob, .pane-toggle-btn .knob {
     position: absolute;
     top: 2px; left: 2px;
     width: 12px; height: 12px;
@@ -390,7 +397,7 @@
     background: #fff;
     transition: left 0.15s;
   }
-  #thickness-toggle-btn.on .knob {
+  #thickness-toggle-btn.on .knob, .pane-toggle-btn.on .knob {
     left: 18px;
   }
 
@@ -530,8 +537,26 @@
       <span>Loading surface map…</span>
     </div>
     <div id="thickness-toggle-wrap">
-      <span id="thickness-toggle-label">Thickness</span>
-      <button id="thickness-toggle-btn" onclick="toggleP3ThicknessDis()"><span class="knob"></span></button>
+      <div class="pane-toggle-row">
+        <span id="thickness-toggle-label">Thickness</span>
+        <button id="thickness-toggle-btn" onclick="toggleP3ThicknessDis()"><span class="knob"></span></button>
+      </div>
+      <div class="pane-toggle-row">
+        <span class="pane-toggle-label">HRDPS Wind Barbs</span>
+        <button id="wind-hrdps-toggle-btn" class="pane-toggle-btn" onclick="toggleP3Layer('hrdps_wb')"><span class="knob"></span></button>
+      </div>
+      <div class="pane-toggle-row">
+        <span class="pane-toggle-label">RDPS Wind Barbs 40m</span>
+        <button id="wind-rdps40-toggle-btn" class="pane-toggle-btn" onclick="toggleP3Layer('rdps_wb40')"><span class="knob"></span></button>
+      </div>
+      <div class="pane-toggle-row">
+        <span class="pane-toggle-label">RDPS Wind Gust</span>
+        <button id="wind-gust-toggle-btn" class="pane-toggle-btn" onclick="toggleP3Layer('rdps_gust')"><span class="knob"></span></button>
+      </div>
+      <div class="pane-toggle-row">
+        <span class="pane-toggle-label">RDPS Wind Barbs 10m</span>
+        <button id="wind-rdps10-toggle-btn" class="pane-toggle-btn" onclick="toggleP3Layer('rdps_wb10')"><span class="knob"></span></button>
+      </div>
     </div>
     <div class="pane-blank" id="blank-p3">
       <div class="no-data-icon">⊘</div>
@@ -1212,6 +1237,21 @@ var _p3DisWmsValidTimes   = null;
 var _p3DisWmsCapPromise   = null;
 var _p3ThicknessDisOn     = false;
 
+// ── p3 additional toggle overlays — wind barbs / wind gust, GeoMet ────────
+// Config-driven so each toggle shares one capabilities/sync/toggle
+// implementation instead of duplicating the thickness-layer boilerplate.
+var P3_TOGGLE_LAYERS = [
+  { id: 'hrdps_wb',  label: 'HRDPS Wind Barbs',    layerName: 'HRDPS.CONTINENTAL_UU_40m', styles: 'WindBarbs_Sfc', opacity: 0.75, zIndex: 636, btnId: 'wind-hrdps-toggle-btn' },
+  { id: 'rdps_wb40', label: 'RDPS Wind Barbs 40m', layerName: 'RDPS_10km_Winds_40m',       styles: 'WindBarbs_Sfc', opacity: 0.75, zIndex: 635, btnId: 'wind-rdps40-toggle-btn' },
+  { id: 'rdps_gust', label: 'RDPS Wind Gust',      layerName: 'RDPS_10km_WindGust_10m',    styles: '',              opacity: 0.75, zIndex: 634, btnId: 'wind-gust-toggle-btn' },
+  { id: 'rdps_wb10', label: 'RDPS Wind Barbs 10m', layerName: 'RDPS_10km_Winds_10m',       styles: 'WindBarbs_Sfc', opacity: 0.75, zIndex: 633, btnId: 'wind-rdps10-toggle-btn' }
+];
+// Runtime state keyed by cfg.id: { layer, validTimes, capPromise, on }
+var _p3ToggleState = {};
+P3_TOGGLE_LAYERS.forEach(function(cfg) {
+  _p3ToggleState[cfg.id] = { layer: null, validTimes: null, capPromise: null, on: false };
+});
+
 function _fetchP3WmsCapabilities() {
   if (_p3WmsCapPromise) return _p3WmsCapPromise;
   var url = P3_WMS_BASE + '?service=WMS&version=1.3.0&request=GetCapabilities&LAYERS=' + P3_WMS_LAYER_NAME + '&_=' + Date.now();
@@ -1363,6 +1403,12 @@ function initP3WmsLayer(lmap) {
     _fetchP3DisWmsCapabilities().then(function() {
       _syncP3DisWms();
     });
+
+    // Wind barb / wind gust toggle overlays — layer objects are created now
+    // but NOT added to the map (default off) until the user flips a toggle.
+    P3_TOGGLE_LAYERS.forEach(function(cfg) {
+      _initP3ToggleLayer(cfg, lmap);
+    });
   } catch(e) {
     console.error('[AWCC] initP3WmsLayer THREW:', e);
   }
@@ -1493,6 +1539,128 @@ function _syncP3DisWms() {
   } catch(e) {
     console.error('[AWCC] _syncP3DisWms THREW:', e);
     return Promise.resolve();
+  }
+}
+
+function _fetchP3ToggleCapabilities(cfg) {
+  var state = _p3ToggleState[cfg.id];
+  if (state.capPromise) return state.capPromise;
+  var url = P3_WMS_BASE + '?service=WMS&version=1.3.0&request=GetCapabilities&LAYERS=' + cfg.layerName + '&_=' + Date.now();
+  state.capPromise = fetch(url, { cache: 'no-store' })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(function(text) {
+      var m = text.match(/<Dimension[^>]*name="time"[^>]*>([\s\S]*?)<\/Dimension>/i)
+           || text.match(/<Extent[^>]*name="time"[^>]*>([\s\S]*?)<\/Extent>/i);
+      if (!m) throw new Error('No time dimension found in capabilities');
+      var raw = m[1].trim();
+      var times = [];
+      if (raw.indexOf('/') >= 0 && raw.split('/').length === 3) {
+        var parts = raw.split('/');
+        var start = parts[0], end = parts[1], period = parts[2];
+        var stepMatchH = period.match(/PT(\d+)H/);
+        var stepMs = (stepMatchH ? parseInt(stepMatchH[1]) : 1) * 3600000;
+        var t = Date.parse(start), endMs = Date.parse(end);
+        while (t <= endMs) { times.push(t); t += stepMs; }
+      } else {
+        times = raw.split(',').map(function(s) { return Date.parse(s.trim()); })
+                    .filter(function(t) { return !isNaN(t); });
+      }
+      times.sort(function(a, b) { return a - b; });
+      state.validTimes = times;
+      console.log('[AWCC] p3 toggle', cfg.id, 'capabilities parsed —', times.length, 'valid times');
+      return times;
+    })
+    .catch(function(e) {
+      console.error('[AWCC] p3 toggle', cfg.id, 'capabilities fetch failed:', e);
+      state.validTimes = null;
+      return null;
+    });
+  return state.capPromise;
+}
+
+function _nearestValidWmsTimeToggle(cfg, targetMs) {
+  var state = _p3ToggleState[cfg.id];
+  if (!state.validTimes || !state.validTimes.length) return targetMs;
+  var best = state.validTimes[0], bestDiff = Math.abs(targetMs - best);
+  for (var i = 1; i < state.validTimes.length; i++) {
+    var diff = Math.abs(targetMs - state.validTimes[i]);
+    if (diff < bestDiff) { bestDiff = diff; best = state.validTimes[i]; }
+  }
+  return best;
+}
+
+function _initP3ToggleLayer(cfg, lmap) {
+  var state = _p3ToggleState[cfg.id];
+  if (state.layer) return;
+  var p3win = document.getElementById('frame-p3').contentWindow;
+  var _L = p3win.L;
+  if (!_L) return;
+  var paneName = 'p3TogglePane_' + cfg.id;
+  if (!lmap.getPane(paneName)) {
+    lmap.createPane(paneName);
+    lmap.getPane(paneName).style.zIndex = cfg.zIndex;
+    lmap.getPane(paneName).style.pointerEvents = 'none';
+  }
+  state.layer = _L.tileLayer.wms(P3_WMS_BASE, {
+    layers: cfg.layerName,
+    styles: cfg.styles,
+    format: 'image/png',
+    transparent: true,
+    version: '1.3.0',
+    opacity: cfg.opacity,
+    pane: paneName
+  });
+  _fetchP3ToggleCapabilities(cfg);
+}
+
+function _syncP3ToggleLayer(cfg) {
+  var state = _p3ToggleState[cfg.id];
+  if (!state.layer || !state.on) return Promise.resolve();
+  try {
+    var win    = document.getElementById('frame-p3').contentWindow;
+    var steps  = win['_GEM_STEPS'];
+    var slider = win.document.getElementById('gem-time-slider');
+    if (!steps || !slider) return Promise.resolve();
+    var idx  = parseInt(slider.value);
+    var step = steps[idx];
+    if (!step) return Promise.resolve();
+    var targetMs = _p1KeyToMs(step.key);
+    if (targetMs === null) return Promise.resolve();
+    var snapped    = _nearestValidWmsTimeToggle(cfg, targetMs);
+    var isoSnapped = _msToISO(snapped);
+    state.layer.setParams({ TIME: isoSnapped });
+    return _waitForWmsLayerLoad(state.layer, 4000);
+  } catch(e) {
+    console.error('[AWCC] _syncP3ToggleLayer THREW:', cfg.id, e);
+    return Promise.resolve();
+  }
+}
+
+function _syncAllP3ToggleLayers() {
+  return Promise.all(P3_TOGGLE_LAYERS.map(function(cfg) { return _syncP3ToggleLayer(cfg); }));
+}
+
+function toggleP3Layer(id) {
+  var cfg = null;
+  for (var i = 0; i < P3_TOGGLE_LAYERS.length; i++) {
+    if (P3_TOGGLE_LAYERS[i].id === id) { cfg = P3_TOGGLE_LAYERS[i]; break; }
+  }
+  if (!cfg) return;
+  var state = _p3ToggleState[id];
+  state.on = !state.on;
+  var btn = document.getElementById(cfg.btnId);
+  if (btn) btn.classList.toggle('on', state.on);
+
+  if (!state.layer || !_p3LeafletMap) return;
+
+  if (state.on) {
+    if (!_p3LeafletMap.hasLayer(state.layer)) state.layer.addTo(_p3LeafletMap);
+    _syncP3ToggleLayer(cfg);
+  } else {
+    if (_p3LeafletMap.hasLayer(state.layer)) _p3LeafletMap.removeLayer(state.layer);
   }
 }
 
@@ -1735,6 +1903,7 @@ window.addEventListener('message', function(e) {
   if (src.id === 'p3') {
     _syncP3Wms();
     _syncP3DisWms();
+    _syncAllP3ToggleLayers();
   }
 
   // First step from any pane → safe to attach map sync (Leaflet is fully ready)
@@ -1912,6 +2081,7 @@ setPaneBlank(p.id, false, '');
   _syncP1Wms();
   _syncP3Wms();
   _syncP3DisWms();
+  _syncAllP3ToggleLayers();
   _masterBusy = false;
 }
 // Keep master slider thumb in sync when panes are driven individually
@@ -1979,7 +2149,7 @@ function mirrorStep(src, tgt, srcIdx) {
 tgtWin[tgt.fnName](targetIdx);
     tgtWin.__awcc_syncing = false;
 if (tgt.id === 'p1') _syncP1Wms();
-    if (tgt.id === 'p3') { _syncP3Wms(); _syncP3DisWms(); }
+    if (tgt.id === 'p3') { _syncP3Wms(); _syncP3DisWms(); _syncAllP3ToggleLayers(); }
   } catch(e) {
     console.warn('[AWCC] mirrorStep error', tgt.id, e);
   }
