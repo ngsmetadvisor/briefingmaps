@@ -1940,7 +1940,7 @@ function _p3HideWindTooltip() {
   if (tip) tip.classList.remove('visible');
 }
 
-function _p3BuildFeatureInfoUrl(layerName, stylesName, lmap, containerPoint) {
+function _p3BuildFeatureInfoUrl(layerName, stylesName, timeIso, lmap, containerPoint) {
   var size = lmap.getSize();
   var bounds = lmap.getBounds();
   var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
@@ -1948,12 +1948,14 @@ function _p3BuildFeatureInfoUrl(layerName, stylesName, lmap, containerPoint) {
   var yMin = _p1Lat2Merc(sw.lat), yMax = _p1Lat2Merc(ne.lat);
   var i = Math.round(containerPoint.x);
   var j = Math.round(containerPoint.y);
-  return P3_WMS_BASE + '?service=WMS&version=1.3.0&request=GetFeatureInfo'
+  var url = P3_WMS_BASE + '?service=WMS&version=1.3.0&request=GetFeatureInfo'
     + '&layers=' + layerName + '&query_layers=' + layerName
     + '&styles=' + (stylesName || '')
     + '&crs=EPSG:3857&bbox=' + xMin + ',' + yMin + ',' + xMax + ',' + yMax
     + '&width=' + size.x + '&height=' + size.y
     + '&i=' + i + '&j=' + j + '&info_format=application/json&feature_count=1';
+  if (timeIso) url += '&time=' + timeIso;
+  return url;
 }
 
 // Only returns a value from a real feature payload. An OGC
@@ -1984,6 +1986,12 @@ function _p3ParseFeatureInfoValue(text, valueKey) {
   }
 }
 
+function _msToKnots(val) {
+  var n = parseFloat(val);
+  if (isNaN(n)) return null;
+  return Math.round(n * 1.943844 * 10) / 10;
+}
+
 function _p3HandleWindHover(ev, lmap, win, containerPoint) {
   if (!_p3WindOn) { _p3HideWindTooltip(); return; }
   var now = Date.now();
@@ -1992,22 +2000,27 @@ function _p3HandleWindHover(ev, lmap, win, containerPoint) {
   _p3WindHoverPending = true;
 
   var barbCfg = P3_WIND_BARB_LAYERS[_p3WindRadioId];
+  var barbStateObj = _p3WindLayerObjs[_p3WindRadioId];
   var pageX = ev.clientX, pageY = ev.clientY;
   var jobs = [];
 
-  if (barbCfg) {
-    var windUrl = _p3BuildFeatureInfoUrl(barbCfg.layerName, barbCfg.styles, lmap, containerPoint);
+  if (barbCfg && barbStateObj && barbStateObj.layer) {
+    var windTime = barbStateObj.layer.wmsParams.TIME;
+    var windUrl = _p3BuildFeatureInfoUrl(barbCfg.layerName, barbCfg.styles, windTime, lmap, containerPoint);
     jobs.push(fetch(windUrl).then(function(r) { return r.text(); }).then(function(text) {
-      return { label: 'Wind', val: _p3ParseFeatureInfoValue(text, barbCfg.valueKey) };
+      var raw = _p3ParseFeatureInfoValue(text, barbCfg.valueKey);
+      return { label: 'Wind', val: _msToKnots(raw) };
     }).catch(function() { return { label: 'Wind', val: null }; }));
   } else {
     jobs.push(Promise.resolve({ label: 'Wind', val: null }));
   }
 
-  if (_p3WindGustOn) {
-    var gustUrl = _p3BuildFeatureInfoUrl(P3_WIND_GUST_LAYER.layerName, P3_WIND_GUST_LAYER.styles, lmap, containerPoint);
+  if (_p3WindGustOn && _p3WindGustLayerObj.layer) {
+    var gustTime = _p3WindGustLayerObj.layer.wmsParams.TIME;
+    var gustUrl = _p3BuildFeatureInfoUrl(P3_WIND_GUST_LAYER.layerName, P3_WIND_GUST_LAYER.styles, gustTime, lmap, containerPoint);
     jobs.push(fetch(gustUrl).then(function(r) { return r.text(); }).then(function(text) {
-      return { label: 'Gust', val: _p3ParseFeatureInfoValue(text, P3_WIND_GUST_LAYER.valueKey) };
+      var raw = _p3ParseFeatureInfoValue(text, P3_WIND_GUST_LAYER.valueKey);
+      return { label: 'Gust', val: _msToKnots(raw) };
     }).catch(function() { return { label: 'Gust', val: null }; }));
   }
 
