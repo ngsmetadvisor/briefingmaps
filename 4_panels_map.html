@@ -1297,11 +1297,11 @@ var _p3ThicknessDisOn     = false;
 
 // ── p3 Wind overlay — one radio-selected barb layer + independent gust checkbox ──
 var P3_WIND_BARB_LAYERS = {
-  hrdps10: { layerName: 'HRDPS.CONTINENTAL_UU_40m', styles: 'WindBarbs_Sfc', zIndex: 636 },
-  rdps10:  { layerName: 'RDPS_10km_Winds_10m',       styles: 'WindBarbs_Sfc', zIndex: 636 },
-  rdps40:  { layerName: 'RDPS_10km_Winds_40m',       styles: 'WindBarbs_Sfc', zIndex: 636 }
+  hrdps10: { layerName: 'HRDPS.CONTINENTAL_UU_40m', styles: 'WindBarbs_Sfc', zIndex: 636, valueKey: 'uv_length' },
+  rdps10:  { layerName: 'RDPS_10km_Winds_10m',       styles: 'WindBarbs_Sfc', zIndex: 636, valueKey: 'Value' },
+  rdps40:  { layerName: 'RDPS_10km_Winds_40m',       styles: 'WindBarbs_Sfc', zIndex: 636, valueKey: 'Value' }
 };
-var P3_WIND_GUST_LAYER = { layerName: 'RDPS_10km_WindGust_10m', styles: '', zIndex: 635 };
+var P3_WIND_GUST_LAYER = { layerName: 'RDPS_10km_WindGust_10m', styles: '', zIndex: 635, valueKey: 'Value' };
 
 var _p3WindOn      = false;          // master Wind toggle
 var _p3WindRadioId = 'hrdps10';      // currently selected barb layer id
@@ -1961,7 +1961,7 @@ function _p3BuildFeatureInfoUrl(layerName, stylesName, lmap, containerPoint) {
 // detected and rejected outright — the old fallback regex could pull a
 // stray digit (e.g. the "1.3.0" in that boilerplate) out of the exception
 // body, which is why the tooltip kept showing one fixed value everywhere.
-function _p3ParseFeatureInfoValue(text) {
+function _p3ParseFeatureInfoValue(text, valueKey) {
   if (!text) return null;
   if (text.indexOf('ExceptionReport') !== -1 || text.indexOf('ServiceException') !== -1) return null;
   try {
@@ -1970,11 +1970,15 @@ function _p3ParseFeatureInfoValue(text) {
     if (!feats || !feats.length || !feats[0].properties) return null;
     var props = feats[0].properties;
     var keys = Object.keys(props);
-    var key = keys.find(function(k) { return /value|gray_index/i.test(k); }) || keys[0];
+    var key = keys.find(function(k) { return k.toLowerCase() === String(valueKey).toLowerCase(); })
+           || keys.find(function(k) { return /value|gray_index/i.test(k); })
+           || keys[0];
     if (key === undefined || props[key] === null || props[key] === undefined || props[key] === '') return null;
     return props[key];
   } catch(e) {
-    var m = text.match(/value\s*[:=]\s*'?(-?[0-9]+(\.[0-9]+)?)/i)
+    var escaped = String(valueKey).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var m = text.match(new RegExp(escaped + "\\s*[:=]\\s*'?(-?[0-9]+(\\.[0-9]+)?)", 'i'))
+         || text.match(/value\s*[:=]\s*'?(-?[0-9]+(\.[0-9]+)?)/i)
          || text.match(/GRAY_INDEX\s*[:=]\s*'?(-?[0-9]+(\.[0-9]+)?)/i);
     return m ? m[1] : null;
   }
@@ -1994,7 +1998,7 @@ function _p3HandleWindHover(ev, lmap, win, containerPoint) {
   if (barbCfg) {
     var windUrl = _p3BuildFeatureInfoUrl(barbCfg.layerName, barbCfg.styles, lmap, containerPoint);
     jobs.push(fetch(windUrl).then(function(r) { return r.text(); }).then(function(text) {
-      return { label: 'Wind', val: _p3ParseFeatureInfoValue(text) };
+      return { label: 'Wind', val: _p3ParseFeatureInfoValue(text, barbCfg.valueKey) };
     }).catch(function() { return { label: 'Wind', val: null }; }));
   } else {
     jobs.push(Promise.resolve({ label: 'Wind', val: null }));
@@ -2003,7 +2007,7 @@ function _p3HandleWindHover(ev, lmap, win, containerPoint) {
   if (_p3WindGustOn) {
     var gustUrl = _p3BuildFeatureInfoUrl(P3_WIND_GUST_LAYER.layerName, P3_WIND_GUST_LAYER.styles, lmap, containerPoint);
     jobs.push(fetch(gustUrl).then(function(r) { return r.text(); }).then(function(text) {
-      return { label: 'Gust', val: _p3ParseFeatureInfoValue(text) };
+      return { label: 'Gust', val: _p3ParseFeatureInfoValue(text, P3_WIND_GUST_LAYER.valueKey) };
     }).catch(function() { return { label: 'Gust', val: null }; }));
   }
 
