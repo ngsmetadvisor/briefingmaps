@@ -1972,16 +1972,16 @@ function _p3ParseFeatureInfoValue(text, valueKey) {
     if (!feats || !feats.length || !feats[0].properties) return null;
     var props = feats[0].properties;
     var keys = Object.keys(props);
-    var key = keys.find(function(k) { return k.toLowerCase() === String(valueKey).toLowerCase(); })
-           || keys.find(function(k) { return /value|gray_index/i.test(k); })
-           || keys[0];
+    // Only trust an exact (case-insensitive) match to the field name we were
+    // told to expect. No fallback to GRAY_INDEX or "first property" — those
+    // are raster palette indices, not physical values, and silently showing
+    // one as a wind speed is worse than showing nothing.
+    var key = keys.find(function(k) { return k.toLowerCase() === String(valueKey).toLowerCase(); });
     if (key === undefined || props[key] === null || props[key] === undefined || props[key] === '') return null;
     return props[key];
   } catch(e) {
     var escaped = String(valueKey).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    var m = text.match(new RegExp(escaped + "\\s*[:=]\\s*'?(-?[0-9]+(\\.[0-9]+)?)", 'i'))
-         || text.match(/value\s*[:=]\s*'?(-?[0-9]+(\.[0-9]+)?)/i)
-         || text.match(/GRAY_INDEX\s*[:=]\s*'?(-?[0-9]+(\.[0-9]+)?)/i);
+    var m = text.match(new RegExp(escaped + "\\s*[:=]\\s*'?(-?[0-9]+(\\.[0-9]+)?)", 'i'));
     return m ? m[1] : null;
   }
 }
