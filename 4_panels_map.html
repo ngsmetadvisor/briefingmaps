@@ -2450,9 +2450,9 @@ function drawExportTimestamp(canvas, label) {
   if (!label) return;
   var ctx = canvas.getContext('2d');
   var scale = canvas.width / 2200;   // scale text relative to a ~2200px-wide reference
-  var fontSize = Math.max(28, Math.round(46 * scale));   // bigger font
-  var padX = Math.round(14 * scale);
-  var padY = Math.round(10 * scale);
+  var fontSize = Math.max(22, Math.round(37 * scale));   // 20% smaller
+  var padX = Math.round(11 * scale);
+  var padY = Math.round(8 * scale);
 
   ctx.save();
   ctx.font = 'bold ' + fontSize + 'px "Courier New", monospace';
@@ -2464,11 +2464,9 @@ function drawExportTimestamp(canvas, label) {
   var boxH  = fontSize + padY * 2;
   var margin = Math.round(10 * scale);
 
-  // Position over the orange-highlighted area: bottom-left of the
-  // top-left panel (p1), just above the p1/p4 divider line.
-  var panelH = canvas.height / 2;
+// Position at the bottom-left of the whole exported image.
   var boxX   = margin;
-  var boxY   = panelH - boxH - margin;
+  var boxY   = canvas.height - boxH - margin;
 
   ctx.fillStyle = 'rgba(13,17,23,0.9)';
   ctx.fillRect(boxX, boxY, boxW, boxH);
