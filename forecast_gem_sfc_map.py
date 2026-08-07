@@ -7847,7 +7847,7 @@ def _extract_temp_bands(grid, lat_vec, lon_vec, n_interp=120):
 
 # ── RH (2m) fill bands ────────────────────────────────────────────────────────
 RH_LEVELS = [0, 10, 20, 30, 40, 50]
-RH_COLORS = {0: '#3b2412', 10: '#6b4423', 20: '#c8a165', 30: '#a8e6a1', 40: '#4caf50'}
+RH_COLORS = {0: '#3b2412', 10: '#6b4423', 20: '#c8a165', 30: '#e8c468', 40: '#f2d94e'}
 RH_FILL_OPACITY = 0.45
 
 def _extract_rh_bands(grid, lat_vec, lon_vec, n_interp=120):
@@ -8119,7 +8119,7 @@ _gem_temp_swatches = '<div style="display:flex;">' + ''.join(
 _gem_rh_swatches = '<div style="display:flex;">' + ''.join(
     _gem_swatch_col(l, c) for l, c in [
         ('0-10', '#3b2412'), ('10-20', '#6b4423'), ('20-30', '#c8a165'),
-        ('30-40', '#a8e6a1'), ('40-50', '#4caf50'),
+        ('30-40', '#e8c468'), ('40-50', '#f2d94e'),
     ]
 ) + '</div>'
 
