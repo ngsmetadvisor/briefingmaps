@@ -4795,19 +4795,33 @@ _bar_html = '''
   color: #2a2a3a;
   box-shadow: 0 -3px 12px rgba(0,0,0,0.25);
   min-height: 13px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
+#syn-bar::-webkit-scrollbar { height: 4px; }
+#syn-bar::-webkit-scrollbar-thumb { background: #4a7fc1; border-radius: 2px; }
 #syn-bar .bar-label {
   font-size: 8px; color: #5a5a6a; font-weight: bold;
   text-transform: uppercase; letter-spacing: 0.5px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 #syn-bar .bar-section {
   display: flex; align-items: center; gap: 6px;
   border-right: 1px solid #c8c8ce;
   padding-right: 14px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 #syn-bar .bar-section:last-child { border-right: none; }
+@media (max-width: 600px) {
+  #syn-bar { padding: 4px 10px; gap: 10px; }
+  .syn-lvl-btn, .syn-exp-btn { padding: 5px 9px; font-size: 11px; }
+  #syn-time-slider { width: 160px; }
+}
 .syn-lvl-btn {
   font-size: 9px; padding: 2px 7px;
   cursor: pointer;
@@ -6616,19 +6630,33 @@ _bar_html = '''
   color: #e0e0e0;
   box-shadow: 0 -3px 12px rgba(0,0,0,0.5);
   min-height: 52px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
+#syn-bar::-webkit-scrollbar { height: 4px; }
+#syn-bar::-webkit-scrollbar-thumb { background: #4a7fc1; border-radius: 2px; }
 #syn-bar .bar-label {
   font-size: 8px; color: #8888aa; font-weight: bold;
   text-transform: uppercase; letter-spacing: 0.5px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 #syn-bar .bar-section {
   display: flex; align-items: center; gap: 6px;
   border-right: 1px solid #3a3a5a;
   padding-right: 14px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 #syn-bar .bar-section:last-child { border-right: none; }
+@media (max-width: 600px) {
+  #syn-bar { padding: 6px 10px; gap: 10px; }
+  .syn-lvl-btn, .syn-exp-btn { padding: 5px 9px; font-size: 12px; }
+  #syn-time-slider { width: 160px; }
+}#syn-bar .bar-section:last-child { border-right: none; }
 .syn-lvl-btn {
   font-size: 12px; padding: 4px 14px;
   cursor: pointer;
