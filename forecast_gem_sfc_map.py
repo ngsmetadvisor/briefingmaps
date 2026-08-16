@@ -8044,12 +8044,21 @@ _bar_html = '''
   padding:2px 16px;display:flex;align-items:center;gap:14px;
   font-family:"Courier New",monospace;font-size:9px;color:#2a2a3a;
   box-shadow:0 -3px 12px rgba(0,0,0,0.25);min-height:13px;
+  overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap;
+  -webkit-overflow-scrolling:touch;scrollbar-width:thin;
 }
+#gem-bar::-webkit-scrollbar{height:4px;}
+#gem-bar::-webkit-scrollbar-thumb{background:#4a7fc1;border-radius:2px;}
 #gem-bar .bar-label{font-size:8px;color:#5a5a6a;font-weight:bold;
-  text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;}
+  text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;flex-shrink:0;}
 #gem-bar .bar-section{display:flex;align-items:center;gap:6px;
-  border-right:1px solid #c8c8ce;padding-right:14px;white-space:nowrap;}
+  border-right:1px solid #c8c8ce;padding-right:14px;white-space:nowrap;flex-shrink:0;}
 #gem-bar .bar-section:last-child{border-right:none;}
+@media (max-width:600px){
+  #gem-bar{padding:4px 10px;gap:10px;}
+  .gem-layer-btn{padding:5px 9px;font-size:11px;}
+  #gem-time-slider{width:160px;}
+}
 .gem-layer-btn{font-size:9px;padding:2px 7px;cursor:pointer;
   border:1px solid #3a4a6a;border-radius:3px;background:#2a2a4a;
   color:#c0c8e0;font-family:"Courier New",monospace;font-weight:bold;}
