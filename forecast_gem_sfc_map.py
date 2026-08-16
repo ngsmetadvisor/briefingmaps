@@ -4776,7 +4776,7 @@ print(f'\n✓ _ts_ua_stn_json_str keys: {sorted(_ua_stn_data.keys())}')
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  CONTROL BAR  — level (850/500) + time slider
+#  CONTROL BAR  — level (850/500) + time slider - 1
 # ═══════════════════════════════════════════════════════════════════════════
 _bar_html = '''
 <style>
@@ -6611,7 +6611,7 @@ print(f'\n✓ _ts_ua_stn_json_str keys: {sorted(_ua_stn_data.keys())}')
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  CONTROL BAR  — level (850/500) + time slider
+#  CONTROL BAR  — level (850/500) + time slider - 2
 # ═══════════════════════════════════════════════════════════════════════════
 _bar_html = '''
 <style>
