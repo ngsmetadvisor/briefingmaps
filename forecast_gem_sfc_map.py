@@ -6656,7 +6656,7 @@ _bar_html = '''
   #syn-bar { padding: 6px 10px; gap: 10px; }
   .syn-lvl-btn, .syn-exp-btn { padding: 5px 9px; font-size: 12px; }
   #syn-time-slider { width: 160px; }
-}#syn-bar .bar-section:last-child { border-right: none; }
+}
 .syn-lvl-btn {
   font-size: 12px; padding: 4px 14px;
   cursor: pointer;
