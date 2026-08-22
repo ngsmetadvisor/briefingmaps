@@ -32,6 +32,12 @@ from shapely.geometry import shape
 
 print('✓ All packages ready')
 
+def _j2raw(html_str):
+    """Wrap raw HTML/JS/CSS in Jinja2 raw tags so literal '{{', '{%', '{#'
+    sequences inside embedded JS/JSON don't get mis-parsed by folium.Element,
+    which internally compiles injected content as a Jinja2 macro."""
+    return '{% raw %}' + html_str + '{% endraw %}'
+
 # @title
 # -- Cell 1.5 - Configuration ------------------------------------------
 
@@ -6148,13 +6154,17 @@ _syn_legend_html = (
     "font-family:'Courier New',monospace;padding:4px 10px 2px;"
     'display:none;align-items:center;gap:6px;pointer-events:none;"></div>'
 )
-m.get_root().html.add_child(Element(_bar_html))
-m.get_root().html.add_child(Element(_syn_legend_html))
+m.get_root().html.add_child(Element(_j2raw(_bar_html)))
+m.get_root().html.add_child(Element(_j2raw(_syn_legend_html)))
 m.get_root().html.add_child(Element(
     '<style>#syn-time-slider{display:none;}'
     '@media (max-width:600px){#syn-time-slider{display:inline-block;}}</style>'
 ))
-m.get_root().html.add_child(Element(_js))
+m.get_root().html.add_child(Element(_j2raw(_js)))
+
+# ── Save ──────────────────────────────────────────────────────────────────
+os.makedirs('outputs', exist_ok=True)
+out_path = 'outputs/synoptic_map.html'
 
 # ── Save ──────────────────────────────────────────────────────────────────
 os.makedirs('outputs', exist_ok=True)
@@ -7593,12 +7603,12 @@ else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700);
 </script>
 '''
 
-m.get_root().html.add_child(Element(_bar_html))
+m.get_root().html.add_child(Element(_j2raw(_bar_html)))
 m.get_root().html.add_child(Element(
     '<style>#syn-time-slider{display:none;}'
     '@media (max-width:600px){#syn-time-slider{display:inline-block;}}</style>'
 ))
-m.get_root().html.add_child(Element(_js))
+m.get_root().html.add_child(Element(_j2raw(_js)))
 
 os.makedirs('outputs', exist_ok=True)
 m.save('outputs/llj_prog.html')
@@ -8127,7 +8137,7 @@ _bar_html = '''
   </div>
   </div>
 '''
-m.get_root().html.add_child(Element(_bar_html))
+m.get_root().html.add_child(Element(_j2raw(_bar_html)))
 m.get_root().html.add_child(Element(
     '<style>#gem-time-slider{display:none;}'
     '@media (max-width:600px){#gem-time-slider{display:inline-block;}}</style>'
@@ -8881,7 +8891,7 @@ if(document.readyState==="complete"){{setTimeout(_gemInit,800);}}
 else{{window.addEventListener("load",function(){{setTimeout(_gemInit,800);}});}}
 </script>
 '''
-m.get_root().html.add_child(Element(_js))
+m.get_root().html.add_child(Element(_j2raw(_js)))
 
 _banner_html = f'''
 <div id="gem-banner" style="
