@@ -32,12 +32,6 @@ from shapely.geometry import shape
 
 print('✓ All packages ready')
 
-def _j2raw(html_str):
-    """Wrap raw HTML/JS/CSS in Jinja2 raw tags so literal '{{', '{%', '{#'
-    sequences inside embedded JS/JSON don't get mis-parsed by folium.Element,
-    which internally compiles injected content as a Jinja2 macro."""
-    return '{% raw %}' + html_str + '{% endraw %}'
-
 # @title
 # -- Cell 1.5 - Configuration ------------------------------------------
 
@@ -4801,14 +4795,10 @@ _bar_html = '''
   color: #2a2a3a;
   box-shadow: 0 -3px 12px rgba(0,0,0,0.25);
   min-height: 13px;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
   flex-wrap: nowrap;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
 }
-#syn-bar::-webkit-scrollbar { height: 4px; }
-#syn-bar::-webkit-scrollbar-thumb { background: #4a7fc1; border-radius: 2px; }
 #syn-bar .bar-label {
   font-size: 8px; color: #5a5a6a; font-weight: bold;
   text-transform: uppercase; letter-spacing: 0.5px;
@@ -4824,7 +4814,14 @@ _bar_html = '''
 }
 #syn-bar .bar-section:last-child { border-right: none; }
 @media (max-width: 600px) {
-  #syn-bar { padding: 4px 10px; gap: 10px; }
+  #syn-bar {
+    padding: 4px 10px; gap: 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  #syn-bar::-webkit-scrollbar { height: 4px; }
+  #syn-bar::-webkit-scrollbar-thumb { background: #4a7fc1; border-radius: 2px; }
   .syn-lvl-btn, .syn-exp-btn { padding: 5px 9px; font-size: 11px; }
   #syn-time-slider { width: 160px; }
 }
@@ -6154,17 +6151,9 @@ _syn_legend_html = (
     "font-family:'Courier New',monospace;padding:4px 10px 2px;"
     'display:none;align-items:center;gap:6px;pointer-events:none;"></div>'
 )
-m.get_root().html.add_child(Element(_j2raw(_bar_html)))
-m.get_root().html.add_child(Element(_j2raw(_syn_legend_html)))
-m.get_root().html.add_child(Element(
-    '<style>#syn-time-slider{display:none;}'
-    '@media (max-width:600px){#syn-time-slider{display:inline-block;}}</style>'
-))
-m.get_root().html.add_child(Element(_j2raw(_js)))
-
-# ── Save ──────────────────────────────────────────────────────────────────
-os.makedirs('outputs', exist_ok=True)
-out_path = 'outputs/synoptic_map.html'
+m.get_root().html.add_child(Element(_bar_html))
+m.get_root().html.add_child(Element(_syn_legend_html))
+m.get_root().html.add_child(Element(_js))
 
 # ── Save ──────────────────────────────────────────────────────────────────
 os.makedirs('outputs', exist_ok=True)
@@ -6644,14 +6633,10 @@ _bar_html = '''
   color: #e0e0e0;
   box-shadow: 0 -3px 12px rgba(0,0,0,0.5);
   min-height: 52px;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
   flex-wrap: nowrap;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
 }
-#syn-bar::-webkit-scrollbar { height: 4px; }
-#syn-bar::-webkit-scrollbar-thumb { background: #4a7fc1; border-radius: 2px; }
 #syn-bar .bar-label {
   font-size: 8px; color: #8888aa; font-weight: bold;
   text-transform: uppercase; letter-spacing: 0.5px;
@@ -6667,7 +6652,14 @@ _bar_html = '''
 }
 #syn-bar .bar-section:last-child { border-right: none; }
 @media (max-width: 600px) {
-  #syn-bar { padding: 6px 10px; gap: 10px; }
+  #syn-bar {
+    padding: 6px 10px; gap: 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  #syn-bar::-webkit-scrollbar { height: 4px; }
+  #syn-bar::-webkit-scrollbar-thumb { background: #4a7fc1; border-radius: 2px; }
   .syn-lvl-btn, .syn-exp-btn { padding: 5px 9px; font-size: 12px; }
   #syn-time-slider { width: 160px; }
 }
@@ -7603,12 +7595,8 @@ else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700);
 </script>
 '''
 
-m.get_root().html.add_child(Element(_j2raw(_bar_html)))
-m.get_root().html.add_child(Element(
-    '<style>#syn-time-slider{display:none;}'
-    '@media (max-width:600px){#syn-time-slider{display:inline-block;}}</style>'
-))
-m.get_root().html.add_child(Element(_j2raw(_js)))
+m.get_root().html.add_child(Element(_bar_html))
+m.get_root().html.add_child(Element(_js))
 
 os.makedirs('outputs', exist_ok=True)
 m.save('outputs/llj_prog.html')
@@ -8089,19 +8077,23 @@ _bar_html = '''
   background:#e6e6ea;border-top:1px solid #4a7fc1;
   padding:2px 16px;display:flex;align-items:center;gap:14px;
   font-family:"Courier New",monospace;font-size:9px;color:#2a2a3a;
-  box-shadow:0 -3px 12px rgba(0,0,0,0.25);min-height:13px;
-  overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap;
-  -webkit-overflow-scrolling:touch;scrollbar-width:thin;
+    box-shadow:0 -3px 12px rgba(0,0,0,0.25);min-height:13px;
+  overflow-x:hidden;overflow-y:hidden;flex-wrap:nowrap;
 }
-#gem-bar::-webkit-scrollbar{height:4px;}
-#gem-bar::-webkit-scrollbar-thumb{background:#4a7fc1;border-radius:2px;}
 #gem-bar .bar-label{font-size:8px;color:#5a5a6a;font-weight:bold;
   text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;flex-shrink:0;}
 #gem-bar .bar-section{display:flex;align-items:center;gap:6px;
   border-right:1px solid #c8c8ce;padding-right:14px;white-space:nowrap;flex-shrink:0;}
 #gem-bar .bar-section:last-child{border-right:none;}
 @media (max-width:600px){
-  #gem-bar{padding:4px 10px;gap:10px;}
+  #gem-bar{
+    padding:4px 10px;gap:10px;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:thin;
+  }
+  #gem-bar::-webkit-scrollbar{height:4px;}
+  #gem-bar::-webkit-scrollbar-thumb{background:#4a7fc1;border-radius:2px;}
   .gem-layer-btn{padding:5px 9px;font-size:11px;}
   #gem-time-slider{width:160px;}
 }
@@ -8137,11 +8129,7 @@ _bar_html = '''
   </div>
   </div>
 '''
-m.get_root().html.add_child(Element(_j2raw(_bar_html)))
-m.get_root().html.add_child(Element(
-    '<style>#gem-time-slider{display:none;}'
-    '@media (max-width:600px){#gem-time-slider{display:inline-block;}}</style>'
-))
+m.get_root().html.add_child(Element(_bar_html))
 
 def _gem_swatch_col(label, color):
     return (
@@ -8891,7 +8879,7 @@ if(document.readyState==="complete"){{setTimeout(_gemInit,800);}}
 else{{window.addEventListener("load",function(){{setTimeout(_gemInit,800);}});}}
 </script>
 '''
-m.get_root().html.add_child(Element(_j2raw(_js)))
+m.get_root().html.add_child(Element(_js))
 
 _banner_html = f'''
 <div id="gem-banner" style="
