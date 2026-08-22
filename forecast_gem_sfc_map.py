@@ -6150,6 +6150,10 @@ _syn_legend_html = (
 )
 m.get_root().html.add_child(Element(_bar_html))
 m.get_root().html.add_child(Element(_syn_legend_html))
+m.get_root().html.add_child(Element(
+    '<style>#syn-time-slider{display:none;}'
+    '@media (max-width:600px){#syn-time-slider{display:inline-block;}}</style>'
+))
 m.get_root().html.add_child(Element(_js))
 
 # ── Save ──────────────────────────────────────────────────────────────────
@@ -7590,6 +7594,10 @@ else {{ window.addEventListener("load", function() {{ setTimeout(_synInit, 700);
 '''
 
 m.get_root().html.add_child(Element(_bar_html))
+m.get_root().html.add_child(Element(
+    '<style>#syn-time-slider{display:none;}'
+    '@media (max-width:600px){#syn-time-slider{display:inline-block;}}</style>'
+))
 m.get_root().html.add_child(Element(_js))
 
 os.makedirs('outputs', exist_ok=True)
@@ -8120,6 +8128,10 @@ _bar_html = '''
   </div>
 '''
 m.get_root().html.add_child(Element(_bar_html))
+m.get_root().html.add_child(Element(
+    '<style>#gem-time-slider{display:none;}'
+    '@media (max-width:600px){#gem-time-slider{display:inline-block;}}</style>'
+))
 
 def _gem_swatch_col(label, color):
     return (
