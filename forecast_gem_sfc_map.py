@@ -2550,6 +2550,24 @@ for (_date, _hr) in _sfc_times:
         print(f'  ✓ QPF3H  {qpf3h_grid.shape} '
               f'{qpf3h_grid.min():.1f}–{qpf3h_grid.max():.1f} mm')
 
+    # ── QPF24H — 24h accumulation = this 12h window + the previous 12h window ──
+    # (surface valid times are spaced 12h apart, so summing two consecutive
+    #  QPF12H windows gives the trailing 24h total without re-fetching GRIB)
+    _prev_vt  = _vt - timedelta(hours=12)
+    _prev_sub = _sfc_df[(_sfc_df['_date'] == _prev_vt.date()) &
+                         (_sfc_df['_hour'] == _prev_vt.hour)]
+    _sub24 = _sub[['lat', 'lon', 'QPF12H']].merge(
+        _prev_sub[['lat', 'lon', 'QPF12H']].rename(columns={'QPF12H': 'QPF12H_prev'}),
+        on=['lat', 'lon'], how='left')
+    _sub24['QPF24H'] = _sub24['QPF12H'].fillna(0) + _sub24['QPF12H_prev'].fillna(0)
+
+    qpf24h_grid = _qpf_build_grid(_sub24, sigma=QPF_SIGMA,
+                                   lon_vec=_qpf_lons, lat_vec=_qpf_lats, col='QPF24H')
+    if qpf24h_grid is not None:
+        _note = '' if not _prev_sub.empty else '  (no prior step — = QPF12H)'
+        print(f'  ✓ QPF24H {qpf24h_grid.shape} '
+              f'{qpf24h_grid.min():.1f}–{qpf24h_grid.max():.1f} mm{_note}')
+
     _mslp_segs = _count_contours(slp_grid, lon_vec, lat_vec, MSLP_INTERVAL) if slp_grid is not None else 0
     _qpf_segs  = _count_contours(qpf_grid,
                                   np.array(sorted(np.unique(_sub['lon'].dropna()))),
@@ -2562,6 +2580,7 @@ for (_date, _hr) in _sfc_times:
     globals()[f'slp_grid_{_key}']    = slp_grid
     globals()[f'qpf_grid_{_key}']    = qpf_grid
     globals()[f'qpf3h_grid_{_key}']  = qpf3h_grid
+    globals()[f'qpf24h_grid_{_key}'] = qpf24h_grid
     globals()[f'precip_grid_{_key}'] = qpf_grid
     globals()[f'lon_vec_{_key}']     = lon_vec
     globals()[f'lat_vec_{_key}']     = lat_vec
@@ -7937,6 +7956,10 @@ for _key in _sfc_keys:
     _qpf3h_available = _qpf3h is not None
     _qpf3h_bands = _extract_qpf_bands(_qpf3h, _qpf_latv, _qpf_lonv) if _qpf3h_available else []
 
+    _qpf24h = globals().get(f'qpf24h_grid_{_key}')
+    _qpf24h_available = _qpf24h is not None
+    _qpf24h_bands = _extract_qpf_bands(_qpf24h, _qpf_latv, _qpf_lonv) if _qpf24h_available else []
+
     _cape       = globals().get(f'cape_grid_{_key}')
     _cape_lonv  = globals().get(f'cape_lon_vec_{_key}', _lonv)
     _cape_latv  = globals().get(f'cape_lat_vec_{_key}', _latv)
@@ -7963,6 +7986,8 @@ for _key in _sfc_keys:
         'qpf_available': _qpf_available,
         'qpf3h': _qpf3h_bands,
         'qpf3h_available': _qpf3h_available,
+        'qpf24h': _qpf24h_bands,
+        'qpf24h_available': _qpf24h_available,
         'cape': _cape_bands,
         'crossover': _crossover_bands,
         'temp': _temp_bands,
@@ -8235,12 +8260,13 @@ function _utcKeyToLocalStr(key) {{
 
 var _gemStepIdx       = 0;
 var _gemShowMslp      = true;
-var _gemQpfMode       = 0;  // 0=QPF12h, 1=QPF3h, 2=off
+var _gemQpfMode       = 0;  // 0=QPF12h, 1=QPF3h, 2=QPF24h, 3=off
 var _gemShowCape      = false;
 var _gemCrossoverMode = 0;  // 0=off, 1=crossover, 2=temp, 3=rh
 var _gemMslpLayer      = null;
 var _gemQpfLayer       = null;
 var _gemQpf3hLayer     = null;
+var _gemQpf24hLayer    = null;
 var _gemCapeLayer      = null;
 var _gemCrossoverLayer = null;
 var _gemTempLayer      = null;
@@ -8308,12 +8334,12 @@ function _hlMarkerHtml(c, zf, valDivisor) {{
 function gemToggle(which){{
   if(which==="mslp")           {{ _gemShowMslp =!_gemShowMslp;  document.getElementById("btn-mslp" ).classList.toggle("active",_gemShowMslp);  }}
   else if(which==="qpf")       {{
-    _gemQpfMode = (_gemQpfMode + 1) % 3;
+    _gemQpfMode = (_gemQpfMode + 1) % 4;
     var _qpfBtn = document.getElementById("btn-qpf");
-    var _qpfLabels = ["QPF 12h","QPF 3h","QPF Off"];
+    var _qpfLabels = ["QPF 12h","QPF 3h","QPF 24h","QPF Off"];
     if (_qpfBtn) {{
       _qpfBtn.textContent = _qpfLabels[_gemQpfMode];
-      _qpfBtn.classList.toggle("active", _gemQpfMode !== 2);
+      _qpfBtn.classList.toggle("active", _gemQpfMode !== 3);
     }}
   }}
   else if(which==="cape")      {{
@@ -8376,6 +8402,21 @@ function _gemEnsureNoQpf3hLabel(){{
   return el;
 }}
 
+function _gemEnsureNoQpf24hLabel(){{
+  var el=document.getElementById("gem-noqpf24h-label");
+  if(!el){{
+    el=document.createElement("div");
+    el.id="gem-noqpf24h-label";
+    el.style.cssText="position:fixed;top:82px;left:8px;z-index:10003;"
+      +"background:rgba(255,255,255,0.92);border:1px solid #cc0000;border-radius:4px;"
+      +"padding:3px 8px;font-family:Courier New,monospace;font-size:11px;"
+      +"color:#cc0000;font-weight:bold;pointer-events:none;display:none;";
+    el.textContent="24hr QPF not available on this timeframe";
+    document.body.appendChild(el);
+  }}
+  return el;
+}}
+
 function gemRender(idx){{
   var MAP=_getMap(); if(!MAP) return;
   var step=_GEM_STEPS[idx]; if(!step) return;
@@ -8386,6 +8427,7 @@ function gemRender(idx){{
 
   if(_gemQpfLayer)       {{ MAP.removeLayer(_gemQpfLayer);       _gemQpfLayer=null;       }}
   if(_gemQpf3hLayer)     {{ MAP.removeLayer(_gemQpf3hLayer);     _gemQpf3hLayer=null;     }}
+  if(_gemQpf24hLayer)    {{ MAP.removeLayer(_gemQpf24hLayer);    _gemQpf24hLayer=null;    }}
   if(_gemMslpLayer)      {{ MAP.removeLayer(_gemMslpLayer);      _gemMslpLayer=null;      }}
   if(_gemCapeLayer)      {{ MAP.removeLayer(_gemCapeLayer);      _gemCapeLayer=null;      }}
   if(_gemCrossoverLayer) {{ MAP.removeLayer(_gemCrossoverLayer); _gemCrossoverLayer=null; }}
@@ -8401,9 +8443,16 @@ function gemRender(idx){{
   var _noQpf3hEl=_gemEnsureNoQpf3hLabel();
   _noQpf3hEl.style.display=(_gemQpfMode===1 && fd.qpf3h_available===false)?"block":"none";
 
+  var _noQpf24hEl=_gemEnsureNoQpf24hLabel();
+  _noQpf24hEl.style.display=(_gemQpfMode===2 && fd.qpf24h_available===false)?"block":"none";
+
   var _qpfBtn=document.getElementById("btn-qpf");
   if(_qpfBtn){{
     if(_gemQpfMode===1 && fd.qpf3h_available===false){{
+      _qpfBtn.style.background="#cc0000";
+      _qpfBtn.style.borderColor="#ff4444";
+      _qpfBtn.style.color="#ffffff";
+    }} else if(_gemQpfMode===2 && fd.qpf24h_available===false){{
       _qpfBtn.style.background="#cc0000";
       _qpfBtn.style.borderColor="#ff4444";
       _qpfBtn.style.color="#ffffff";
@@ -8532,6 +8581,30 @@ function gemRender(idx){{
       }}).addTo(_gemQpf3hLayer);
     }});
     _gemQpf3hLayer.addTo(MAP);
+  }}
+
+// ── QPF 24h fill ──────────────────────────────────────────────────────
+  if(_gemQpfMode===2 && fd.qpf24h && fd.qpf24h.length){{
+    _gemQpf24hLayer=L.layerGroup();
+    if(!MAP.getPane("qpf24hPane")){{
+      MAP.createPane("qpf24hPane");
+      MAP.getPane("qpf24hPane").style.zIndex=481;
+      MAP.getPane("qpf24hPane").style.pointerEvents="none";
+    }}
+    fd.qpf24h.slice().sort(function(a,b){{return a.level-b.level;}}).forEach(function(band){{
+      if(!band.coords||band.coords.length<3) return;
+      var rings=[band.coords].concat(band.holes||[]);
+      L.polygon(rings,{{
+        color:"none",
+        weight:0,
+        fillColor:band.color,
+        fillOpacity:0.75,
+        fillRule:"evenodd",
+        interactive:false,
+        pane:"qpf24hPane"
+      }}).addTo(_gemQpf24hLayer);
+    }});
+    _gemQpf24hLayer.addTo(MAP);
   }}
 
 
