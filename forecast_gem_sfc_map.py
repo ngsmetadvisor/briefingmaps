@@ -952,8 +952,12 @@ for _d in range(GDPS_FORECAST_DAYS + 1):
 # QPF12H = Precip-Accum(06Z day D) − Precip-Accum(18Z day D-1)
 # MSLP fetched at 00Z day D (06Z − 6h)
 # Output row labelled 00Z day D
+# Start at day 0 (today) so the earliest timesteps get precip data whenever
+# it's actually fetchable — the fxx_tgt range check below already skips any
+# target that predates the model run, so this is a no-op where data doesn't
+# exist yet and simply fills it in where it does.
 _sfc_target_vts = []
-for _d in range(1, GDPS_FORECAST_DAYS + 2):
+for _d in range(0, GDPS_FORECAST_DAYS + 2):
     _vt_00z = _base_day_mdt + timedelta(days=_d, hours=6)    # 06Z endpoint → 00Z label
     _vt_12z = _base_day_mdt + timedelta(days=_d, hours=18)   # 18Z endpoint → 12Z label
     _sfc_target_vts.append(_vt_00z)
@@ -1096,6 +1100,12 @@ for vt in _target_vts:
 # QPF12H = max(0, _PACC − _PACC_PRIOR) computed at assembly
 _sfc_tasks = []
 
+# Tracks, per remapped label (e.g. "2026-09-02 00Z"), whether a genuine
+# full 12h prior window was fetchable (fxx_prior > 0). When False, QPF12H
+# must be reported as unavailable rather than silently defaulting the
+# prior to 0 — otherwise a partial window (e.g. 11h) gets mislabeled "12h".
+_qpf12h_full_window = {}
+
 for vt in _sfc_target_vts:
     use_rdps   = _NOW_UTC < vt < _RDPS_CUTOFF
     run_dt     = _rdps_run_dt if use_rdps else _gdps_run_dt
@@ -1117,6 +1127,14 @@ for vt in _sfc_target_vts:
 
     if not (0 <= fxx_tgt <= max_fxx):
         continue
+
+    # Remap to the same 00Z/12Z label used in the assembly merge, so the
+    # flag can be looked up there by vt_str.
+    if vt_pacc.hour == 6:
+        _vt_label = (vt_pacc - timedelta(hours=6)).strftime('%Y-%m-%d') + ' 00Z'
+    else:  # hour == 18
+        _vt_label = vt_pacc.strftime('%Y-%m-%d') + ' 12Z'
+    _qpf12h_full_window[_vt_label] = fxx_prior > 0
 
     # MSLP at 00Z
     if 0 <= fxx_mslp <= max_fxx:
@@ -1572,13 +1590,15 @@ for (lat, lon, vt_str), fields in _sfc_merged.items():
                  else None)
 
     pacc       = fields.get('_PACC')
-    pacc_prior = fields.get('_PACC_PRIOR', 0.0)
-    if pacc_prior is None:
-        pacc_prior = 0.0
+    pacc_prior = fields.get('_PACC_PRIOR')
+    _has_full_12h_window = _qpf12h_full_window.get(vt_str, False)
 
-    if _is_valid(pacc):
+    if _has_full_12h_window and _is_valid(pacc) and _is_valid(pacc_prior):
         qpf12h = round(max(0.0, float(pacc) - float(pacc_prior)), 2)
     else:
+        # No real 12h window behind this point (run just started, or the
+        # prior fetch failed) — report unavailable rather than a partial
+        # or zero-defaulted number that would masquerade as a true 12h total.
         qpf12h = None
 
     pacc3h = fields.get('_PACC3H')
@@ -2553,20 +2573,24 @@ for (_date, _hr) in _sfc_times:
     # ── QPF24H — 24h accumulation = this 12h window + the previous 12h window ──
     # (surface valid times are spaced 12h apart, so summing two consecutive
     #  QPF12H windows gives the trailing 24h total without re-fetching GRIB)
+    # Both legs must be real full-window QPF12H values — if either is NaN
+    # (partial/missing window), QPF24H must come out NaN too, not a silent
+    # partial total. No fillna(0) on either side.
     _prev_vt  = _vt - timedelta(hours=12)
     _prev_sub = _sfc_df[(_sfc_df['_date'] == _prev_vt.date()) &
                          (_sfc_df['_hour'] == _prev_vt.hour)]
     _sub24 = _sub[['lat', 'lon', 'QPF12H']].merge(
         _prev_sub[['lat', 'lon', 'QPF12H']].rename(columns={'QPF12H': 'QPF12H_prev'}),
         on=['lat', 'lon'], how='left')
-    _sub24['QPF24H'] = _sub24['QPF12H'].fillna(0) + _sub24['QPF12H_prev'].fillna(0)
+    _sub24['QPF24H'] = _sub24['QPF12H'] + _sub24['QPF12H_prev']
 
     qpf24h_grid = _qpf_build_grid(_sub24, sigma=QPF_SIGMA,
                                    lon_vec=_qpf_lons, lat_vec=_qpf_lats, col='QPF24H')
     if qpf24h_grid is not None:
-        _note = '' if not _prev_sub.empty else '  (no prior step — = QPF12H)'
         print(f'  ✓ QPF24H {qpf24h_grid.shape} '
-              f'{qpf24h_grid.min():.1f}–{qpf24h_grid.max():.1f} mm{_note}')
+              f'{qpf24h_grid.min():.1f}–{qpf24h_grid.max():.1f} mm')
+    else:
+        print('  ⚠ QPF24H unavailable this step (no full trailing 24h window yet)')
 
     _mslp_segs = _count_contours(slp_grid, lon_vec, lat_vec, MSLP_INTERVAL) if slp_grid is not None else 0
     _qpf_segs  = _count_contours(qpf_grid,
