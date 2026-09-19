@@ -9034,3 +9034,10 @@ _out_path = 'outputs/gem_surface_map.html'
 m.save(_out_path)
 
 print(f'\n✅ DONE!!! Cell UA-2d complete — map saved → {_out_path}')
+
+# Skip interpreter teardown: the GRIB/GEOS native objects segfault (exit 139)
+# while being freed. All outputs are already on disk at this point.
+import sys
+sys.stdout.flush()
+sys.stderr.flush()
+os._exit(0)
