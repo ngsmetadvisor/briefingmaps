@@ -55,7 +55,9 @@ jobs:
       - name: Install Python packages
         run: pip install -r requirements.txt
       - name: Run map generator
-        run: python forecast_gem_sfc_map.py
+        run: python -u forecast_gem_sfc_map.py
+        env:
+          PYTHONUNBUFFERED: "1"
         timeout-minutes: 40
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
