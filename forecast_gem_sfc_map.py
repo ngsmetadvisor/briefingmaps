@@ -5,6 +5,12 @@ GitHub Actions version — all packages pre-installed via requirements.txt
 
 # ── Standard library ──────────────────────────────────────────
 import csv, io, json, math, os, re, sys, time, warnings
+
+# Watchdog: if still running at 37 min, print every thread's stack to the
+# Actions log and exit, so a stall shows exactly where it was stuck
+# (GitHub's 40-min kill otherwise leaves no trace).
+import faulthandler
+faulthandler.dump_traceback_later(37 * 60, exit=True)
 import concurrent.futures
 from collections import defaultdict
 
@@ -2339,9 +2345,13 @@ def _fetch_grib(url, tag='', retries=3, retry_delay=5):
             r = requests.get(url, stream=True, timeout=(15, 90))
             r.raise_for_status()
             tmp = tempfile.NamedTemporaryFile(suffix='.grib2', delete=False)
+            _dl_t0 = time.time()
             try:
                 for chunk in r.iter_content(1 << 20):
                     tmp.write(chunk)
+                    if time.time() - _dl_t0 > 180:
+                        raise requests.exceptions.ChunkedEncodingError(
+                            'download exceeded 180 s total')
             except requests.exceptions.ChunkedEncodingError as e:
                 tmp.close()
                 os.unlink(tmp.name)
