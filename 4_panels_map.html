@@ -232,6 +232,31 @@
     border: 2px solid #fff;
     box-shadow: 0 0 0 1px #e03131;
   }
+  #master-slider-track {
+    position: relative;
+    flex: 1;
+    min-width: 80px;
+    display: flex;
+    align-items: center;
+  }
+  #master-slider-track #master-slider {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+  }
+  #master-now-line {
+    position: absolute;
+    top: 50%;
+    width: 2px;
+    height: 18px;
+    margin-left: -1px;
+    transform: translateY(-50%);
+    background: #2f9e44;
+    border-radius: 1px;
+    pointer-events: none;
+    z-index: 0;
+    display: none;
+  }
   #master-step-count {
     font-size: 10px;
     color: #555e6b;
@@ -503,8 +528,11 @@
   </div>
 <div id="master-slider-wrap">
     <span id="master-label">Step</span>
-    <input type="range" id="master-slider" min="0" max="0" value="0" step="1"
-           oninput="onMasterSlider(this.value)">
+    <span id="master-slider-track">
+      <span id="master-now-line" title="Now"></span>
+      <input type="range" id="master-slider" min="0" max="0" value="0" step="1"
+             oninput="onMasterSlider(this.value)">
+    </span>
     <span id="master-step-count">— / —</span>
   </div>
   <div id="ts-display">—</div>
@@ -2209,10 +2237,12 @@ function jumpInitSequence() {
     slider.value = String(last);
     onMasterSlider(last);
 
-    // Step 2: after a short delay, jump back to step 0
+    // Step 2: after a short delay, jump to the last step at or before now
     setTimeout(function() {
-      slider.value = '0';
-      onMasterSlider(0);
+      var nowIdx = _masterNowIdx();
+      slider.value = String(nowIdx);
+      onMasterSlider(nowIdx);
+      updateMasterNowLine();
     }, 600);
 
   }, 500);
@@ -2240,11 +2270,54 @@ function tryInitMasterSlider() {
         document.getElementById('master-step-count').textContent =
           '1 / ' + steps.length;
         console.log('[AWCC] Master slider init from', p.id, '— steps:', steps.length);
+        updateMasterNowLine();
         return;
       }
     } catch(e) {}
   }
 }
+
+// ── Now line / now step ────────────────────────────────────────────────────
+// Index of the last master step whose valid time is at or before now.
+// Falls back to 0 if every step is in the future, or to the last step if all are past.
+function _masterNowIdx() {
+  if (!_masterSteps || !_masterSteps.length) return 0;
+  var now = Date.now();
+  var best = 0;
+  for (var i = 0; i < _masterSteps.length; i++) {
+    var ms = _p1KeyToMs(_masterSteps[i].key);
+    if (ms === null) continue;
+    if (ms <= now) best = i; else break;
+  }
+  return best;
+}
+
+// Positions the green line at the exact current time, interpolated between
+// the two steps that bracket now. Hidden if now is outside the step range.
+function updateMasterNowLine() {
+  var line = document.getElementById('master-now-line');
+  if (!line) return;
+  if (!_masterSteps || _masterSteps.length < 2) { line.style.display = 'none'; return; }
+  var n = _masterSteps.length;
+  var now = Date.now();
+  var frac = null;
+  for (var i = 0; i < n - 1; i++) {
+    var t0 = _p1KeyToMs(_masterSteps[i].key);
+    var t1 = _p1KeyToMs(_masterSteps[i + 1].key);
+    if (t0 === null || t1 === null || t1 <= t0) continue;
+    if (now >= t0 && now <= t1) {
+      frac = (i + (now - t0) / (t1 - t0)) / (n - 1);
+      break;
+    }
+  }
+  if (frac === null) { line.style.display = 'none'; return; }
+  // Thumb is 15px wide, so the track's usable span is inset 7.5px each side
+  line.style.left = 'calc(7.5px + ' + (frac * 100).toFixed(4) + '% - ' + (frac * 15).toFixed(4) + 'px)';
+  line.style.display = 'block';
+}
+
+// Keep the now line moving; does not move the slider itself
+setInterval(updateMasterNowLine, 60000);
 
 function onMasterSlider(val) {
   if (_masterBusy) return;
