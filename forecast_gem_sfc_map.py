@@ -64,7 +64,7 @@ print(f'Coverage: {COVERAGE} | Interp: {INTERP_METHOD} | Grid: {GRID_N} | Export
 #cell 1.2
 import urllib.request, xml.etree.ElementTree as ET, json
 
-_KML_URL = 'http://orangecore.net/met/wxchart/Alberta_Fire_Weather_Forecast_Zones.kml'
+_KML_URL = 'https://orangecore.net/met/wxchart/Alberta_Fire_Weather_Forecast_Zones.kml'
 
 def _kml_to_geojson(kml_bytes):
     root = ET.fromstring(kml_bytes)
